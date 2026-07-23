@@ -1,0 +1,16 @@
+[package]
+name = "twip"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A modern Flash: draw vector shapes on a timeline and export .swf that Ruffle plays. Compiler for .wick -> .swf."
+repository = "https://github.com/justinstimatze/twip"
+publish = false
+
+[lib]
+name = "twip"
+path = "src/lib.rs"
+
+[[bin]]
+name = "twip"
+path = "src/main.rs"

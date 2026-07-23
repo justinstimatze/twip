@@ -1,2 +1,23 @@
 # upstream reference clone (StickmanRed/wick-editor) — has its own .git, do not vendor
 reference/wick-editor/
+
+# Rust
+/target
+
+# defn MCP server runtime state
+/.defn/
+
+# scratch
+/tmp/
+*.log
+
+# session resume notes — transient
+/RESUME.md
+
+# editor / OS cruft
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+.vscode/
