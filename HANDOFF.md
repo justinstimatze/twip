@@ -168,8 +168,11 @@ AA noise is blind to easing errors. Three layers instead:
   per Path. `twip fixtures/test1.wick out.swf` → 415-byte valid SWF; structural test (2 shapes,
   2 places, 1 ShowFrame) green. DEFERRED (not needed by this fixture): planarization/i_overlay
   (both shapes are simple convex contours), strokes (LineStyle2), the root-Clip transform (assumed
-  identity), fill-winding normalization (using fill_style_1, verify visually — flip if inverted).
-  VISUAL RUFFLE CHECK PENDING (Chrome extension disconnected mid-verify).
+  identity), fill-winding normalization (fill_style_1 verified CORRECT — no inversion).
+  VISUALLY VERIFIED in Ruffle 2026-07-23: test1.wick renders as a smooth black ellipse + a
+  mint-green rectangle (color [0.302,1,0.651]→RGB 77,255,166 exact), correct positions and
+  z-order (green over black per child order). THE PAYOFF MILESTONE IS HIT — a real drawing
+  compiled to SWF and played. Phase 1 first cut COMPLETE.
 - **Phase 2 — THE INTEGRATED EXPERIENCE (first-class, elevated)**: our fork of the Wick editor
   gets an **Export button** (shell-out to the twip CLI) + a **Ruffle preview tab**. Draw →
   click Export → it plays. This is "Flash, but it just works," and the reason the project
