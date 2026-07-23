@@ -172,8 +172,22 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    rects) → front Wick layer (index 0, red) emits at depth 2001, back layer (index 1, blue) at
    1001; higher SWF depth = frontmost. Loose-path position is baked into geometry (PlaceObject
    matrix identity, tx=0), per design. Locked as test `compiles_multi_layer_wick`.
-4. **Nested clips / DefineSprite (1d).** Real tweens apply to CLIPS not loose paths, so real
-   1c parsing is blocked on clip support — this comes before real tweens.
+4. **DONE 2026-07-23 — nested clips / DefineSprite (1d).** Parser now walks root-down
+   (project → root Clip → Timeline → …), recursing into each Clip's own Timeline; the old
+   "find the first Timeline" scan broke once there were multiple. `wick::Clip {transform,
+   layers}` added; `Frame` gained `clips`. Compiler restructured to `compile_timeline` (recursive):
+   all DefineShape/DefineSprite DEFINITIONS hoist to the root tag list in post-order (children
+   before the DefineSprite that uses them, per SWF); each clip → one DefineSprite whose body is
+   its own playhead walk; the parent places the sprite once with the clip's matrix + opacity
+   CXFORM. Verified: synthetic `nested_clip_emits_sprite`, real `compiles_nested_clip_wick`
+   (fixtures/nested-clip.wick: 2 timelines, 2 clips → 1 DefineSprite num_frames=2, both nested
+   shapes hoisted, placed at tx=200/ty=150), and Ruffle (sprite renders at 200,150 and its
+   2-keyframe timeline loops — strobes because a 2-frame flipbook at 24fps is inherently flickery).
+   GOTCHA that the structural oracle missed but the Ruffle check caught: building a clip fixture by
+   mixing `new Wick.Clip({objects})` (which RE-BASES children by the clip transform) with
+   `frame.addPath` (which does NOT) puts the two keyframes in different coordinate spaces. Fix:
+   create the clip at IDENTITY, add all shapes the same way, THEN set clip.transformation.x/y.
+   Static clip transform only; tweened clips are #5.
 5. **Tween-object parser.** JSON schema now CAPTURED (2026-07-23) by inspecting a real
    `Wick.Tween._serialize()`: `{classname:"Tween", playheadPosition:<int>, transformation:
    {x,y,scaleX,scaleY,rotation,opacity}, fullRotations:<int>, easingType:<string>,

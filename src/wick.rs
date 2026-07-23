@@ -1,11 +1,12 @@
 //! Parse a `.wick` document (zip + `project.json`) into flat, filled contours
 //! ready to become SWF shapes.
 //!
-//! Phase 1 scope: static shapes, fills only, a single main timeline (no nested
-//! clips yet). Curves are flattened to polylines; the format details were
-//! ground-truthed against a real save (see HANDOFF.md "Known gaps #1"):
-//! `objects` is a flat UUID-keyed map, parents reference children by UUID, and
-//! `Selection` objects are editor UI state to skip.
+//! Scope: static shapes (fills only) plus nested clips (recursive timelines).
+//! Curves are flattened to polylines; the format details were ground-truthed
+//! against a real save (see HANDOFF.md "Known gaps #1"): `objects` is a flat
+//! UUID-keyed map, parents reference children by UUID, and `Selection` objects
+//! are editor UI state to skip. The walk is root-down (project -> root Clip ->
+//! Timeline -> ...) so multiple timelines (one per clip) resolve correctly.
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
@@ -25,11 +26,24 @@ pub struct Layer {
     pub frames: Vec<Frame>,
 }
 
-/// One keyframe, occupying frame numbers `start..=end` (1-indexed), holding shapes.
+/// One keyframe, occupying frame numbers `start..=end` (1-indexed).
+///
+/// Holds loose shapes and nested clips. Within a frame, shapes are drawn first
+/// (behind) and clips on top — a v1 simplification; the true z-order is the
+/// child array order, which mixes the two. Fixtures keep clips and loose paths
+/// on separate layers so this never bites.
 pub struct Frame {
     pub start: u16,
     pub end: u16,
     pub contours: Vec<Contour>,
+    pub clips: Vec<Clip>,
+}
+
+/// A nested clip: its own transform (placed on the parent frame) plus its own
+/// timeline, which compiles to a SWF `DefineSprite`. Recursive.
+pub struct Clip {
+    pub transform: crate::Transform,
+    pub layers: Vec<Layer>,
 }
 
 /// One closed contour with a solid fill, in absolute stage pixels (y-down).
@@ -80,53 +94,103 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow!("no objects map"))?;
 
-    // This fixture has a single main Timeline (nested clips are a later phase).
-    let timeline = objects
-        .values()
+    // Walk root-down so nested clips (each with its own Timeline) resolve: the
+    // project's children hold a Selection (skipped) plus the root Clip; the root
+    // Clip's children hold the main Timeline.
+    let root_clip = child_objects(project, objects)
+        .find(|v| classname(v) == Some("Clip"))
+        .ok_or_else(|| anyhow!("no root Clip in project"))?;
+    let timeline = child_objects(root_clip, objects)
         .find(|v| classname(v) == Some("Timeline"))
-        .ok_or_else(|| anyhow!("no Timeline object"))?;
+        .ok_or_else(|| anyhow!("root Clip has no Timeline"))?;
 
-    // Keep Wick layer order (index 0 = frontmost); depth is resolved at compile.
+    let layers = parse_timeline(timeline, objects)?;
+    Ok(Document {
+        width,
+        height,
+        layers,
+    })
+}
+
+type Objects = serde_json::Map<String, Value>;
+
+/// Resolve an object's `children` UUIDs to the objects they name (missing ones dropped).
+fn child_objects<'a>(v: &Value, objects: &'a Objects) -> impl Iterator<Item = &'a Value> {
+    children(v)
+        .into_iter()
+        .filter_map(move |uuid| objects.get(&uuid))
+}
+
+/// Parse a Timeline object into its layers (Wick order; index 0 = frontmost).
+fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
     let mut layers = Vec::new();
-    for layer_uuid in children(timeline) {
-        let Some(layer_obj) = objects.get(&layer_uuid) else {
+    for layer_obj in child_objects(timeline, objects) {
+        if classname(layer_obj) != Some("Layer") {
             continue;
-        };
+        }
         let mut frames = Vec::new();
-        for frame_uuid in children(layer_obj) {
-            let Some(frame_obj) = objects.get(&frame_uuid) else {
+        for frame_obj in child_objects(layer_obj, objects) {
+            if classname(frame_obj) != Some("Frame") {
                 continue;
-            };
+            }
             let start = frame_obj.get("start").and_then(Value::as_u64).unwrap_or(1) as u16;
             let end = frame_obj
                 .get("end")
                 .and_then(Value::as_u64)
                 .unwrap_or(u64::from(start)) as u16;
             let mut contours = Vec::new();
-            for child_uuid in children(frame_obj) {
-                let Some(child) = objects.get(&child_uuid) else {
-                    continue;
-                };
-                if classname(child) == Some("Path")
-                    && let Some(contour) = path_to_contour(child)?
-                {
-                    contours.push(contour);
+            let mut clips = Vec::new();
+            for child in child_objects(frame_obj, objects) {
+                match classname(child) {
+                    Some("Path") => {
+                        if let Some(contour) = path_to_contour(child)? {
+                            contours.push(contour);
+                        }
+                    }
+                    // Button is a Clip subclass; its extra state (states, script) is
+                    // ignored for now — it still renders as its clip timeline.
+                    Some("Clip" | "Button") => clips.push(parse_clip(child, objects)?),
+                    _ => {}
                 }
             }
             frames.push(Frame {
                 start,
                 end,
                 contours,
+                clips,
             });
         }
         layers.push(Layer { frames });
     }
+    Ok(layers)
+}
 
-    Ok(Document {
-        width,
-        height,
-        layers,
-    })
+/// Parse a Clip object: its placement transform plus its own (recursive) timeline.
+fn parse_clip(clip: &Value, objects: &Objects) -> Result<Clip> {
+    let transform = parse_transform(clip);
+    let timeline = child_objects(clip, objects)
+        .find(|v| classname(v) == Some("Timeline"))
+        .ok_or_else(|| anyhow!("Clip has no Timeline"))?;
+    let layers = parse_timeline(timeline, objects)?;
+    Ok(Clip { transform, layers })
+}
+
+/// A Clip's `transformation` is an inline `{x, y, scaleX, scaleY, rotation, opacity}`.
+fn parse_transform(clip: &Value) -> crate::Transform {
+    let t = clip.get("transformation");
+    let g = |key: &str, default: f64| {
+        t.and_then(|t| t.get(key))
+            .and_then(Value::as_f64)
+            .unwrap_or(default)
+    };
+    crate::Transform {
+        x: g("x", 0.0),
+        y: g("y", 0.0),
+        scale_x: g("scaleX", 1.0),
+        scale_y: g("scaleY", 1.0),
+        rotation_deg: g("rotation", 0.0),
+        opacity: g("opacity", 1.0),
+    }
 }
 
 fn path_to_contour(path: &Value) -> Result<Option<Contour>> {

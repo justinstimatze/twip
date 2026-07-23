@@ -327,31 +327,93 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
 /// per layer per frame.
 const DEPTH_BAND: u16 = 1000;
 
-/// Compile a parsed document into an SWF timeline (frame-by-frame).
-pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
-    let num_layers = doc.layers.len();
+/// One thing to place at a depth: a character id with the matrix + optional opacity
+/// CXFORM to place it with. Loose shapes use identity + no cxform; clips carry their
+/// own transform.
+#[derive(Clone)]
+struct Placement {
+    id: u16,
+    matrix: Matrix,
+    cxform: Option<ColorTransform>,
+}
 
-    // Give every contour a unique shape id and emit all DefineShapes upfront.
-    let mut tags: Vec<Tag> = Vec::new();
-    let mut next_id: u16 = 1;
-    let mut ids: Vec<Vec<Vec<u16>>> = Vec::with_capacity(num_layers);
-    for layer in &doc.layers {
-        let mut layer_ids = Vec::with_capacity(layer.frames.len());
+/// A `PlaceObject` from a [`Placement`].
+fn place_placement(action: PlaceObjectAction, p: &Placement, depth: u16) -> Tag<'static> {
+    Tag::PlaceObject(Box::new(PlaceObject {
+        version: 2,
+        action,
+        depth,
+        matrix: Some(p.matrix),
+        color_transform: p.cxform,
+        ratio: None,
+        name: None,
+        clip_depth: None,
+        class_name: None,
+        filters: None,
+        background_color: None,
+        blend_mode: None,
+        clip_actions: None,
+        has_image: false,
+        is_bitmap_cached: None,
+        is_visible: None,
+        amf_data: None,
+    }))
+}
+
+/// Compile a timeline (a list of layers) into its control-tag stream (Place/Remove/
+/// ShowFrame), pushing any shape/sprite DEFINITIONS onto the shared `defs` list in
+/// dependency order (children before the DefineSprite that uses them). Recurses for
+/// nested clips. SWF requires all DefineShape/DefineSprite tags at the root, before
+/// use — post-order recursion gives exactly that ordering.
+fn compile_timeline(
+    layers: &[wick::Layer],
+    next_id: &mut u16,
+    defs: &mut Vec<Tag<'static>>,
+) -> Vec<Tag<'static>> {
+    let num_layers = layers.len();
+
+    // Per (layer, frame): the ordered placements that frame wants live. Building this
+    // first also emits the definitions (shapes now, sprites via recursion).
+    let mut slots: Vec<Vec<Vec<Placement>>> = Vec::with_capacity(num_layers);
+    for layer in layers {
+        let mut layer_slots = Vec::with_capacity(layer.frames.len());
         for frame in &layer.frames {
-            let mut frame_ids = Vec::with_capacity(frame.contours.len());
+            let mut placements = Vec::new();
             for contour in &frame.contours {
-                let id = next_id;
-                next_id += 1;
-                tags.push(Tag::DefineShape(Box::new(contour_to_shape(id, contour))));
-                frame_ids.push(id);
+                let id = *next_id;
+                *next_id += 1;
+                defs.push(Tag::DefineShape(Box::new(contour_to_shape(id, contour))));
+                placements.push(Placement {
+                    id,
+                    matrix: Matrix::IDENTITY,
+                    cxform: None,
+                });
             }
-            layer_ids.push(frame_ids);
+            for clip in &frame.clips {
+                let body = compile_timeline(&clip.layers, next_id, defs);
+                let num_frames = body
+                    .iter()
+                    .filter(|t| matches!(t, Tag::ShowFrame))
+                    .count() as u16;
+                let id = *next_id;
+                *next_id += 1;
+                defs.push(Tag::DefineSprite(swf::Sprite {
+                    id,
+                    num_frames: num_frames.max(1),
+                    tags: body,
+                }));
+                placements.push(Placement {
+                    id,
+                    matrix: clip.transform.matrix(),
+                    cxform: Some(clip.transform.color_transform()),
+                });
+            }
+            layer_slots.push(placements);
         }
-        ids.push(layer_ids);
+        slots.push(layer_slots);
     }
 
-    let total: u16 = doc
-        .layers
+    let total: u16 = layers
         .iter()
         .flat_map(|l| l.frames.iter())
         .map(|f| f.end)
@@ -363,39 +425,59 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
     let depth_base = |li: usize| -> u16 { (num_layers - li) as u16 * DEPTH_BAND };
 
     // Walk the playhead, emitting place/remove deltas against the display list.
-    let mut current: BTreeMap<u16, u16> = BTreeMap::new(); // depth -> character id
+    let mut control: Vec<Tag<'static>> = Vec::new();
+    let mut current: BTreeMap<u16, Placement> = BTreeMap::new(); // depth -> placement
     for frame_no in 1..=total {
-        let mut desired: BTreeMap<u16, u16> = BTreeMap::new();
-        for (li, layer) in doc.layers.iter().enumerate() {
+        let mut desired: BTreeMap<u16, Placement> = BTreeMap::new();
+        for (li, layer) in layers.iter().enumerate() {
             if let Some(fi) = layer
                 .frames
                 .iter()
                 .position(|fr| fr.start <= frame_no && frame_no <= fr.end)
             {
                 let base = depth_base(li);
-                for (ci, &id) in ids[li][fi].iter().enumerate() {
-                    desired.insert(base + ci as u16 + 1, id);
+                for (ci, placement) in slots[li][fi].iter().enumerate() {
+                    desired.insert(base + ci as u16 + 1, placement.clone());
                 }
             }
         }
         // Remove characters whose depth is now empty or holds a different id.
-        for (&depth, &cur_id) in &current {
-            if desired.get(&depth) != Some(&cur_id) {
-                tags.push(Tag::RemoveObject(swf::RemoveObject {
+        for (&depth, cur) in &current {
+            if desired.get(&depth).map(|d| d.id) != Some(cur.id) {
+                control.push(Tag::RemoveObject(swf::RemoveObject {
                     depth,
                     character_id: None,
                 }));
             }
         }
         // Place new or changed characters (removes above already cleared the slot).
-        for (&depth, &id) in &desired {
-            if current.get(&depth) != Some(&id) {
-                tags.push(place(PlaceObjectAction::Place(id), Matrix::IDENTITY, depth));
+        for (&depth, placement) in &desired {
+            if current.get(&depth).map(|c| c.id) != Some(placement.id) {
+                control.push(place_placement(
+                    PlaceObjectAction::Place(placement.id),
+                    placement,
+                    depth,
+                ));
             }
         }
-        tags.push(Tag::ShowFrame);
+        control.push(Tag::ShowFrame);
         current = desired;
     }
+    control
+}
+
+/// Compile a parsed document into an SWF timeline (frame-by-frame, with nested clips).
+pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
+    let mut next_id: u16 = 1;
+    let mut tags: Vec<Tag> = Vec::new();
+    let control = compile_timeline(&doc.layers, &mut next_id, &mut tags);
+    let total: u16 = control
+        .iter()
+        .filter(|t| matches!(t, Tag::ShowFrame))
+        .count()
+        .try_into()
+        .unwrap_or(u16::MAX);
+    tags.extend(control);
 
     let header = Header {
         compression: Compression::None,
@@ -407,7 +489,7 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
             y_max: Twips::from_pixels(doc.height),
         },
         frame_rate: Fixed8::from_f64(24.0),
-        num_frames: total,
+        num_frames: total.max(1),
     };
 
     let mut out = Vec::new();
@@ -546,6 +628,55 @@ mod tests {
         );
     }
 
+    /// Phase 1d parser: a real nested-clip `.wick` (a clip placed on the root frame,
+    /// the clip's OWN timeline a 2-keyframe animation) drawn in wickeditor.com. Two
+    /// Timelines and two Clips in the JSON; the root Clip becomes the document, the
+    /// nested one a DefineSprite.
+    #[test]
+    fn compiles_nested_clip_wick() {
+        let bytes = include_bytes!("../fixtures/nested-clip.wick");
+        let swf = compile_wick(bytes).expect("compile nested-clip.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let sprites: Vec<&swf::Sprite> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::DefineSprite(s) => Some(s),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sprites.len(), 1, "the nested clip -> one DefineSprite");
+        assert_eq!(sprites[0].num_frames, 2, "clip's own 2-keyframe timeline");
+
+        // Both nested shapes hoist to the root as DefineShape.
+        assert_eq!(
+            parsed
+                .tags
+                .iter()
+                .filter(|t| matches!(t, Tag::DefineShape(_)))
+                .count(),
+            2,
+            "both nested shapes defined at the root"
+        );
+
+        // The root is a single frame that places the sprite once, at the clip's (200, 150).
+        assert_eq!(parsed.header.num_frames(), 1, "root is one frame");
+        let root_places: Vec<&PlaceObject> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => Some(po.as_ref()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(root_places.len(), 1, "root places the sprite once");
+        let m = root_places[0].matrix.expect("placement has a matrix");
+        assert_eq!(m.tx.get(), Twips::from_pixels(200.0).get(), "clip x -> tx");
+        assert_eq!(m.ty.get(), Twips::from_pixels(150.0).get(), "clip y -> ty");
+    }
+
     /// Phase 1b: a two-keyframe flipbook removes the old shape and places the new.
     #[test]
     fn frame_by_frame_timeline() {
@@ -564,11 +695,13 @@ mod tests {
                         start: 1,
                         end: 1,
                         contours: vec![triangle(0.0)],
+                        clips: vec![],
                     },
                     Frame {
                         start: 2,
                         end: 2,
                         contours: vec![triangle(50.0)],
+                        clips: vec![],
                     },
                 ],
             }],
@@ -595,6 +728,105 @@ mod tests {
             1,
             "remove A when B replaces it at the same depth"
         );
+    }
+
+    /// Phase 1d: a nested clip compiles to a DefineSprite (its own timeline) that the
+    /// root places once, carrying the clip's transform. Definitions hoist to the root.
+    #[test]
+    fn nested_clip_emits_sprite() {
+        use wick::{Clip, Contour, Document, Frame, Layer};
+
+        let tri = |x: f64| Contour {
+            points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
+            fill: swf::Color::from_rgb(0x00ff00, 255),
+        };
+        // A clip whose OWN timeline is a 2-keyframe animation, placed at (100, 50).
+        let clip = Clip {
+            transform: Transform {
+                x: 100.0,
+                y: 50.0,
+                scale_x: 1.0,
+                scale_y: 1.0,
+                rotation_deg: 0.0,
+                opacity: 1.0,
+            },
+            layers: vec![Layer {
+                frames: vec![
+                    Frame {
+                        start: 1,
+                        end: 1,
+                        contours: vec![tri(0.0)],
+                        clips: vec![],
+                    },
+                    Frame {
+                        start: 2,
+                        end: 2,
+                        contours: vec![tri(20.0)],
+                        clips: vec![],
+                    },
+                ],
+            }],
+        };
+        let doc = Document {
+            width: 200.0,
+            height: 200.0,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![],
+                    clips: vec![clip],
+                }],
+            }],
+        };
+
+        let swf = compile_document(&doc).expect("compile nested clip");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let sprites: Vec<&swf::Sprite> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::DefineSprite(s) => Some(s),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sprites.len(), 1, "one clip -> one DefineSprite");
+        assert_eq!(sprites[0].num_frames, 2, "the sprite's own 2-keyframe timeline");
+        // The sprite body is the nested control stream: 2 shapes' worth of places + 2 ShowFrames.
+        let inner_shows = sprites[0]
+            .tags
+            .iter()
+            .filter(|t| matches!(t, Tag::ShowFrame))
+            .count();
+        assert_eq!(inner_shows, 2, "sprite timeline shows two frames");
+
+        // Definitions hoist to the root; both nested shapes are DefineShape at top level.
+        assert_eq!(
+            parsed
+                .tags
+                .iter()
+                .filter(|t| matches!(t, Tag::DefineShape(_)))
+                .count(),
+            2,
+            "both nested shapes defined at the root"
+        );
+
+        // The root places the sprite once, with the clip's translation (100px -> 2000 twips).
+        let root_places: Vec<&PlaceObject> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => Some(po.as_ref()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(root_places.len(), 1, "root places the sprite once");
+        let m = root_places[0].matrix.expect("placement has a matrix");
+        assert_eq!(m.tx.get(), Twips::from_pixels(100.0).get(), "clip x -> tx");
+        assert_eq!(m.ty.get(), Twips::from_pixels(50.0).get(), "clip y -> ty");
+        assert_eq!(parsed.header.num_frames(), 1, "root timeline is one frame");
     }
 
     /// Phase 1c: lerp is per-property linear.

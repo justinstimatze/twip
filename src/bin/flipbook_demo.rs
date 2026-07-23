@@ -29,6 +29,7 @@ fn main() -> std::io::Result<()> {
                 start,
                 end: start + 11,
                 contours: vec![square(x, 180.0, 40.0)],
+                clips: vec![],
             }
         })
         .collect();
