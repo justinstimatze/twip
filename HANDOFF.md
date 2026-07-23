@@ -161,9 +161,15 @@ AA noise is blind to easing errors. Three layers instead:
   stage and tweens left→right across frames. Phase 0 COMPLETE. (Chrome blocks file://; use a
   localhost http.server. Ruffle shows a "Click to unmute" autoplay overlay — click to dismiss.)
 - **Phase 1 — the compiler payoff**: draw in wickeditor.com/editor/ (live), save .wick,
-  `twip in.wick out.swf`, plays in Ruffle. Static shapes, single frame, INCLUDES the
-  planarization module (the hard 20%). Headless CLI ON PURPOSE — validates SWF generation in
-  isolation before any editor integration. Weeks from start; worth it even if it stopped here.
+  `twip in.wick out.swf`, plays in Ruffle. Static shapes, single frame. Headless CLI ON PURPOSE.
+  FIRST CUT DONE 2026-07-23: `src/wick.rs` parses the zip→project.json flat UUID graph (Timeline→
+  Layer→Frame→Path, layers reversed for depth, Selection skipped), flattens paper.js paths
+  (cubic handles sampled to polylines, bare segments as lines), emits one fill-only DefineShape4
+  per Path. `twip fixtures/test1.wick out.swf` → 415-byte valid SWF; structural test (2 shapes,
+  2 places, 1 ShowFrame) green. DEFERRED (not needed by this fixture): planarization/i_overlay
+  (both shapes are simple convex contours), strokes (LineStyle2), the root-Clip transform (assumed
+  identity), fill-winding normalization (using fill_style_1, verify visually — flip if inverted).
+  VISUAL RUFFLE CHECK PENDING (Chrome extension disconnected mid-verify).
 - **Phase 2 — THE INTEGRATED EXPERIENCE (first-class, elevated)**: our fork of the Wick editor
   gets an **Export button** (shell-out to the twip CLI) + a **Ruffle preview tab**. Draw →
   click Export → it plays. This is "Flash, but it just works," and the reason the project

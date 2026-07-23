@@ -11,6 +11,9 @@ publish = false
 # swf serialization from the ruffle monorepo, pinned to one rev (crates.io 0.2.2 is a
 # stale decoy). The exporter/preview player must be built from this SAME rev.
 swf = { git = "https://github.com/ruffle-rs/ruffle", rev = "645449a5c602044471f045546a0a31af0df9cd69" }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+serde_json = "1"
+anyhow = "1"
 
 [lib]
 name = "twip"

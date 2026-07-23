@@ -6,10 +6,15 @@
 //! shape — the "structural oracle" layer from HANDOFF.md). Visual truth is
 //! Ruffle rendering the same bytes.
 
+pub mod wick;
+
+use anyhow::Result;
 use swf::{
-    Color, Compression, Fixed8, Header, Matrix, PlaceObject, PlaceObjectAction, Point, PointDelta,
-    Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, Tag, Twips, write_swf,
+    Color, Compression, FillStyle, Fixed8, Header, Matrix, PlaceObject, PlaceObjectAction, Point,
+    PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, Tag, Twips,
+    write_swf,
 };
+use wick::Contour;
 
 /// Returns the crate version.
 pub fn version() -> &'static str {
@@ -67,12 +72,12 @@ fn red_square() -> Shape {
     }
 }
 
-/// A minimal `PlaceObject` tag: just an action, depth, and a translation matrix.
-fn place(action: PlaceObjectAction, matrix: Matrix) -> Tag<'static> {
+/// A minimal `PlaceObject` tag: just an action, depth, and a transform matrix.
+fn place(action: PlaceObjectAction, matrix: Matrix, depth: u16) -> Tag<'static> {
     Tag::PlaceObject(Box::new(PlaceObject {
         version: 2,
         action,
-        depth: DEPTH,
+        depth,
         matrix: Some(matrix),
         color_transform: None,
         ratio: None,
@@ -107,7 +112,7 @@ pub fn hello_square_swf() -> Vec<u8> {
         } else {
             PlaceObjectAction::Modify
         };
-        tags.push(place(action, matrix));
+        tags.push(place(action, matrix, DEPTH));
         tags.push(Tag::ShowFrame);
     }
 
@@ -127,6 +132,88 @@ pub fn hello_square_swf() -> Vec<u8> {
     let mut out = Vec::new();
     write_swf(&header, &tags, &mut out).expect("write_swf into a Vec cannot fail");
     out
+}
+
+/// Convert one flattened contour into a filled `DefineShape4`.
+fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
+    // Absolute pixels -> twips (i32) first, then take deltas, so rounding can't drift.
+    let twips: Vec<(i32, i32)> = contour
+        .points
+        .iter()
+        .map(|&(x, y)| (Twips::from_pixels(x).get(), Twips::from_pixels(y).get()))
+        .collect();
+
+    let (mut x_min, mut x_max, mut y_min, mut y_max) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
+    for &(x, y) in &twips {
+        x_min = x_min.min(x);
+        x_max = x_max.max(x);
+        y_min = y_min.min(y);
+        y_max = y_max.max(y);
+    }
+    let bounds = Rectangle {
+        x_min: Twips::new(x_min),
+        x_max: Twips::new(x_max),
+        y_min: Twips::new(y_min),
+        y_max: Twips::new(y_max),
+    };
+
+    let mut records = vec![ShapeRecord::StyleChange(Box::new(StyleChangeData {
+        move_to: Some(Point::new(Twips::new(twips[0].0), Twips::new(twips[0].1))),
+        fill_style_0: None,
+        fill_style_1: Some(1),
+        line_style: None,
+        new_styles: None,
+    }))];
+    for i in 0..twips.len() {
+        let (cx, cy) = twips[i];
+        let (nx, ny) = twips[(i + 1) % twips.len()]; // last edge closes back to the start
+        records.push(ShapeRecord::StraightEdge {
+            delta: PointDelta::new(Twips::new(nx - cx), Twips::new(ny - cy)),
+        });
+    }
+
+    Shape {
+        version: 4,
+        id,
+        shape_bounds: bounds,
+        edge_bounds: bounds,
+        flags: ShapeFlag::NON_ZERO_WINDING_RULE,
+        styles: ShapeStyles {
+            fill_styles: vec![FillStyle::Color(contour.fill)],
+            line_styles: vec![],
+        },
+        shape: records,
+    }
+}
+
+/// Compile the bytes of a `.wick` file into a single-frame SWF of its shapes.
+pub fn compile_wick(wick_bytes: &[u8]) -> Result<Vec<u8>> {
+    let doc = wick::parse_wick(wick_bytes)?;
+
+    let mut tags: Vec<Tag> = Vec::new();
+    for (i, contour) in doc.contours.iter().enumerate() {
+        let id = u16::try_from(i + 1).expect("shape count fits in u16");
+        tags.push(Tag::DefineShape(Box::new(contour_to_shape(id, contour))));
+        tags.push(place(PlaceObjectAction::Place(id), Matrix::IDENTITY, id));
+    }
+    tags.push(Tag::ShowFrame);
+
+    let header = Header {
+        compression: Compression::None,
+        version: 8,
+        stage_size: Rectangle {
+            x_min: Twips::ZERO,
+            x_max: Twips::from_pixels(doc.width),
+            y_min: Twips::ZERO,
+            y_max: Twips::from_pixels(doc.height),
+        },
+        frame_rate: Fixed8::from_f64(24.0),
+        num_frames: 1,
+    };
+
+    let mut out = Vec::new();
+    write_swf(&header, &tags, &mut out)?;
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -165,5 +252,35 @@ mod tests {
             usize::from(FRAMES),
             "one PlaceObject per frame (1 Place + rest Modify)"
         );
+    }
+
+    /// Phase 1: the real fixture compiles to two placed shapes on one frame.
+    #[test]
+    fn compiles_test1_wick() {
+        let bytes = include_bytes!("../fixtures/test1.wick");
+        let swf = compile_wick(bytes).expect("compile test1.wick");
+
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let shapes = parsed
+            .tags
+            .iter()
+            .filter(|t| matches!(t, Tag::DefineShape(_)))
+            .count();
+        let places = parsed
+            .tags
+            .iter()
+            .filter(|t| matches!(t, Tag::PlaceObject(_)))
+            .count();
+        let show_frames = parsed
+            .tags
+            .iter()
+            .filter(|t| matches!(t, Tag::ShowFrame))
+            .count();
+
+        assert_eq!(shapes, 2, "black ellipse + green rectangle");
+        assert_eq!(places, 2, "each shape placed once");
+        assert_eq!(show_frames, 1, "single static frame");
     }
 }
