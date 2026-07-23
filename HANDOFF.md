@@ -193,10 +193,18 @@ AA noise is blind to easing errors. Three layers instead:
 
 ## Known gaps — do these FIRST
 
-1. **No one has ever inspected an actual .wick file.** The whole design assumes zip+
-   project.json from reading serializer source. Save a real one from wickeditor.com/editor/
-   and dump its structure before writing any parser code. Also check whether fork-saved
-   files (new tween methods) add fields the deployed-editor files lack.
+1. **DONE — a real .wick inspected (`test1.wick`, 2026-07-23).** Confirmed: zip = `assets/` +
+   `project.json`. `project.json` = `{project, objects}` where **`objects` is a FLAT MAP keyed
+   by UUID** (classname ∈ Project/Clip/Timeline/Layer/Frame/Path/Selection) and every parent
+   lists `children` as UUID references — NOT a nested tree. Parse = build the UUID map, resolve
+   from `project.children` down: Project → [Selection, root Clip] → Timeline → Layer → Frame →
+   [Path…]. **`Selection` = editor UI state (pivot/widgetRotation) — compiler MUST skip it.**
+   Paths confirmed raw paper.js exportJSON; full segments `[[anchor],[hIn],[hOut]]` (relative
+   handles) and handle-less segments as bare `[x,y]` BOTH present (ellipse vs rectangle);
+   colors float arrays; transform = {x,y,scaleX,scaleY,rotation,opacity}; Frame has start/end;
+   scripts = {name,src}. Deployed editor = wickengine **2021.1.22** (old; NOT the 2026 fork —
+   fork files may add tween fields on top). Fixture is single-frame, 2 static shapes, 720×480
+   @12fps — a ready Phase-1 fixture. Full dump preserved in scratchpad project.json.
 2. **Zero fixtures exist.** Need a small corpus saved from the deployed editor: single
    shape; brush donut; self-crossing path; multi-layer overlap; motion tween; rotation-
    through-90° tween; flip (negative scale) tween; fade tween; nested clip; clip+loose-path
