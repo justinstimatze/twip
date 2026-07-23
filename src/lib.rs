@@ -19,7 +19,9 @@ pub fn version() -> &'static str {
 const STAGE_W: f64 = 550.0;
 const STAGE_H: f64 = 400.0;
 const SIDE: f64 = 40.0;
-const FRAMES: u16 = 24;
+// Enough frames that each step is small (~10px) — 24 looked choppy. Ping-pong (below) also
+// keeps the loop seamless, so no hard snap-back.
+const FRAMES: u16 = 96;
 const SQUARE_ID: u16 = 1;
 const DEPTH: u16 = 1;
 
@@ -94,12 +96,11 @@ pub fn hello_square_swf() -> Vec<u8> {
 
     let y = (STAGE_H - SIDE) / 2.0;
     for i in 0..FRAMES {
-        let t = if FRAMES > 1 {
-            f64::from(i) / f64::from(FRAMES - 1)
-        } else {
-            0.0
-        };
-        let x = t * (STAGE_W - SIDE);
+        // Seamless ping-pong: a triangle wave over the whole loop (0 -> 1 -> 0), so frame 0
+        // and the frame just before the loop both sit near x=0 and the wrap is continuous.
+        let t = f64::from(i) / f64::from(FRAMES); // 0.0 ..< 1.0
+        let triangle = 1.0 - (1.0 - 2.0 * t).abs(); // 0 at ends, 1 at the midpoint
+        let x = triangle * (STAGE_W - SIDE);
         let matrix = Matrix::translate(Twips::from_pixels(x), Twips::from_pixels(y));
         let action = if i == 0 {
             PlaceObjectAction::Place(SQUARE_ID)
