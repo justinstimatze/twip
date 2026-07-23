@@ -272,6 +272,36 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    ONCE on Node 14, Tauri bundles the static output; the compiler/integration/packaging are all
    modern Rust. Never modernize the CRA (that migration killed upstream).
 
+## Tooling & strictness (lifted from sibling repos, 2026-07-23)
+
+Rust conventions taken from `camber` and `rtux` (Justin's other Rust projects); the TS baseline
+from `lucida`. The goal was ecosystem parity, not inventing new tooling — so no cargo-deny /
+cargo-machete / gitleaks (no Rust sibling uses them).
+
+- **`rust-toolchain.toml`** — pins `stable` + `rustfmt`,`clippy`. Inert on this box (no rustup;
+  source-tarball rustc) but `dtolnay/rust-toolchain@stable` honours it in CI. From camber.
+- **`.cargo/config.toml`** — `rustflags = ["-D","warnings"]` so LOCAL `cargo build`/`test` deny
+  warnings like CI (works even without clippy/rustfmt). Env RUSTFLAGS overrides it; CI sets its
+  own. From camber.
+- **`.editorconfig`** — utf-8/lf/final-newline/trim; 4-space Rust, 2-space md/yml/json/toml.
+- **`scripts/check.sh` + `.githooks/pre-commit`** — ONE suite run by both the local hook and CI,
+  so strictness can't drift (rtux's anti-drift pattern). Build + test always gate; clippy gates
+  when installed (CI) and skips with a note otherwise; **fmt is advisory (report-only)**. Enable
+  the hook once: `git config core.hooksPath .githooks`.
+- **CI (`.github/workflows/ci.yml`)** — rewritten to a single `check` job calling `check.sh`,
+  plus concurrency-cancel (camber). **The hard `cargo fmt --check` gate was REMOVED** — it failed
+  repeatedly because this box has no rustfmt, and neither Rust sibling hard-gates fmt (camber runs
+  no rustfmt at all; rtux runs it advisory). clippy `-D warnings` is now the real gate. Flip fmt
+  back to gating (add `|| fail=1` in check.sh) once rustfmt is reliably available everywhere.
+
+- **TS baseline (deferred — no TS in THIS repo).** twip is 100% Rust; the React/Tauri editor is a
+  separate repo that doesn't exist yet (and the frozen CRA can't be modernized). When that repo is
+  scaffolded, use `lucida`'s stack: **Biome** (`biome.json`, `@biomejs/biome` ^2.4, recommended
+  rules + tightened `correctness` — noUnusedVariables/Imports=warn, noUndeclaredVariables=error),
+  TypeScript ~5.6 with a strict tsconfig, Biome lint in pre-commit + CI. Unlike lucida (which
+  disabled Biome's formatter to avoid churn on a 16k-line legacy `.mjs`), ENABLE the formatter for
+  the greenfield editor — 2-space, double-quote, semicolons, trailing-comma-all.
+
 ## Still open (deferred, non-blocking)
 
 - Ruffle preview: self-hosted web build (day one) vs native ruffle_core link (later) — start

@@ -6,26 +6,31 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel superseded runs: a fresh push to the same branch/PR kills the in-flight job rather than
+# letting both grind through the swf-crate build. main is excluded (unique group per run there) so
+# landed commits always get a complete CI record. Lifted from camber.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
 jobs:
-  lint-and-test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # rust-toolchain.toml pins channel + components; this action honours it.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: fmt
-        run: cargo fmt --all -- --check
-
-      - name: clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: build
-        run: cargo build --all-targets
-
-      - name: test
-        run: cargo test
+      # The exact same suite the local pre-commit hook runs — one script, so local
+      # and CI strictness can't drift. clippy (deny warnings) is the gate; fmt is advisory.
+      - name: Checks (fmt advisory, clippy, build, test)
+        run: ./scripts/check.sh

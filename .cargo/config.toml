@@ -1,0 +1,5 @@
+# Local builds deny warnings, exactly like CI (.github/workflows/ci.yml) — so a warning fails the
+# build HERE, not silently red-Xing CI later. Cargo caps dependency lints to `allow`, so this only
+# gates OUR crate. (An env RUSTFLAGS, if set, overrides this — CI sets its own.) Lifted from camber.
+[build]
+rustflags = ["-D", "warnings"]
