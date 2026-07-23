@@ -151,9 +151,12 @@ AA noise is blind to easing errors. Three layers instead:
 
 ## Plan
 
-- **Phase 0 — hello-square** (days): standalone Rust bin, hardcoded doc → write_swf → red
-  square tweens across stage, plays in Ruffle desktop + web. Settles Ruffle's tag-order/
-  header tolerance (the avm1-pub question is already answered).
+- **Phase 0 — hello-square** — CODE DONE, STRUCTURALLY VERIFIED (2026-07-23). `twip::hello_square_swf()`
+  hand-builds a red DefineShape4 square tweening across a 550×400 stage over 24 frames @24fps;
+  `cargo run --bin hello_square` writes a valid SWF (`file` → "Macromedia Flash data, version 8").
+  Structural oracle green: round-trip test parses the bytes back → 1 DefineShape + 24 ShowFrame
+  + 24 PlaceObject. swf crate pinned to rev 645449a builds in ~19s (lightweight, no wgpu).
+  REMAINING: visual playback in Ruffle (desktop/web) — not yet run here (ruffle not installed).
 - **Phase 1 — the compiler payoff**: draw in wickeditor.com/editor/ (live), save .wick,
   `twip in.wick out.swf`, plays in Ruffle. Static shapes, single frame, INCLUDES the
   planarization module (the hard 20%). Headless CLI ON PURPOSE — validates SWF generation in

@@ -4,6 +4,9 @@ reference/wick-editor/
 # Rust
 /target
 
+# Phase 0 build artifact (regenerate: cargo run --bin hello_square)
+/hello_square.swf
+
 # defn MCP server runtime state
 /.defn/
 
