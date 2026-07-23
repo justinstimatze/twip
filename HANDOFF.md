@@ -32,20 +32,32 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
 - **One truth renderer, and it's Ruffle.** Anything that plays (scrub/preview/test) is Ruffle
   rendering compiled SWF. The edit canvas is deliberately schematic (handles, path points,
   onion skins) and never claims pixel fidelity — kills the dual-renderer bug class by design.
-- **Wick is never forked.** Its three roles are all read-only: fixture source (the deployed
-  editor), reference spec (read engine source for semantics), import format. Keep a plain
-  reference clone of StickmanRed/wick-editor next to the repo for reading.
+- **We maintain our own polished fork of StickmanRed/wick-editor as the twip editor** — but
+  in a SEPARATE repo from the compiler crate. The Rust workspace is NEVER planted inside the
+  162MB Node-14 CRA; that conflation is the only thing the design rejected, not owning an
+  editor. Two repos: `twip` (Rust compiler+CLI, clean home) and our `wick-editor` fork (React,
+  GPLv3, the editor product) that shells out to the twip CLI. Positioning: THE Wick-family
+  editor that exports playable SWF for the modern Ruffle/Royale revival ecosystem — the SWF
+  export is the actual differentiator (StickmanRed is already the live/polished fork; polish
+  alone just adds one more), polish only drives adoption. Also keep a plain read-only reference
+  clone (`reference/wick-editor`, DONE) for reading engine semantics.
 - **Desktop = Tauri** (same web UI, ~5MB shell; the compiler crate is a direct function call,
   no WASM/IPC seam; ruffle_core can be LINKED NATIVELY so editor+compiler+player are one
   binary). **Web = PWA** from the same Vite build, hosted once on Pages. Set relative base
   path (`homepage`/`base: "."`) so the static build also runs off any dumb server.
   A TiddlyWiki-style single-file .html build is a fun later target (file:// IS a secure
   context in Chrome; verify file-picker APIs before promising save/open there).
-- Editor UI (Phase 4, maybe never): fresh, small, Vite + Tailwind + shadcn panels + custom
-  canvas for stage/timeline, on the WASM build of the core. paper.js is a defensible seam as
-  the EDIT-layer geometry engine (booleans for brush/eraser, hit testing) with Rust
-  normalizing at compile time — Rust path booleans are the weak spot (kurbo has curve math
-  incl. cubic→quadratic; battle-tested booleans are rarer).
+- **The editor is a first-class goal, not "Phase 4 maybe never"** — it IS the nostalgic
+  experience ("Flash that just works"), which is the point of the project. It is our polished
+  FORK of the live Wick editor, NOT a fresh reimplementation: Justin was a Flash beginner and
+  cannot QA a vibe-coded creative tool, so reusing the battle-tested UI removes that risk
+  entirely (a fresh rebuild reintroduces it). Integration seam for the Export button: prefer a
+  **Tauri desktop shell** loading the existing React UI and shelling out to the twip CLI —
+  dodges the webpack-4 WASM landmine and links ruffle_core natively for the preview tab.
+  Web/PWA (script-tag Ruffle + `load({data})`) is a follow-on constrained by the frozen
+  webpack-4 stack. A fresh-from-scratch editor on the WASM core is explicitly OFF the table now
+  (was the rejected plan); if paper.js path booleans ever matter they're inside the fork's
+  existing engine, not something we rebuild.
 
 ## Verified facts (2026-07-23)
 
@@ -137,27 +149,47 @@ AA noise is blind to easing errors. Three layers instead:
 - **Phase 0 — hello-square** (days): standalone Rust bin, hardcoded doc → write_swf → red
   square tweens across stage, plays in Ruffle desktop + web. Settles Ruffle's tag-order/
   header tolerance (the avm1-pub question is already answered).
-- **Phase 1a — THE PAYOFF MILESTONE**: draw in wickeditor.com/editor/, save .wick,
-  `wick2swf in.wick out.swf`, plays in Ruffle. Static shapes, single frame, INCLUDES the
-  planarization module. Target: weeks from start. Project can die after 1a and have been
-  worth it.
-- **1b** frame-by-frame timeline → **1c** baked tweens (matrix+CXFORM, easing vs JS dump)
-  → **1d** nested clips (DefineSprite, recursive).
-- **Phase 2** — frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
-  Buttons proper (DefineButton2) = separately-decided later item, likely never.
-- **Phase 3 (optional)** — SWF-with-embedded-source save/open round-trip; retire .wick as
-  a format (keep as importer).
-- **Phase 4 (maybe never)** — the twip editor: fresh UI on the WASM core, Ruffle preview
-  pane from day one, Tauri + PWA shapes. The Wick fork is NEVER revived for this; if an
-  Export button in the fork is ever wanted it's a PR to StickmanRed, not our home.
-- Gradients: OUT of v1, decided (not "maybe"). Text, audio, filters, images: OUT of v1.
+- **Phase 1 — the compiler payoff**: draw in wickeditor.com/editor/ (live), save .wick,
+  `twip in.wick out.swf`, plays in Ruffle. Static shapes, single frame, INCLUDES the
+  planarization module (the hard 20%). Headless CLI ON PURPOSE — validates SWF generation in
+  isolation before any editor integration. Weeks from start; worth it even if it stopped here.
+- **Phase 2 — THE INTEGRATED EXPERIENCE (first-class, elevated)**: our fork of the Wick editor
+  gets an **Export button** (shell-out to the twip CLI) + a **Ruffle preview tab**. Draw →
+  click Export → it plays. This is "Flash, but it just works," and the reason the project
+  exists for a nostalgic user — no longer an optional afterthought. Pin the fork's Node-14 env
+  (`.nvmrc` + a 10-line `BUILD.md`) before any code changes. Static shapes are enough for the
+  first Export milestone.
+- **Phase 3 — compiler depth (flows into both CLI and editor)**: frame-by-frame timeline →
+  baked tweens (matrix + CXFORM alpha, **sane per-property lerp**) → nested clips (DefineSprite,
+  recursive) → frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers. Buttons
+  proper (DefineButton2) = separately-decided, likely never.
+- **Phase 4 — polish the fork for the ecosystem**: Tauri desktop shell (native ruffle_core),
+  UI polish, position as the SWF-exporting Wick editor for the Ruffle/Royale revival scene.
+  Optional: SWF-with-embedded-source round-trip, retiring .wick as a format (keep as importer).
+- Gradients: OUT of v1, decided (not "maybe"). Text, audio, filters: OUT of v1. Images
+  (Raster/CompoundPath in Path.json) on the OUT list to reconsider.
 
-## Open decisions for the implementing session
+## Decisions (resolved 2026-07-23)
 
-1. Tween semantics: bug-for-bug fork replication vs sane-lerp (affects 1c and the JS dump).
-2. License: GPLv3 vs MIT/Apache for the fresh repo (nothing forces GPL; Justin default-ok
-   with GPLv3).
-3. Which ruffle rev to pin (pick current master sha at repo creation; record it everywhere).
+1. **Tween semantics = sane per-property lerp** (not the fork's buggy matrix-decompose). The
+   upstream deployed editor — where fixtures are authored — already uses plain lerp, so "sane"
+   matches the fixture source; the JS dump is only needed if we ever want bug-for-bug.
+2. **License: compiler crate `twip` = MIT** (ships zero Wick code); **editor fork = GPLv3**
+   (contains Wick code — fine, Justin's ok with it). Separate repos, so no conflict.
+3. **Ruffle rev pinned = `645449a5c602044471f045546a0a31af0df9cd69`** (ruffle-rs/ruffle master,
+   2026-07-23). swf crate = git dep on this rev; build the exporter + preview player from the
+   SAME rev; bump together.
+4. **Editor = our polished fork of StickmanRed/wick-editor**, first-class goal (not fresh, not
+   maybe-never). Two repos — the Rust compiler is NEVER planted inside the CRA.
+
+## Still open
+
+1. **Editor platform for the integrated Export experience**: Tauri desktop shell-out
+   (RECOMMENDED — dodges the webpack-4 WASM landmine, native ruffle_core) vs web/PWA
+   (constrained by the frozen webpack-4 stack; modernizing it is the migration that killed
+   upstream). Decide before Phase 2.
+2. **How far to modernize the fork's 2019 toolchain vs live with Node 14** — collides directly
+   with "as polished as possible." Owning a 162MB CRA fork is real, ongoing maintenance.
 
 ## Known gaps — do these FIRST
 
@@ -171,9 +203,11 @@ AA noise is blind to easing errors. Three layers instead:
    tweened frame. (Justin draws these, or automate via browser tooling.)
 3. **Nothing has been executed.** Every claim above is repo-reading, not running code.
    Phase 0 is the first execution of anything.
-4. Reference clone not yet made: `git clone https://github.com/StickmanRed/wick-editor`
-   (read-only, sibling dir or reference/).
-5. Repo not yet created: `gh repo create wick2swf --private`, main branch, Cargo workspace.
+4. Reference clone DONE: `reference/wick-editor` (StickmanRed, depth-1, HEAD b05793b,
+   2026-06-26; gitignored — has its own .git). Read-only.
+5. Repos not yet created: `gh repo create twip --private` (Rust compiler crate + CLI, main
+   branch, Cargo workspace) AND a fork of StickmanRed/wick-editor for the editor product. The
+   local `~/Documents/twip` dir is git-inited (HANDOFF committed); no GitHub remote yet.
 
 ## Session lineage
 
