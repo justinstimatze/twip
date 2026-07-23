@@ -110,7 +110,12 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
 - **Brush = potrace output** (Brush.js ~356): CompoundPaths, holes by winding. SWF has NO
   fill rule — fill is per-edge (FillStyle0=left, FillStyle1=right). REQUIRED Phase-1 module:
   planarize (self-union under nonzero), normalize winding, assign fill sides. Fixtures:
-  brush-drawn donut, self-crossing pencil path, figure-eight. This is the hard 20%.
+  brush-drawn donut, self-crossing pencil path, figure-eight. This is the hard 20% — but
+  2026 tooling helps: **`i_overlay`** (v6+, actively maintained) does polygon union/diff/xor
+  with self-intersection + hole support under the non-zero rule, and has an **i32 API** that
+  fits twip integer coords with no float-epsilon fragility. Pipeline: flatten paper.js cubics
+  to polylines at twip resolution → i_overlay union (nonzero) → assign FillStyle0/1 edge sides;
+  kurbo does the curve math (cubic→quadratic). Validate in Phase 1.
 - **Tweens**: fork's new default tweenMethod 'normal' goes through paper.Matrix.decompose +
   a buggy reconstruct (dead `skew.x === 0` guard; NaN when lerped rotation crosses ±90°;
   breaks under negative scale). Upstream Wicklets = plain per-property lerp. DECIDE before
@@ -182,14 +187,21 @@ AA noise is blind to easing errors. Three layers instead:
 4. **Editor = our polished fork of StickmanRed/wick-editor**, first-class goal (not fresh, not
    maybe-never). Two repos — the Rust compiler is NEVER planted inside the CRA.
 
-## Still open
+5. **Editor platform = Tauri 2** (GA Oct 2024), desktop-first. The twip compiler is an
+   IN-PROCESS Rust call from the Export button (Tauri command → `twip::compile()` → SWF
+   bytes) — no subprocess, and crucially NO webpack-4 WASM landmine. This IS the handoff's
+   "compiler as a direct function call, no seam." Ruffle preview: self-hosted Ruffle web build
+   in the webview (`load({data: bytes})`, no COOP/COEP) first; native ruffle_core linking is a
+   later single-binary optimization. Web/PWA is a stretch follow-on only.
+6. **Toolchain: live with Node 14, quarantined.** Resolved by #5 — build the frozen React CRA
+   ONCE on Node 14, Tauri bundles the static output; the compiler/integration/packaging are all
+   modern Rust. Never modernize the CRA (that migration killed upstream).
 
-1. **Editor platform for the integrated Export experience**: Tauri desktop shell-out
-   (RECOMMENDED — dodges the webpack-4 WASM landmine, native ruffle_core) vs web/PWA
-   (constrained by the frozen webpack-4 stack; modernizing it is the migration that killed
-   upstream). Decide before Phase 2.
-2. **How far to modernize the fork's 2019 toolchain vs live with Node 14** — collides directly
-   with "as polished as possible." Owning a 162MB CRA fork is real, ongoing maintenance.
+## Still open (deferred, non-blocking)
+
+- Ruffle preview: self-hosted web build (day one) vs native ruffle_core link (later) — start
+  with the web build, revisit for the single-binary goal.
+- Agent-memory routing (winze vs native MEMORY.md) — infra, not product; native for now.
 
 ## Known gaps — do these FIRST
 
