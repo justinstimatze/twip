@@ -33,7 +33,11 @@ fn classname(v: &Value) -> Option<&str> {
 fn children(v: &Value) -> Vec<String> {
     v.get("children")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -46,9 +50,17 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .read_to_string(&mut json)?;
     let root: Value = serde_json::from_str(&json).context("parse project.json")?;
 
-    let project = root.get("project").ok_or_else(|| anyhow!("no project root"))?;
-    let width = project.get("width").and_then(Value::as_f64).unwrap_or(550.0);
-    let height = project.get("height").and_then(Value::as_f64).unwrap_or(400.0);
+    let project = root
+        .get("project")
+        .ok_or_else(|| anyhow!("no project root"))?;
+    let width = project
+        .get("width")
+        .and_then(Value::as_f64)
+        .unwrap_or(550.0);
+    let height = project
+        .get("height")
+        .and_then(Value::as_f64)
+        .unwrap_or(400.0);
 
     let objects = root
         .get("objects")
@@ -114,7 +126,10 @@ fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
         .get("segments")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("Path has no segments"))?;
-    let closed = props.get("closed").and_then(Value::as_bool).unwrap_or(false);
+    let closed = props
+        .get("closed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     let points = flatten_segments(segs, closed);
     if points.len() < 3 {
