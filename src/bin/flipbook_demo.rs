@@ -30,6 +30,7 @@ fn main() -> std::io::Result<()> {
                 end: start + 11,
                 contours: vec![square(x, 180.0, 40.0)],
                 clips: vec![],
+                tweens: vec![],
             }
         })
         .collect();

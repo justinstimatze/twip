@@ -32,11 +32,16 @@ pub struct Layer {
 /// (behind) and clips on top — a v1 simplification; the true z-order is the
 /// child array order, which mixes the two. Fixtures keep clips and loose paths
 /// on separate layers so this never bites.
+///
+/// A frame may also carry `tweens`: motion-tween keyframes that animate the
+/// frame's (single) clip across its span. An empty `tweens` means the clip is
+/// held statically at its own transform.
 pub struct Frame {
     pub start: u16,
     pub end: u16,
     pub contours: Vec<Contour>,
     pub clips: Vec<Clip>,
+    pub tweens: Vec<Tween>,
 }
 
 /// A nested clip: its own transform (placed on the parent frame) plus its own
@@ -44,6 +49,21 @@ pub struct Frame {
 pub struct Clip {
     pub transform: crate::Transform,
     pub layers: Vec<Layer>,
+}
+
+/// A motion-tween keyframe: the frame's clip should hold `transform` at this
+/// playhead, interpolating to the next tween in between. Wick serializes one of
+/// these per tween keyframe inside the frame.
+pub struct Tween {
+    /// 1-indexed position within the frame (1 = `Frame::start`).
+    pub playhead: u16,
+    pub transform: crate::Transform,
+    /// Extra whole turns added to the rotation as it interpolates to the next
+    /// tween (negative = counter-clockwise).
+    pub full_rotations: i32,
+    /// Wick easing curve name governing the segment from this tween to the next.
+    /// Captured now; only linear is applied until the easing table lands (item 6).
+    pub easing: String,
 }
 
 /// One closed contour with a solid fill, in absolute stage pixels (y-down).
@@ -140,6 +160,7 @@ fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
                 .unwrap_or(u64::from(start)) as u16;
             let mut contours = Vec::new();
             let mut clips = Vec::new();
+            let mut tweens = Vec::new();
             for child in child_objects(frame_obj, objects) {
                 match classname(child) {
                     Some("Path") => {
@@ -150,14 +171,18 @@ fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
                     // Button is a Clip subclass; its extra state (states, script) is
                     // ignored for now — it still renders as its clip timeline.
                     Some("Clip" | "Button") => clips.push(parse_clip(child, objects)?),
+                    Some("Tween") => tweens.push(parse_tween(child)),
                     _ => {}
                 }
             }
+            // Wick may serialize tweens out of order; the interpolator wants them by playhead.
+            tweens.sort_by_key(|t| t.playhead);
             frames.push(Frame {
                 start,
                 end,
                 contours,
                 clips,
+                tweens,
             });
         }
         layers.push(Layer { frames });
@@ -173,6 +198,27 @@ fn parse_clip(clip: &Value, objects: &Objects) -> Result<Clip> {
         .ok_or_else(|| anyhow!("Clip has no Timeline"))?;
     let layers = parse_timeline(timeline, objects)?;
     Ok(Clip { transform, layers })
+}
+
+/// A Tween's `transformation` is the same inline shape a Clip carries, plus a
+/// `playheadPosition`, `fullRotations`, and `easingType`.
+fn parse_tween(tween: &Value) -> Tween {
+    Tween {
+        playhead: tween
+            .get("playheadPosition")
+            .and_then(Value::as_u64)
+            .unwrap_or(1) as u16,
+        transform: parse_transform(tween),
+        full_rotations: tween
+            .get("fullRotations")
+            .and_then(Value::as_i64)
+            .unwrap_or(0) as i32,
+        easing: tween
+            .get("easingType")
+            .and_then(Value::as_str)
+            .unwrap_or("none")
+            .to_string(),
+    }
 }
 
 /// A Clip's `transformation` is an inline `{x, y, scaleX, scaleY, rotation, opacity}`.

@@ -188,14 +188,27 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    `frame.addPath` (which does NOT) puts the two keyframes in different coordinate spaces. Fix:
    create the clip at IDENTITY, add all shapes the same way, THEN set clip.transformation.x/y.
    Static clip transform only; tweened clips are #5.
-5. **Tween-object parser.** JSON schema now CAPTURED (2026-07-23) by inspecting a real
-   `Wick.Tween._serialize()`: `{classname:"Tween", playheadPosition:<int>, transformation:
-   {x,y,scaleX,scaleY,rotation,opacity}, fullRotations:<int>, easingType:<string>,
-   originalLayerIndex:<int>}`. A tween sits on a Frame (span 1..N) alongside the tweened Clip;
-   two+ tweens at different playheads define the interpolation. The `.wick` fixture itself was
-   NOT saved (hand-transcribing its base64 was error-prone and it isn't actionable until #4),
-   but it regenerates from the same Chrome script in seconds when #4 lands.
-6. Real easing — dump the 27 fns from the fork's own JS via a Node script. Only after #5.
+5. **DONE 2026-07-23 — Tween-object parser.** `wick::Tween {playhead, transform, full_rotations,
+   easing}` added; `Frame` gained `tweens` (sorted by playhead). Parser reads Wick's serialization
+   `{classname:"Tween", playheadPosition, transformation:{x,y,scaleX,scaleY,rotation,opacity},
+   fullRotations, easingType}`. Compiler: a tweened frame's slot became an `Item` enum — `Fixed`
+   (loose shape / static clip) or `Tween {id, keys}` that RESOLVES to a different placement per
+   frame. `interp_tween` clamps outside the span, else eases `t` (linear for now) and lerps,
+   adding `full_rotations` whole turns. The playhead diff now emits a `Modify` when a held
+   placement's matrix/cxform changed (that's how a moving tween animates) — `Placement` derives
+   `PartialEq` for this. SEMANTICS validated against the live engine before committing:
+   `playheadPosition` is 1-indexed FRAME-RELATIVE (`getTweenAtPosition(1)`→first key,
+   absolute frame = `frame.start + playhead - 1`); the tween transform is ABSOLUTE (replaces the
+   clip's), and `Wick.Tween.interpolate` at the midpoint gives x=50/scaleX=2/rot=45/op=0.5 for a
+   0→100/1→3/0→90/1→0 tween — exactly per-property linear, matching `interp_tween`. Verified 3 ways:
+   synthetic `tween_interpolates_clip_placement` (x = 0,25,50,75,100 over 5 frames), real
+   `compiles_motion_tween_wick` (fixtures/motion-tween.wick: clip tweened over 24 frames, 1 Place +
+   23 Modify, frame1 tx=90/op=1 → frame24 tx=460/op=0.3), and Ruffle (slide+grow+rotate+fade loop).
+   OPEN: `easingType` is parsed and stored but only linear ("none") is applied — non-linear curves
+   silently fall back to linear until #6.
+6. Real easing — dump the 27 fns from the fork's own JS via a Node script. Only after #5. The seam
+   is ready: `fn ease(name, t) -> t` in lib.rs is called per-segment with the tween's `easingType`;
+   #6 is filling in that match. `full_rotations` is already threaded through `interp_tween`.
 7. Strokes (LineStyle2). Independent of the timeline work.
 8. Planarization via i_overlay (brush donut, figure-eight, self-crossing) — the hard 20%, own
    fixtures needed.

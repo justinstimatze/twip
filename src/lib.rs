@@ -329,12 +329,82 @@ const DEPTH_BAND: u16 = 1000;
 
 /// One thing to place at a depth: a character id with the matrix + optional opacity
 /// CXFORM to place it with. Loose shapes use identity + no cxform; clips carry their
-/// own transform.
-#[derive(Clone)]
+/// own transform. `PartialEq` drives the frame-to-frame diff: a same-id placement whose
+/// matrix or cxform changed (a tween in motion) becomes a `Modify`, not a re-`Place`.
+#[derive(Clone, PartialEq)]
 struct Placement {
     id: u16,
     matrix: Matrix,
     cxform: Option<ColorTransform>,
+}
+
+/// A tween keyframe resolved to absolute-frame coordinates: hold `transform` at
+/// `playhead_abs`, interpolating toward the next key. `easing` names the curve for
+/// the segment that STARTS here.
+#[derive(Clone)]
+struct TweenKey {
+    playhead_abs: u16,
+    transform: Transform,
+    full_rotations: i32,
+    easing: String,
+}
+
+/// What a display-list slot holds across a keyframe's span: either a fixed placement
+/// (loose shape, or a statically-held clip) or a tween track that resolves to a
+/// different transform on each frame.
+#[derive(Clone)]
+enum Item {
+    Fixed(Placement),
+    Tween { id: u16, keys: Vec<TweenKey> },
+}
+
+/// Map a Wick easing name to an eased `t` in [0, 1]. Only linear ("none") is honoured
+/// for now; the full 27-function table is item 6, and lands by extending this match.
+fn ease(_easing: &str, t: f64) -> f64 {
+    t
+}
+
+/// Interpolate a tween track to the transform it holds at `frame_no`. Clamps to the
+/// first/last key outside the tween's span; within a segment, eases `t` then lerps,
+/// adding the segment's `full_rotations` whole turns to the rotation.
+fn interp_tween(keys: &[TweenKey], frame_no: u16) -> Transform {
+    let first = &keys[0];
+    let last = &keys[keys.len() - 1];
+    if frame_no <= first.playhead_abs {
+        return first.transform;
+    }
+    if frame_no >= last.playhead_abs {
+        return last.transform;
+    }
+    let i = keys
+        .iter()
+        .rposition(|k| k.playhead_abs <= frame_no)
+        .unwrap_or(0);
+    let a = &keys[i];
+    let b = &keys[i + 1];
+    let span = f64::from(b.playhead_abs - a.playhead_abs);
+    let raw = f64::from(frame_no - a.playhead_abs) / span;
+    let t = ease(&a.easing, raw);
+    let mut end = b.transform;
+    end.rotation_deg += 360.0 * f64::from(a.full_rotations);
+    lerp_transform(&a.transform, &end, t)
+}
+
+impl Item {
+    /// The placement this slot wants on `frame_no`.
+    fn resolve(&self, frame_no: u16) -> Placement {
+        match self {
+            Item::Fixed(p) => p.clone(),
+            Item::Tween { id, keys } => {
+                let t = interp_tween(keys, frame_no);
+                Placement {
+                    id: *id,
+                    matrix: t.matrix(),
+                    cxform: Some(t.color_transform()),
+                }
+            }
+        }
+    }
 }
 
 /// A `PlaceObject` from a [`Placement`].
@@ -372,24 +442,27 @@ fn compile_timeline(
 ) -> Vec<Tag<'static>> {
     let num_layers = layers.len();
 
-    // Per (layer, frame): the ordered placements that frame wants live. Building this
-    // first also emits the definitions (shapes now, sprites via recursion).
-    let mut slots: Vec<Vec<Vec<Placement>>> = Vec::with_capacity(num_layers);
+    // Per (layer, frame): the ordered items that frame wants live. Building this first
+    // also emits the definitions (shapes now, sprites via recursion). Each item resolves
+    // to a placement per frame — fixed for shapes/static clips, interpolated for tweens.
+    let mut slots: Vec<Vec<Vec<Item>>> = Vec::with_capacity(num_layers);
     for layer in layers {
         let mut layer_slots = Vec::with_capacity(layer.frames.len());
         for frame in &layer.frames {
-            let mut placements = Vec::new();
+            let mut items = Vec::new();
             for contour in &frame.contours {
                 let id = *next_id;
                 *next_id += 1;
                 defs.push(Tag::DefineShape(Box::new(contour_to_shape(id, contour))));
-                placements.push(Placement {
+                items.push(Item::Fixed(Placement {
                     id,
                     matrix: Matrix::IDENTITY,
                     cxform: None,
-                });
+                }));
             }
-            for clip in &frame.clips {
+            // Wick puts at most one clip on a tweened frame; the tween track drives that
+            // clip. Any further clips (unusual) are placed statically at their own transform.
+            for (ci, clip) in frame.clips.iter().enumerate() {
                 let body = compile_timeline(&clip.layers, next_id, defs);
                 let num_frames = body
                     .iter()
@@ -402,13 +475,27 @@ fn compile_timeline(
                     num_frames: num_frames.max(1),
                     tags: body,
                 }));
-                placements.push(Placement {
-                    id,
-                    matrix: clip.transform.matrix(),
-                    cxform: Some(clip.transform.color_transform()),
-                });
+                if ci == 0 && !frame.tweens.is_empty() {
+                    let keys = frame
+                        .tweens
+                        .iter()
+                        .map(|tw| TweenKey {
+                            playhead_abs: frame.start + tw.playhead - 1,
+                            transform: tw.transform,
+                            full_rotations: tw.full_rotations,
+                            easing: tw.easing.clone(),
+                        })
+                        .collect();
+                    items.push(Item::Tween { id, keys });
+                } else {
+                    items.push(Item::Fixed(Placement {
+                        id,
+                        matrix: clip.transform.matrix(),
+                        cxform: Some(clip.transform.color_transform()),
+                    }));
+                }
             }
-            layer_slots.push(placements);
+            layer_slots.push(items);
         }
         slots.push(layer_slots);
     }
@@ -436,8 +523,8 @@ fn compile_timeline(
                 .position(|fr| fr.start <= frame_no && frame_no <= fr.end)
             {
                 let base = depth_base(li);
-                for (ci, placement) in slots[li][fi].iter().enumerate() {
-                    desired.insert(base + ci as u16 + 1, placement.clone());
+                for (ci, item) in slots[li][fi].iter().enumerate() {
+                    desired.insert(base + ci as u16 + 1, item.resolve(frame_no));
                 }
             }
         }
@@ -450,14 +537,20 @@ fn compile_timeline(
                 }));
             }
         }
-        // Place new or changed characters (removes above already cleared the slot).
+        // Place new characters, and Modify held ones whose transform changed this frame
+        // (a tween in motion). Removes above already cleared depths that changed id.
         for (&depth, placement) in &desired {
-            if current.get(&depth).map(|c| c.id) != Some(placement.id) {
-                control.push(place_placement(
+            match current.get(&depth) {
+                Some(cur) if cur.id == placement.id => {
+                    if cur != placement {
+                        control.push(place_placement(PlaceObjectAction::Modify, placement, depth));
+                    }
+                }
+                _ => control.push(place_placement(
                     PlaceObjectAction::Place(placement.id),
                     placement,
                     depth,
-                ));
+                )),
             }
         }
         control.push(Tag::ShowFrame);
@@ -696,12 +789,14 @@ mod tests {
                         end: 1,
                         contours: vec![triangle(0.0)],
                         clips: vec![],
+                        tweens: vec![],
                     },
                     Frame {
                         start: 2,
                         end: 2,
                         contours: vec![triangle(50.0)],
                         clips: vec![],
+                        tweens: vec![],
                     },
                 ],
             }],
@@ -757,12 +852,14 @@ mod tests {
                         end: 1,
                         contours: vec![tri(0.0)],
                         clips: vec![],
+                        tweens: vec![],
                     },
                     Frame {
                         start: 2,
                         end: 2,
                         contours: vec![tri(20.0)],
                         clips: vec![],
+                        tweens: vec![],
                     },
                 ],
             }],
@@ -776,6 +873,7 @@ mod tests {
                     end: 1,
                     contours: vec![],
                     clips: vec![clip],
+                    tweens: vec![],
                 }],
             }],
         };
@@ -827,6 +925,168 @@ mod tests {
         assert_eq!(m.tx.get(), Twips::from_pixels(100.0).get(), "clip x -> tx");
         assert_eq!(m.ty.get(), Twips::from_pixels(50.0).get(), "clip y -> ty");
         assert_eq!(parsed.header.num_frames(), 1, "root timeline is one frame");
+    }
+
+    /// Phase 1e parser: a real motion-tween `.wick` drawn via the Wick engine. One clip
+    /// tweened across a 24-frame span from (90, 300) scale 1 opacity 1 to (460, 100)
+    /// scale 2.5 opacity 0.3. Validates the tween parser against Wick's own serialization
+    /// (playheadPosition frame-relative, transform absolute — confirmed against the engine).
+    #[test]
+    fn compiles_motion_tween_wick() {
+        let bytes = include_bytes!("../fixtures/motion-tween.wick");
+        let swf = compile_wick(bytes).expect("compile motion-tween.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
+
+        assert_eq!(parsed.header.num_frames(), 24, "24-frame tween span");
+        assert_eq!(
+            count(&|t| matches!(t, Tag::DefineSprite(_))),
+            1,
+            "the tweened clip -> one sprite"
+        );
+        assert_eq!(
+            count(&|t| matches!(t, Tag::DefineShape(_))),
+            1,
+            "the clip's blue square, hoisted to the root"
+        );
+        assert_eq!(count(&|t| matches!(t, Tag::ShowFrame)), 24, "24 frames");
+        assert_eq!(
+            count(&|t| matches!(t, Tag::RemoveObject(_))),
+            0,
+            "same sprite held throughout — never removed"
+        );
+        // One Place (frame 1) + a Modify every subsequent frame as the tween moves.
+        assert_eq!(
+            count(&|t| matches!(t, Tag::PlaceObject(_))),
+            24,
+            "place once, modify 23 times"
+        );
+
+        let places: Vec<&PlaceObject> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => Some(po.as_ref()),
+                _ => None,
+            })
+            .collect();
+        // The first is the Place at the tween's start transform.
+        assert!(
+            matches!(places[0].action, PlaceObjectAction::Place(_)),
+            "first is a Place"
+        );
+        assert_eq!(
+            places[0].matrix.unwrap().tx.get(),
+            Twips::from_pixels(90.0).get(),
+            "frame 1 x = 90"
+        );
+        assert_eq!(
+            places[0].color_transform.unwrap().a_multiply,
+            Fixed8::from_f64(1.0),
+            "frame 1 opacity 1.0"
+        );
+        // The last lands on the tween's end transform.
+        let last = places[places.len() - 1];
+        assert!(
+            matches!(last.action, PlaceObjectAction::Modify),
+            "subsequent frames are Modify"
+        );
+        assert_eq!(
+            last.matrix.unwrap().tx.get(),
+            Twips::from_pixels(460.0).get(),
+            "frame 24 x = 460"
+        );
+        assert_eq!(
+            last.color_transform.unwrap().a_multiply,
+            Fixed8::from_f64(0.3),
+            "frame 24 opacity 0.3"
+        );
+    }
+
+    /// Phase 1e: a motion tween on a clip. Two tween keys (x=0 at playhead 1, x=100 at
+    /// playhead 5) over a 5-frame span → the sprite is placed once and Modified each frame
+    /// with a linearly interpolated x: 0, 25, 50, 75, 100 pixels.
+    #[test]
+    fn tween_interpolates_clip_placement() {
+        use wick::{Clip, Contour, Document, Frame, Layer, Tween};
+
+        let dot = Contour {
+            points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            fill: swf::Color::from_rgb(0x0000ff, 255),
+        };
+        let clip = Clip {
+            transform: Transform {
+                x: 0.0,
+                y: 0.0,
+                scale_x: 1.0,
+                scale_y: 1.0,
+                rotation_deg: 0.0,
+                opacity: 1.0,
+            },
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![dot],
+                    clips: vec![],
+                    tweens: vec![],
+                }],
+            }],
+        };
+        let key = |playhead: u16, x: f64| Tween {
+            playhead,
+            transform: Transform {
+                x,
+                y: 0.0,
+                scale_x: 1.0,
+                scale_y: 1.0,
+                rotation_deg: 0.0,
+                opacity: 1.0,
+            },
+            full_rotations: 0,
+            easing: "none".to_string(),
+        };
+        let doc = Document {
+            width: 200.0,
+            height: 200.0,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 5,
+                    contours: vec![],
+                    clips: vec![clip],
+                    tweens: vec![key(1, 0.0), key(5, 100.0)],
+                }],
+            }],
+        };
+
+        let swf = compile_document(&doc).expect("compile tween");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        assert_eq!(parsed.header.num_frames(), 5, "5-frame span");
+        let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
+        assert_eq!(
+            count(&|t| matches!(t, Tag::DefineSprite(_))),
+            1,
+            "the tweened clip -> one sprite"
+        );
+
+        // The placement's tx, in playhead order, is the interpolated x each frame.
+        let txs: Vec<i32> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => po.matrix.map(|m| m.tx.get()),
+                _ => None,
+            })
+            .collect();
+        let expect: Vec<i32> = [0.0, 25.0, 50.0, 75.0, 100.0]
+            .iter()
+            .map(|&x| Twips::from_pixels(x).get())
+            .collect();
+        assert_eq!(txs, expect, "one Place + four Modify, linearly interpolated x");
     }
 
     /// Phase 1c: lerp is per-property linear.
