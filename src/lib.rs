@@ -11,9 +11,9 @@ pub mod wick;
 use anyhow::Result;
 use std::collections::BTreeMap;
 use swf::{
-    Color, Compression, FillStyle, Fixed8, Header, Matrix, PlaceObject, PlaceObjectAction, Point,
-    PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, Tag, Twips,
-    write_swf,
+    Color, ColorTransform, Compression, FillStyle, Fixed8, Fixed16, Header, Matrix, PlaceObject,
+    PlaceObjectAction, Point, PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles,
+    StyleChangeData, Tag, Twips, write_swf,
 };
 use wick::Contour;
 
@@ -94,6 +94,141 @@ fn place(action: PlaceObjectAction, matrix: Matrix, depth: u16) -> Tag<'static> 
         is_visible: None,
         amf_data: None,
     }))
+}
+
+/// An affine transform plus opacity — the interpolable state of a Wick clip.
+#[derive(Clone, Copy)]
+pub struct Transform {
+    pub x: f64,
+    pub y: f64,
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub rotation_deg: f64,
+    pub opacity: f64,
+}
+
+impl Transform {
+    /// The SWF matrix for this transform (scale, then rotation, then translation).
+    pub fn matrix(&self) -> Matrix {
+        let r = self.rotation_deg.to_radians();
+        Matrix {
+            a: Fixed16::from_f64(self.scale_x * r.cos()),
+            b: Fixed16::from_f64(self.scale_x * r.sin()),
+            c: Fixed16::from_f64(-self.scale_y * r.sin()),
+            d: Fixed16::from_f64(self.scale_y * r.cos()),
+            tx: Twips::from_pixels(self.x),
+            ty: Twips::from_pixels(self.y),
+        }
+    }
+
+    /// A CXFORM that multiplies alpha by this transform's opacity.
+    pub fn color_transform(&self) -> ColorTransform {
+        ColorTransform {
+            r_multiply: Fixed8::ONE,
+            g_multiply: Fixed8::ONE,
+            b_multiply: Fixed8::ONE,
+            a_multiply: Fixed8::from_f64(self.opacity),
+            r_add: 0,
+            g_add: 0,
+            b_add: 0,
+            a_add: 0,
+        }
+    }
+}
+
+/// Per-property linear interpolation between two transforms — Wick's default lerp.
+/// Fidelity to the 27 Wick easing functions is deferred until a real tween fixture.
+pub fn lerp_transform(a: &Transform, b: &Transform, t: f64) -> Transform {
+    let l = |from: f64, to: f64| from + (to - from) * t;
+    Transform {
+        x: l(a.x, b.x),
+        y: l(a.y, b.y),
+        scale_x: l(a.scale_x, b.scale_x),
+        scale_y: l(a.scale_y, b.scale_y),
+        rotation_deg: l(a.rotation_deg, b.rotation_deg),
+        opacity: l(a.opacity, b.opacity),
+    }
+}
+
+/// A `PlaceObject` carrying a full transform: matrix plus an opacity CXFORM.
+fn place_transformed(action: PlaceObjectAction, transform: &Transform, depth: u16) -> Tag<'static> {
+    Tag::PlaceObject(Box::new(PlaceObject {
+        version: 2,
+        action,
+        depth,
+        matrix: Some(transform.matrix()),
+        color_transform: Some(transform.color_transform()),
+        ratio: None,
+        name: None,
+        clip_depth: None,
+        class_name: None,
+        filters: None,
+        background_color: None,
+        blend_mode: None,
+        clip_actions: None,
+        has_image: false,
+        is_bitmap_cached: None,
+        is_visible: None,
+        amf_data: None,
+    }))
+}
+
+/// Phase 1c demo: bake a motion tween (slide + scale + rotate + fade) onto a
+/// centered square, ping-ponging so the loop is seamless. No `.wick` parsing —
+/// this verifies the matrix + CXFORM interpolation renders smoothly in Ruffle.
+pub fn tween_demo_swf() -> Vec<u8> {
+    const FRAMES: u16 = 48;
+    let contour = wick::Contour {
+        points: vec![(-20.0, -20.0), (20.0, -20.0), (20.0, 20.0), (-20.0, 20.0)],
+        fill: Color::from_rgb(0xff3030, 255),
+    };
+    let mut tags: Vec<Tag> = vec![Tag::DefineShape(Box::new(contour_to_shape(1, &contour)))];
+
+    let start = Transform {
+        x: 90.0,
+        y: 200.0,
+        scale_x: 1.0,
+        scale_y: 1.0,
+        rotation_deg: 0.0,
+        opacity: 1.0,
+    };
+    let end = Transform {
+        x: 430.0,
+        y: 200.0,
+        scale_x: 2.5,
+        scale_y: 2.5,
+        rotation_deg: 360.0,
+        opacity: 0.15,
+    };
+
+    for i in 0..FRAMES {
+        let phase = f64::from(i) / f64::from(FRAMES);
+        let t = 1.0 - (1.0 - 2.0 * phase).abs(); // triangle 0->1->0, seamless loop
+        let transform = lerp_transform(&start, &end, t);
+        let action = if i == 0 {
+            PlaceObjectAction::Place(1)
+        } else {
+            PlaceObjectAction::Modify
+        };
+        tags.push(place_transformed(action, &transform, 1));
+        tags.push(Tag::ShowFrame);
+    }
+
+    let header = Header {
+        compression: Compression::None,
+        version: 8,
+        stage_size: Rectangle {
+            x_min: Twips::ZERO,
+            x_max: Twips::from_pixels(550.0),
+            y_min: Twips::ZERO,
+            y_max: Twips::from_pixels(400.0),
+        },
+        frame_rate: Fixed8::from_f64(24.0),
+        num_frames: FRAMES,
+    };
+    let mut out = Vec::new();
+    write_swf(&header, &tags, &mut out).expect("write tween demo");
+    out
 }
 
 /// Builds the hello-square SWF and returns the encoded bytes.
@@ -402,5 +537,57 @@ mod tests {
             1,
             "remove A when B replaces it at the same depth"
         );
+    }
+
+    /// Phase 1c: lerp is per-property linear.
+    #[test]
+    fn lerp_midpoint() {
+        let a = Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation_deg: 0.0,
+            opacity: 1.0,
+        };
+        let b = Transform {
+            x: 100.0,
+            y: 0.0,
+            scale_x: 3.0,
+            scale_y: 3.0,
+            rotation_deg: 180.0,
+            opacity: 0.0,
+        };
+        let m = lerp_transform(&a, &b, 0.5);
+        assert!((m.x - 50.0).abs() < 1e-9);
+        assert!((m.scale_x - 2.0).abs() < 1e-9);
+        assert!((m.rotation_deg - 90.0).abs() < 1e-9);
+        assert!((m.opacity - 0.5).abs() < 1e-9);
+    }
+
+    /// Phase 1c: the baked tween places a matrix + CXFORM on every frame.
+    #[test]
+    fn tween_demo_has_matrix_and_cxform() {
+        let data = tween_demo_swf();
+        let buf = swf::decompress_swf(&data[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let show_frames = parsed
+            .tags
+            .iter()
+            .filter(|t| matches!(t, Tag::ShowFrame))
+            .count();
+        assert_eq!(show_frames, 48, "48 baked frames");
+
+        let place = parsed
+            .tags
+            .iter()
+            .find_map(|t| match t {
+                Tag::PlaceObject(p) => Some(p),
+                _ => None,
+            })
+            .expect("a PlaceObject");
+        assert!(place.matrix.is_some(), "carries a transform matrix");
+        assert!(place.color_transform.is_some(), "carries an opacity CXFORM");
     }
 }

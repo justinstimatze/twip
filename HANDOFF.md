@@ -180,7 +180,15 @@ AA noise is blind to easing errors. Three layers instead:
   `flipbook_demo` bin rendered in Ruffle — a red square STEPS discretely through 4 positions
   (no interpolation, correct for 1b). test1.wick regression unchanged. NOT YET verified against
   a REAL multi-frame .wick (parse side) — need a frame-by-frame fixture drawn in the editor.
-  Next: 1c baked tweens (matrix + CXFORM, sane lerp).
+- **Phase 1c — baked tweens (compile side)** — DONE 2026-07-23. `Transform {x,y,scale_x,scale_y,
+  rotation_deg,opacity}` with `.matrix()` (a=sx·cos, b=sx·sin, c=-sy·sin, d=sy·cos, tx/ty) and
+  `.color_transform()` (a_multiply = opacity); `lerp_transform` = per-property linear (Wick's
+  default). `tween_demo_swf` bakes slide+scale+rotate+fade per frame as PlaceObject Modify with
+  matrix + CXFORM, ping-ponged for a seamless loop. VERIFIED in Ruffle: smooth continuous
+  motion + fade (a square hides rotation via symmetry — use a rectangle to see it; matrix
+  rotation is unit-tested). DEFERRED: real Wick easing (27 fns — dump from the fork's JS), and
+  the PARSER for real Wick Tween objects (never seen the tween JSON — need a tweened .wick).
+  Tweens apply to CLIPS not loose paths, so full parse also needs the clip/DefineSprite work (1d).
 - **Phase 2 — THE INTEGRATED EXPERIENCE (first-class, elevated)**: our fork of the Wick editor
   gets an **Export button** (shell-out to the twip CLI) + a **Ruffle preview tab**. Draw →
   click Export → it plays. This is "Flash, but it just works," and the reason the project
