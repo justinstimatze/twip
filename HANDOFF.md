@@ -172,7 +172,15 @@ AA noise is blind to easing errors. Three layers instead:
   VISUALLY VERIFIED in Ruffle 2026-07-23: test1.wick renders as a smooth black ellipse + a
   mint-green rectangle (color [0.302,1,0.651]→RGB 77,255,166 exact), correct positions and
   z-order (green over black per child order). THE PAYOFF MILESTONE IS HIT — a real drawing
-  compiled to SWF and played. Phase 1 first cut COMPLETE.
+  compiled to SWF and played. Phase 1a (static shapes) COMPLETE.
+- **Phase 1b — frame-by-frame timeline** — DONE 2026-07-23. parse_wick now preserves layers→
+  frames (start/end spans); `compile_document` walks the playhead 1..=total emitting place/
+  remove deltas against a depth-keyed display list (depth band per layer, front layer highest).
+  Verified: synthetic 2-keyframe unit test (2 defines, 2 places, 1 remove, 2 ShowFrames) + a
+  `flipbook_demo` bin rendered in Ruffle — a red square STEPS discretely through 4 positions
+  (no interpolation, correct for 1b). test1.wick regression unchanged. NOT YET verified against
+  a REAL multi-frame .wick (parse side) — need a frame-by-frame fixture drawn in the editor.
+  Next: 1c baked tweens (matrix + CXFORM, sane lerp).
 - **Phase 2 — THE INTEGRATED EXPERIENCE (first-class, elevated)**: our fork of the Wick editor
   gets an **Export button** (shell-out to the twip CLI) + a **Ruffle preview tab**. Draw →
   click Export → it plays. This is "Flash, but it just works," and the reason the project

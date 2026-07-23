@@ -12,10 +12,23 @@ use serde_json::Value;
 use std::io::{Cursor, Read};
 use swf::Color;
 
-/// A parsed document: stage size (pixels) plus filled contours in draw order.
+/// A parsed document: stage size (pixels) plus the timeline's layers.
 pub struct Document {
     pub width: f64,
     pub height: f64,
+    /// Layers in Wick order — index 0 is frontmost (depth is resolved at compile).
+    pub layers: Vec<Layer>,
+}
+
+/// One timeline layer: a sequence of keyframes.
+pub struct Layer {
+    pub frames: Vec<Frame>,
+}
+
+/// One keyframe, occupying frame numbers `start..=end` (1-indexed), holding shapes.
+pub struct Frame {
+    pub start: u16,
+    pub end: u16,
     pub contours: Vec<Contour>,
 }
 
@@ -73,18 +86,27 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .find(|v| classname(v) == Some("Timeline"))
         .ok_or_else(|| anyhow!("no Timeline object"))?;
 
-    // Wick layer index 0 = frontmost; SWF paints later tags on top. Walk layers
-    // back-to-front (reverse) so layer 0 lands on top.
-    let mut contours = Vec::new();
-    for layer_uuid in children(timeline).iter().rev() {
-        let Some(layer) = objects.get(layer_uuid) else {
+    // Keep Wick layer order (index 0 = frontmost); depth is resolved at compile.
+    let mut layers = Vec::new();
+    for layer_uuid in children(timeline) {
+        let Some(layer_obj) = objects.get(&layer_uuid) else {
             continue;
         };
-        for frame_uuid in children(layer) {
-            let Some(frame) = objects.get(&frame_uuid) else {
+        let mut frames = Vec::new();
+        for frame_uuid in children(layer_obj) {
+            let Some(frame_obj) = objects.get(&frame_uuid) else {
                 continue;
             };
-            for child_uuid in children(frame) {
+            let start = frame_obj
+                .get("start")
+                .and_then(Value::as_u64)
+                .unwrap_or(1) as u16;
+            let end = frame_obj
+                .get("end")
+                .and_then(Value::as_u64)
+                .unwrap_or(u64::from(start)) as u16;
+            let mut contours = Vec::new();
+            for child_uuid in children(frame_obj) {
                 let Some(child) = objects.get(&child_uuid) else {
                     continue;
                 };
@@ -94,13 +116,19 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
                     contours.push(contour);
                 }
             }
+            frames.push(Frame {
+                start,
+                end,
+                contours,
+            });
         }
+        layers.push(Layer { frames });
     }
 
     Ok(Document {
         width,
         height,
-        contours,
+        layers,
     })
 }
 

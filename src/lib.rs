@@ -9,6 +9,7 @@
 pub mod wick;
 
 use anyhow::Result;
+use std::collections::BTreeMap;
 use swf::{
     Color, Compression, FillStyle, Fixed8, Header, Matrix, PlaceObject, PlaceObjectAction, Point,
     PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, Tag, Twips,
@@ -186,17 +187,80 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
     }
 }
 
-/// Compile the bytes of a `.wick` file into a single-frame SWF of its shapes.
-pub fn compile_wick(wick_bytes: &[u8]) -> Result<Vec<u8>> {
-    let doc = wick::parse_wick(wick_bytes)?;
+/// Depth band per layer. The front layer (Wick index 0) gets the highest band so
+/// it draws on top. v1 assumption: fewer than ~60 layers, fewer than 1000 shapes
+/// per layer per frame.
+const DEPTH_BAND: u16 = 1000;
 
+/// Compile a parsed document into an SWF timeline (frame-by-frame).
+pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
+    let num_layers = doc.layers.len();
+
+    // Give every contour a unique shape id and emit all DefineShapes upfront.
     let mut tags: Vec<Tag> = Vec::new();
-    for (i, contour) in doc.contours.iter().enumerate() {
-        let id = u16::try_from(i + 1).expect("shape count fits in u16");
-        tags.push(Tag::DefineShape(Box::new(contour_to_shape(id, contour))));
-        tags.push(place(PlaceObjectAction::Place(id), Matrix::IDENTITY, id));
+    let mut next_id: u16 = 1;
+    let mut ids: Vec<Vec<Vec<u16>>> = Vec::with_capacity(num_layers);
+    for layer in &doc.layers {
+        let mut layer_ids = Vec::with_capacity(layer.frames.len());
+        for frame in &layer.frames {
+            let mut frame_ids = Vec::with_capacity(frame.contours.len());
+            for contour in &frame.contours {
+                let id = next_id;
+                next_id += 1;
+                tags.push(Tag::DefineShape(Box::new(contour_to_shape(id, contour))));
+                frame_ids.push(id);
+            }
+            layer_ids.push(frame_ids);
+        }
+        ids.push(layer_ids);
     }
-    tags.push(Tag::ShowFrame);
+
+    let total: u16 = doc
+        .layers
+        .iter()
+        .flat_map(|l| l.frames.iter())
+        .map(|f| f.end)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+
+    // Front layer (li=0) must land above the back layers.
+    let depth_base = |li: usize| -> u16 { (num_layers - li) as u16 * DEPTH_BAND };
+
+    // Walk the playhead, emitting place/remove deltas against the display list.
+    let mut current: BTreeMap<u16, u16> = BTreeMap::new(); // depth -> character id
+    for frame_no in 1..=total {
+        let mut desired: BTreeMap<u16, u16> = BTreeMap::new();
+        for (li, layer) in doc.layers.iter().enumerate() {
+            if let Some(fi) = layer
+                .frames
+                .iter()
+                .position(|fr| fr.start <= frame_no && frame_no <= fr.end)
+            {
+                let base = depth_base(li);
+                for (ci, &id) in ids[li][fi].iter().enumerate() {
+                    desired.insert(base + ci as u16 + 1, id);
+                }
+            }
+        }
+        // Remove characters whose depth is now empty or holds a different id.
+        for (&depth, &cur_id) in &current {
+            if desired.get(&depth) != Some(&cur_id) {
+                tags.push(Tag::RemoveObject(swf::RemoveObject {
+                    depth,
+                    character_id: None,
+                }));
+            }
+        }
+        // Place new or changed characters (removes above already cleared the slot).
+        for (&depth, &id) in &desired {
+            if current.get(&depth) != Some(&id) {
+                tags.push(place(PlaceObjectAction::Place(id), Matrix::IDENTITY, depth));
+            }
+        }
+        tags.push(Tag::ShowFrame);
+        current = desired;
+    }
 
     let header = Header {
         compression: Compression::None,
@@ -208,12 +272,17 @@ pub fn compile_wick(wick_bytes: &[u8]) -> Result<Vec<u8>> {
             y_max: Twips::from_pixels(doc.height),
         },
         frame_rate: Fixed8::from_f64(24.0),
-        num_frames: 1,
+        num_frames: total,
     };
 
     let mut out = Vec::new();
     write_swf(&header, &tags, &mut out)?;
     Ok(out)
+}
+
+/// Compile the bytes of a `.wick` file into an SWF.
+pub fn compile_wick(wick_bytes: &[u8]) -> Result<Vec<u8>> {
+    compile_document(&wick::parse_wick(wick_bytes)?)
 }
 
 #[cfg(test)]
@@ -282,5 +351,52 @@ mod tests {
         assert_eq!(shapes, 2, "black ellipse + green rectangle");
         assert_eq!(places, 2, "each shape placed once");
         assert_eq!(show_frames, 1, "single static frame");
+    }
+
+    /// Phase 1b: a two-keyframe flipbook removes the old shape and places the new.
+    #[test]
+    fn frame_by_frame_timeline() {
+        use wick::{Contour, Document, Frame, Layer};
+
+        let triangle = |x: f64| Contour {
+            points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
+            fill: swf::Color::from_rgb(0xff0000, 255),
+        };
+        let doc = Document {
+            width: 100.0,
+            height: 100.0,
+            layers: vec![Layer {
+                frames: vec![
+                    Frame {
+                        start: 1,
+                        end: 1,
+                        contours: vec![triangle(0.0)],
+                    },
+                    Frame {
+                        start: 2,
+                        end: 2,
+                        contours: vec![triangle(50.0)],
+                    },
+                ],
+            }],
+        };
+
+        let swf = compile_document(&doc).expect("compile document");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
+        assert_eq!(count(&|t| matches!(t, Tag::DefineShape(_))), 2, "two shapes");
+        assert_eq!(count(&|t| matches!(t, Tag::ShowFrame)), 2, "two frames");
+        assert_eq!(
+            count(&|t| matches!(t, Tag::PlaceObject(_))),
+            2,
+            "place A on frame 1, B on frame 2"
+        );
+        assert_eq!(
+            count(&|t| matches!(t, Tag::RemoveObject(_))),
+            1,
+            "remove A when B replaces it at the same depth"
+        );
     }
 }

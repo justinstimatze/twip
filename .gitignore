@@ -7,6 +7,7 @@ reference/wick-editor/
 # build artifacts (regenerate via cargo run)
 /hello_square.swf
 /test1.swf
+/flipbook.swf
 /out.swf
 
 # defn MCP server runtime state
