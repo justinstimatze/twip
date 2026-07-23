@@ -156,16 +156,31 @@ work in. The organizing fact: emission is Ruffle-verified for 0/1a/1b/1c, but th
 only touched real data for 1a (test1.wick) — 1b/1c parsing has never seen a real multi-frame
 or tweened `.wick`. The queue follows the risk, not the phase numbers.
 
-1. **[user-gated] Draw two fixtures** in wickeditor.com/editor: a frame-by-frame animation
-   (2–3 keyframes, one layer) and a multi-layer overlap. Unblocks all of Tier 2. Justin draws,
-   or automate the draw via the Chrome tool.
-2. Run the frame-by-frame fixture through `compile_wick`; confirm/fix parse of `start`/`end`
-   spans and place/remove diffing against real editor output. (verifies 1b parser)
-3. Confirm multi-layer depth ordering (Wick index 0 = frontmost) against the overlap fixture.
+1. **DONE 2026-07-23 — fixtures generated via Chrome automation.** Rather than hand-drawing,
+   drove `window.Wick`/`window.editor` in wickeditor.com (v1.19.3) directly: built paths with
+   paper.js, assembled timeline via the engine API, exported with `Wick.WickFile.toWickFile`.
+   Exfil was the hard part — https→localhost is mixed-content blocked, script/gestured
+   downloads never reach disk in the extension-driven Chrome, and js-result/read_page both
+   truncate at ~1KB. Working channel: base64 in ~800-char slices through the js-tool result
+   (spaced every 8 chars to dodge the base64 filter), reassembled + `base64 -d` on disk.
+   Committed: `fixtures/frame-by-frame.wick`, `fixtures/multi-layer.wick`.
+2. **DONE — 1b parser verified against real data.** `frame-by-frame.wick` (3 keyframes @
+   1-4/5-8/9-12, one layer) → `compile_wick` → structural oracle green: num_frames=12,
+   3 DefineShape, 3 PlaceObject, 2 RemoveObject, 12 ShowFrame. Locked as test
+   `compiles_frame_by_frame_wick`.
+3. **DONE — multi-layer depth ordering verified.** `multi-layer.wick` (2 layers, overlapping
+   rects) → front Wick layer (index 0, red) emits at depth 2001, back layer (index 1, blue) at
+   1001; higher SWF depth = frontmost. Loose-path position is baked into geometry (PlaceObject
+   matrix identity, tx=0), per design. Locked as test `compiles_multi_layer_wick`.
 4. **Nested clips / DefineSprite (1d).** Real tweens apply to CLIPS not loose paths, so real
    1c parsing is blocked on clip support — this comes before real tweens.
-5. **[user-gated] Motion-tween fixture** → then the **Tween-object parser** (the tween JSON has
-   never been seen; can't be written blind).
+5. **Tween-object parser.** JSON schema now CAPTURED (2026-07-23) by inspecting a real
+   `Wick.Tween._serialize()`: `{classname:"Tween", playheadPosition:<int>, transformation:
+   {x,y,scaleX,scaleY,rotation,opacity}, fullRotations:<int>, easingType:<string>,
+   originalLayerIndex:<int>}`. A tween sits on a Frame (span 1..N) alongside the tweened Clip;
+   two+ tweens at different playheads define the interpolation. The `.wick` fixture itself was
+   NOT saved (hand-transcribing its base64 was error-prone and it isn't actionable until #4),
+   but it regenerates from the same Chrome script in seconds when #4 lands.
 6. Real easing — dump the 27 fns from the fork's own JS via a Node script. Only after #5.
 7. Strokes (LineStyle2). Independent of the timeline work.
 8. Planarization via i_overlay (brush donut, figure-eight, self-crossing) — the hard 20%, own

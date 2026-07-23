@@ -488,6 +488,64 @@ mod tests {
         assert_eq!(show_frames, 1, "single static frame");
     }
 
+    /// Phase 1b parser: a real frame-by-frame `.wick` (3 keyframes over 12 playhead
+    /// positions, one layer) drawn in wickeditor.com and exported by the engine.
+    #[test]
+    fn compiles_frame_by_frame_wick() {
+        let bytes = include_bytes!("../fixtures/frame-by-frame.wick");
+        let swf = compile_wick(bytes).expect("compile frame-by-frame.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
+
+        assert_eq!(
+            count(&|t| matches!(t, Tag::DefineShape(_))),
+            3,
+            "one rect per keyframe"
+        );
+        assert_eq!(
+            count(&|t| matches!(t, Tag::ShowFrame)),
+            12,
+            "playhead spans frames 1..=12"
+        );
+        assert_eq!(
+            count(&|t| matches!(t, Tag::PlaceObject(_))),
+            3,
+            "place at f1, f5, f9"
+        );
+        assert_eq!(
+            count(&|t| matches!(t, Tag::RemoveObject(_))),
+            2,
+            "remove the outgoing shape at each keyframe boundary"
+        );
+    }
+
+    /// Phase 1 depth mapping: a real two-layer `.wick`. Wick layer index 0 is frontmost,
+    /// which must map to the HIGHER SWF depth band (higher depth = drawn on top).
+    #[test]
+    fn compiles_multi_layer_wick() {
+        let bytes = include_bytes!("../fixtures/multi-layer.wick");
+        let swf = compile_wick(bytes).expect("compile multi-layer.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let mut depths: Vec<u16> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => Some(po.depth),
+                _ => None,
+            })
+            .collect();
+        depths.sort_unstable();
+        // Two layers, one shape each: back layer at band 1, front layer at band 2.
+        assert_eq!(
+            depths,
+            vec![DEPTH_BAND + 1, 2 * DEPTH_BAND + 1],
+            "front Wick layer (index 0) placed in the higher depth band"
+        );
+    }
+
     /// Phase 1b: a two-keyframe flipbook removes the old shape and places the new.
     #[test]
     fn frame_by_frame_timeline() {
