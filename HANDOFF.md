@@ -1,0 +1,182 @@
+# twip — HANDOFF
+
+A modern Flash recreation, personal nostalgia project (Justin's, explicitly not a product).
+Draw vector shapes on a timeline, tween them, press export, get an honest-to-god .swf that
+Ruffle plays. Design converged 2026-07-23 across one long session; plan pressure-tested by a
+5-expert adversarial panel (all verdicts sound-with-changes, zero fatal). Raw panel output
+with per-finding file/line evidence: `reference/panel-findings.json`. Everything below that
+says "verified" was checked against live repos/APIs that day.
+
+## Naming
+
+- **twip** = the name for EVERYTHING — repo, crate, project, and (later) editor (SWF
+  coordinate unit, 1/20 px). Collision-checked: crates.io FREE, npm FREE, twip.dev
+  unregistered. Soft collisions only: dead PHP twitter proxy (github twip/twip, 2016), dead
+  PyPI tweet tool, twip.app parked by Italian agency twipping.com, and (unverified, from
+  model memory) twip.kr Korean Twitch donation platform. Fallback name if twip ever rankles:
+  **mutoscope** (clean everywhere).
+- **The name split is retired** (decided 2026-07-23, superseding the original handoff). There
+  is no longer a separate `wick2swf` v1-compiler name; the crate/CLI and the future editor
+  share the single `twip` name. Repo: private, main branch (`gh repo create twip --private`).
+  The compiler CLI is the `twip` crate; the editor phase (maybe never) is also `twip`.
+
+## Architecture (the "elegant version")
+
+One Rust crate is the center of gravity: it is simultaneously the document model, the
+compiler, and the file format. Everything else (CLI, editor, importer) is a thin consumer.
+
+- **One file format, and it's SWF.** Saving IS compiling: the file gets the baked movie plus
+  one custom tag holding the full source document (tweens un-baked, cubics un-subdivided,
+  layer names). Opening = parse the SWF back, read that tag. SWF spec requires players to
+  skip unknown tags, so every save plays anywhere. `.wick` is an IMPORTER, not the format.
+- **One truth renderer, and it's Ruffle.** Anything that plays (scrub/preview/test) is Ruffle
+  rendering compiled SWF. The edit canvas is deliberately schematic (handles, path points,
+  onion skins) and never claims pixel fidelity — kills the dual-renderer bug class by design.
+- **Wick is never forked.** Its three roles are all read-only: fixture source (the deployed
+  editor), reference spec (read engine source for semantics), import format. Keep a plain
+  reference clone of StickmanRed/wick-editor next to the repo for reading.
+- **Desktop = Tauri** (same web UI, ~5MB shell; the compiler crate is a direct function call,
+  no WASM/IPC seam; ruffle_core can be LINKED NATIVELY so editor+compiler+player are one
+  binary). **Web = PWA** from the same Vite build, hosted once on Pages. Set relative base
+  path (`homepage`/`base: "."`) so the static build also runs off any dumb server.
+  A TiddlyWiki-style single-file .html build is a fun later target (file:// IS a secure
+  context in Chrome; verify file-picker APIs before promising save/open there).
+- Editor UI (Phase 4, maybe never): fresh, small, Vite + Tailwind + shadcn panels + custom
+  canvas for stage/timeline, on the WASM build of the core. paper.js is a defensible seam as
+  the EDIT-layer geometry engine (booleans for brush/eraser, hit testing) with Rust
+  normalizing at compile time — Rust path booleans are the weak spot (kurbo has curve math
+  incl. cubic→quadratic; battle-tested booleans are rarer).
+
+## Verified facts (2026-07-23)
+
+- **Deployed Wick editor is LIVE at https://wickeditor.com/editor/** (200, full CRA bundle).
+  editor.wickeditor.com is DEAD (curl 000). Fixtures can be authored there today — the
+  editor fork is NOT on the v1 critical path.
+- **StickmanRed/wick-editor**: only live fork (+54 ahead, 0 behind; HEAD 2026-06-27 "Add
+  different tween methods and inspector clip skew"; gh-pages deployed 2026-07-09; 17★; no CI).
+  Builds ONLY on Node 14 (README says so; react-scripts 2.0.5 / webpack 4.19.1 / node-sass
+  4.14.1 — the linux-x64-83 prebuilt binding still downloads, verified 200). NEVER attempt a
+  "modern Node" migration; the fork's own updgrading-react branch died Feb 2021. Its +54
+  commits changed zero build config. package.json has postinstall electron-builder — delete
+  it / --ignore-scripts for browser-only work. Editor consumes a COMMITTED prebuilt engine
+  bundle (public/corelibs/wick-engine/wickengine.js, 2.27MB, kept current by the fork) — the
+  gulp engine build is fully skippable. Built gh-pages assets use absolute /wick-editor/
+  paths (homepage field) — serve parent dir or rebuild with homepage: ".".
+- **swf crate**: crates.io 0.2.2 (published 2025-01-20) is an 18-month-stale DECOY wearing
+  the same version number as ruffle master's swf/ (40+ commits divergence). MUST use a git
+  dependency pinned to one ruffle-rs/ruffle rev, and build the CI exporter + preview player
+  from that SAME rev. Bump all together.
+- **avm1::write IS public** (`pub mod avm1` in swf/src/lib.rs; write_action on pub Writer).
+  Gotchas: DoAction = `&[u8]` (Tag<'a> borrows ⇒ owned byte-buffer arena pattern);
+  Action::End must be appended manually; write_tag_list appends Tag::End implicitly (never
+  push it); Header/Sprite num_frames are caller-supplied — compute as ShowFrame count in the
+  same function that finalizes each timeline.
+- **DefineShape4 unconditionally**: RGBA fills need v3+, LineStyle2 caps/joins need v4,
+  NON_ZERO_WINDING_RULE flag only written for v4 — and paper.js default fill rule is nonzero.
+  Lower versions drop alpha silently or hard-error.
+- **Ruffle exporter as CI oracle works** but: unpublished binary crate, builds whole ruffle +
+  wgpu (~20-40min cold), needs software Vulkan (mesa-vulkan-drivers/lavapipe — copy ruffle's
+  own .github/workflows/test_rust.yml recipe), and goldens MUST be blessed on the same
+  backend that checks them (lavapipe in CI, never the dev GPU).
+- **Ruffle web embed**: script-tag selfhosted build in public/, `player.ruffle().load({data:
+  bytes})` takes an ArrayBuffer (no server round-trip). Never import @ruffle-rs/ruffle
+  through webpack 4. No COOP/COEP requirement. Serve .wasm with correct MIME.
+- **Tier-0 clicks**: ClipEventFlag::PRESS/RELEASE on PlaceObject clip actions (hit area =
+  clip shapes). NOT MOUSE_DOWN (fires stage-globally). PRESS is SWF6+ ⇒ just use header
+  version 8. stop/play/gotoAndPlay = plain DoAction. No button tags needed for v1.
+- **Apache Royale** alive (AS3→ABC/SWF + JS backends) — only relevant if full AS3 scripting
+  is ever wanted (doubtful; general JS→AVM1 compilation is a permanent non-goal).
+- License: GPLv3 is NOT forced if no Wick code is vendored (swf crate is MIT/Apache-2.0).
+  Justin is fine with GPLv3; it's a choice, decide at repo creation.
+
+## Wick semantics the compiler must honor (panel-verified, file:line in panel-findings.json)
+
+- **Path.json is raw paper.js exportJSON**: segment handles are RELATIVE to anchors;
+  handle-less segments serialize as bare [x,y]; top-level class may be Path, CompoundPath,
+  Raster (images!), PointText, Group; colors are hex strings OR float arrays. Add images to
+  the v1 OUT list. Emit twips by rounding ABSOLUTE coords then taking deltas (else drift).
+- **Brush = potrace output** (Brush.js ~356): CompoundPaths, holes by winding. SWF has NO
+  fill rule — fill is per-edge (FillStyle0=left, FillStyle1=right). REQUIRED Phase-1 module:
+  planarize (self-union under nonzero), normalize winding, assign fill sides. Fixtures:
+  brush-drawn donut, self-crossing pencil path, figure-eight. This is the hard 20%.
+- **Tweens**: fork's new default tweenMethod 'normal' goes through paper.Matrix.decompose +
+  a buggy reconstruct (dead `skew.x === 0` guard; NaN when lerped rotation crosses ±90°;
+  breaks under negative scale). Upstream Wicklets = plain per-property lerp. DECIDE before
+  building: bug-for-bug replication vs patching the fork to sane semantics. Tween lerps
+  x, y, scaleX, scaleY, rotation, skew, OPACITY, + fullRotations (valB += 360*n).
+  Opacity ⇒ PlaceObject color_transform (CXFORM alpha multiply) per baked frame, or fades
+  export opaque. 27 easing functions in Tween.js must match numerically — generate expected
+  values by CALLING THE FORK'S OWN JS (small Node script dumping JSON), don't re-derive.
+- **Tween application** (Frame.js applyTweenTransforms ~564): the tween transformation is
+  copied ABSOLUTELY (replacement, not composition) onto EVERY clip on the frame; loose paths
+  on the same frame are NOT transformed. Emit per-clip identical matrices; static placement
+  for loose paths. Fixtures: tweened frame with clip+loose path; with two clips.
+- **Matrix mapping is clean**: clip children are re-based to clip-local coords at creation
+  (Clip.js addObjects), view pivots group at (0,0) ⇒ PlaceObject.matrix =
+  clip.transformation.toMatrix(), same y-down convention, [a,b,c,d,tx,ty] ↔
+  [ScaleX, RotateSkew0, RotateSkew1, ScaleY, TranslateX, TranslateY].
+- **Layers**: Wick layer index 0 = FRONTMOST (View.Timeline reverses at render). SWF depth:
+  higher = frontmost. depth = (layerCount − layerIndex) band + within-frame drawable index.
+  Hidden layers DO render in published output (isPublished check) — match or make a flag.
+- **Opacity compositing divergence** (accepted, document don't fix): paper.js group opacity
+  composites offscreen then blends; SWF cxform multiplies per shape — overlapping children
+  inside a translucent clip differ. Exclude such fixtures from strict pixel comparison.
+
+## Test oracle (panel replaced the original differential idea)
+
+Cross-renderer pixel diff (Wick canvas vs Ruffle) is REJECTED — tolerance loose enough for
+AA noise is blind to easing errors. Three layers instead:
+1. STRUCTURAL (workhorse): parse emitted SWF back with the same swf crate; assert tags,
+   depths, per-frame matrices. Expected tween matrices from the fork's own JS via Node dump.
+2. Ruffle-only golden PNGs (exporter, lavapipe-blessed, tolerance + max_outliers copied from
+   ruffle's tests/framework image_comparison).
+3. Wick-vs-Ruffle side-by-side = manual eyeball tool only, never CI.
+
+## Plan
+
+- **Phase 0 — hello-square** (days): standalone Rust bin, hardcoded doc → write_swf → red
+  square tweens across stage, plays in Ruffle desktop + web. Settles Ruffle's tag-order/
+  header tolerance (the avm1-pub question is already answered).
+- **Phase 1a — THE PAYOFF MILESTONE**: draw in wickeditor.com/editor/, save .wick,
+  `wick2swf in.wick out.swf`, plays in Ruffle. Static shapes, single frame, INCLUDES the
+  planarization module. Target: weeks from start. Project can die after 1a and have been
+  worth it.
+- **1b** frame-by-frame timeline → **1c** baked tweens (matrix+CXFORM, easing vs JS dump)
+  → **1d** nested clips (DefineSprite, recursive).
+- **Phase 2** — frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
+  Buttons proper (DefineButton2) = separately-decided later item, likely never.
+- **Phase 3 (optional)** — SWF-with-embedded-source save/open round-trip; retire .wick as
+  a format (keep as importer).
+- **Phase 4 (maybe never)** — the twip editor: fresh UI on the WASM core, Ruffle preview
+  pane from day one, Tauri + PWA shapes. The Wick fork is NEVER revived for this; if an
+  Export button in the fork is ever wanted it's a PR to StickmanRed, not our home.
+- Gradients: OUT of v1, decided (not "maybe"). Text, audio, filters, images: OUT of v1.
+
+## Open decisions for the implementing session
+
+1. Tween semantics: bug-for-bug fork replication vs sane-lerp (affects 1c and the JS dump).
+2. License: GPLv3 vs MIT/Apache for the fresh repo (nothing forces GPL; Justin default-ok
+   with GPLv3).
+3. Which ruffle rev to pin (pick current master sha at repo creation; record it everywhere).
+
+## Known gaps — do these FIRST
+
+1. **No one has ever inspected an actual .wick file.** The whole design assumes zip+
+   project.json from reading serializer source. Save a real one from wickeditor.com/editor/
+   and dump its structure before writing any parser code. Also check whether fork-saved
+   files (new tween methods) add fields the deployed-editor files lack.
+2. **Zero fixtures exist.** Need a small corpus saved from the deployed editor: single
+   shape; brush donut; self-crossing path; multi-layer overlap; motion tween; rotation-
+   through-90° tween; flip (negative scale) tween; fade tween; nested clip; clip+loose-path
+   tweened frame. (Justin draws these, or automate via browser tooling.)
+3. **Nothing has been executed.** Every claim above is repo-reading, not running code.
+   Phase 0 is the first execution of anything.
+4. Reference clone not yet made: `git clone https://github.com/StickmanRed/wick-editor`
+   (read-only, sibling dir or reference/).
+5. Repo not yet created: `gh repo create wick2swf --private`, main branch, Cargo workspace.
+
+## Session lineage
+
+Designed in Claude Code session f66726fa (2026-07), which also verified all repo facts and
+ran the panel (5 agents, ~364k tokens). Claude memory: project_flash_editor.md in the
+gas6amus Documents memory dir mirrors the durable facts.
