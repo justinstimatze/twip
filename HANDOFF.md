@@ -149,6 +149,35 @@ AA noise is blind to easing errors. Three layers instead:
    ruffle's tests/framework image_comparison).
 3. Wick-vs-Ruffle side-by-side = manual eyeball tool only, never CI.
 
+## Working queue (reranked 2026-07-23)
+
+The phase list below is the record of what each phase *is*. This is the order to actually
+work in. The organizing fact: emission is Ruffle-verified for 0/1a/1b/1c, but the parser has
+only touched real data for 1a (test1.wick) — 1b/1c parsing has never seen a real multi-frame
+or tweened `.wick`. The queue follows the risk, not the phase numbers.
+
+1. **[user-gated] Draw two fixtures** in wickeditor.com/editor: a frame-by-frame animation
+   (2–3 keyframes, one layer) and a multi-layer overlap. Unblocks all of Tier 2. Justin draws,
+   or automate the draw via the Chrome tool.
+2. Run the frame-by-frame fixture through `compile_wick`; confirm/fix parse of `start`/`end`
+   spans and place/remove diffing against real editor output. (verifies 1b parser)
+3. Confirm multi-layer depth ordering (Wick index 0 = frontmost) against the overlap fixture.
+4. **Nested clips / DefineSprite (1d).** Real tweens apply to CLIPS not loose paths, so real
+   1c parsing is blocked on clip support — this comes before real tweens.
+5. **[user-gated] Motion-tween fixture** → then the **Tween-object parser** (the tween JSON has
+   never been seen; can't be written blind).
+6. Real easing — dump the 27 fns from the fork's own JS via a Node script. Only after #5.
+7. Strokes (LineStyle2). Independent of the timeline work.
+8. Planarization via i_overlay (brush donut, figure-eight, self-crossing) — the hard 20%, own
+   fixtures needed.
+9. **Editor fork** (StickmanRed/wick-editor): pin Node-14, Tauri 2 shell, Export button →
+   twip compiler, Ruffle preview tab. Independent of 2–8; the first Export milestone needs only
+   static shapes, which already work. Biggest single rock, delivers the "Flash that just works"
+   experience — but de-risks nothing about the compiler, so it sits below the cheap parser
+   closes. Clean swap upward if Justin wants to start the editor now instead.
+10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
+11. Ruffle golden-PNG oracle (lavapipe-blessed).
+
 ## Plan
 
 - **Phase 0 — hello-square** — CODE DONE, STRUCTURALLY VERIFIED (2026-07-23). `twip::hello_square_swf()`
