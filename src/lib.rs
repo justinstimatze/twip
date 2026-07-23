@@ -386,7 +386,11 @@ mod tests {
         let parsed = swf::parse_swf(&buf).expect("parse");
 
         let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
-        assert_eq!(count(&|t| matches!(t, Tag::DefineShape(_))), 2, "two shapes");
+        assert_eq!(
+            count(&|t| matches!(t, Tag::DefineShape(_))),
+            2,
+            "two shapes"
+        );
         assert_eq!(count(&|t| matches!(t, Tag::ShowFrame)), 2, "two frames");
         assert_eq!(
             count(&|t| matches!(t, Tag::PlaceObject(_))),

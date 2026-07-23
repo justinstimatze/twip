@@ -97,10 +97,7 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
             let Some(frame_obj) = objects.get(&frame_uuid) else {
                 continue;
             };
-            let start = frame_obj
-                .get("start")
-                .and_then(Value::as_u64)
-                .unwrap_or(1) as u16;
+            let start = frame_obj.get("start").and_then(Value::as_u64).unwrap_or(1) as u16;
             let end = frame_obj
                 .get("end")
                 .and_then(Value::as_u64)
