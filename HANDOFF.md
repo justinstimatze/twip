@@ -156,7 +156,10 @@ AA noise is blind to easing errors. Three layers instead:
   `cargo run --bin hello_square` writes a valid SWF (`file` → "Macromedia Flash data, version 8").
   Structural oracle green: round-trip test parses the bytes back → 1 DefineShape + 24 ShowFrame
   + 24 PlaceObject. swf crate pinned to rev 645449a builds in ~19s (lightweight, no wgpu).
-  REMAINING: visual playback in Ruffle (desktop/web) — not yet run here (ruffle not installed).
+  VISUAL PLAYBACK VERIFIED in Ruffle (2026-07-23): served the SWF (inline base64) into the
+  Ruffle web build via a localhost page in Chrome — solid red square renders on the white
+  stage and tweens left→right across frames. Phase 0 COMPLETE. (Chrome blocks file://; use a
+  localhost http.server. Ruffle shows a "Click to unmute" autoplay overlay — click to dismiss.)
 - **Phase 1 — the compiler payoff**: draw in wickeditor.com/editor/ (live), save .wick,
   `twip in.wick out.swf`, plays in Ruffle. Static shapes, single frame, INCLUDES the
   planarization module (the hard 20%). Headless CLI ON PURPOSE — validates SWF generation in
