@@ -241,8 +241,26 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    (4-pt closed square -> 4 edges, both styles, butt->None cap, miter join), the real
    `compiles_test1_wick` now asserts both engine-authored shapes gain a black round-capped 1px
    stroke, and Ruffle (green rectangle renders with its thin black outline — dropped before #7).
-8. Planarization via i_overlay (brush donut, figure-eight, self-crossing) — the hard 20%, own
-   fixtures needed.
+8. **DONE 2026-07-23 — Planarization via i_overlay (brush donut).** CompoundPaths now parse
+   (`compound_to_contour`): style on the compound, geometry on `children` Paths (Wick keeps
+   classname "Path" for a compound; the inner paper class is "CompoundPath"). `wick::Contour` gained
+   `holes: Vec<Vec<(f64,f64)>>` (empty for a simple path). A holed contour goes through `planarize`
+   — `i_overlay` v7.0.2, `Vec<Vec<IntPoint>>.simplify(FillRule::NonZero, IntOverlayOptions::keep_all_points())`
+   — which resolves self-intersections and returns outer+holes wound OPPOSITE (shape[0]=outer);
+   every output ring is emitted into ONE DefineShape4 under `NON_ZERO_WINDING_RULE`, so the holes
+   render empty. A simple single-ring contour BYPASSES planarize and is emitted with exact vertices,
+   so #4–#7's exact edge-count tests are untouched. imports via i_overlay re-exports
+   (`i_overlay::i_float::int::point::IntPoint`, `::core::fill_rule::FillRule`, `::core::simplify::Simplify`,
+   `::core::overlay::IntOverlayOptions`). Verified: `planarize_makes_donut_hole` (outer + opposite-
+   wound 40x40 hole -> 2 rings, opposite winding, hole area preserved exactly), `planarize_splits_figure_eight`
+   (bowtie single contour -> 2 lobes), end-to-end `compiles_brush_donut_wick`
+   (fixtures/brush-donut.wick, a CompoundPath donut -> 1 shape, 2 move-to rings, 8 edges), and Ruffle
+   (blue square with an empty white hole punched through the middle). NOTE: self-crossing SINGLE
+   paths (no holes) still emit raw and render fine under non-zero (both lobes fill); routing them
+   through planarize is only needed if an even-odd source or a self-overlapping stroke sliver shows
+   up — deferred until a real fixture demands it. brush-donut.wick is hand-built from test1.wick's
+   real object graph with a format-faithful CompoundPath json (paper.js source-confirmed), not a
+   fresh engine export.
 9. **Editor fork** (StickmanRed/wick-editor): pin Node-14, Tauri 2 shell, Export button →
    twip compiler, Ruffle preview tab. Independent of 2–8; the first Export milestone needs only
    static shapes, which already work. Biggest single rock, delivers the "Flash that just works"

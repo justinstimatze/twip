@@ -180,6 +180,7 @@ pub fn tween_demo_swf() -> Vec<u8> {
     const FRAMES: u16 = 48;
     let contour = wick::Contour {
         points: vec![(-20.0, -20.0), (20.0, -20.0), (20.0, 20.0), (-20.0, 20.0)],
+        holes: vec![],
         closed: true,
         fill: Some(Color::from_rgb(0xff3030, 255)),
         stroke: None,
@@ -294,17 +295,60 @@ fn stroke_to_line_style(stroke: &wick::Stroke, close: bool) -> LineStyle {
         .with_allow_close(close)
 }
 
+/// Planarize a filled region's rings under the non-zero rule via i_overlay: resolve
+/// self-intersections and normalize winding so holes come back wound opposite to their
+/// outer (index 0 of each output shape is the outer boundary). Returns every output
+/// ring flattened across all resulting shapes, in twips. `keep_all_points` preserves
+/// input vertices (no collinear thinning) so twip geometry is stable.
+fn planarize(rings: &[Vec<(i32, i32)>]) -> Vec<Vec<(i32, i32)>> {
+    use i_overlay::core::fill_rule::FillRule;
+    use i_overlay::core::overlay::IntOverlayOptions;
+    use i_overlay::core::simplify::Simplify;
+    use i_overlay::i_float::int::point::IntPoint;
+
+    let contours: Vec<Vec<IntPoint>> = rings
+        .iter()
+        .map(|r| r.iter().map(|&(x, y)| IntPoint::new(x, y)).collect())
+        .collect();
+    let shapes = contours.simplify(FillRule::NonZero, IntOverlayOptions::keep_all_points());
+    let out: Vec<Vec<(i32, i32)>> = shapes
+        .into_iter()
+        .flatten()
+        .map(|contour| contour.into_iter().map(|p| (p.x, p.y)).collect())
+        .collect();
+    // A degenerate input (e.g. all collinear) can simplify to nothing; fall back to the
+    // raw rings so the region still draws rather than vanishing.
+    if out.is_empty() { rings.to_vec() } else { out }
+}
+
 /// Convert one flattened contour into a `DefineShape4` with its fill and/or stroke.
+/// A CompoundPath contributes hole rings alongside the outer ring; those go through
+/// `planarize` (i_overlay, non-zero) so the holes render empty. A plain single-ring
+/// contour is emitted directly, preserving its exact vertices.
 fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
     // Absolute pixels -> twips (i32) first, then take deltas, so rounding can't drift.
-    let twips: Vec<(i32, i32)> = contour
-        .points
-        .iter()
-        .map(|&(x, y)| (Twips::from_pixels(x).get(), Twips::from_pixels(y).get()))
-        .collect();
+    let to_twips = |ring: &[(f64, f64)]| -> Vec<(i32, i32)> {
+        ring.iter()
+            .map(|&(x, y)| (Twips::from_pixels(x).get(), Twips::from_pixels(y).get()))
+            .collect()
+    };
+    let outer = to_twips(&contour.points);
+
+    // A fill always closes the area; an open stroke stops at the last vertex.
+    let close = contour.fill.is_some() || contour.closed;
+
+    // Only holed regions (CompoundPaths) need planarization; a simple ring is emitted
+    // as-is so its geometry and edge count stay exact.
+    let rings: Vec<Vec<(i32, i32)>> = if contour.holes.is_empty() {
+        vec![outer]
+    } else {
+        let mut all = vec![outer];
+        all.extend(contour.holes.iter().map(|h| to_twips(h)));
+        planarize(&all)
+    };
 
     let (mut x_min, mut x_max, mut y_min, mut y_max) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
-    for &(x, y) in &twips {
+    for &(x, y) in rings.iter().flatten() {
         x_min = x_min.min(x);
         x_max = x_max.max(x);
         y_min = y_min.min(y);
@@ -317,23 +361,32 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
         y_max: Twips::new(y_max),
     };
 
-    // A fill always closes the area; an open stroke stops at the last vertex.
-    let close = contour.fill.is_some() || contour.closed;
+    let fill_idx = contour.fill.as_ref().map(|_| 1); // 1-based into fill_styles
+    let line_idx = contour.stroke.as_ref().map(|_| 1); // 1-based into line_styles
 
-    let mut records = vec![ShapeRecord::StyleChange(Box::new(StyleChangeData {
-        move_to: Some(Point::new(Twips::new(twips[0].0), Twips::new(twips[0].1))),
-        fill_style_0: None,
-        fill_style_1: contour.fill.as_ref().map(|_| 1), // 1-based into fill_styles
-        line_style: contour.stroke.as_ref().map(|_| 1), // 1-based into line_styles
-        new_styles: None,
-    }))];
-    let last = if close { twips.len() } else { twips.len() - 1 };
-    for i in 0..last {
-        let (cx, cy) = twips[i];
-        let (nx, ny) = twips[(i + 1) % twips.len()]; // wraps to the start only when closing
-        records.push(ShapeRecord::StraightEdge {
-            delta: PointDelta::new(Twips::new(nx - cx), Twips::new(ny - cy)),
-        });
+    // Emit one ring: a move-to that re-declares the styles, then its edges. Only the
+    // first (outer) ring honors `close` for the open-stroke case; planarized holes and
+    // extra outers are always closed.
+    let mut records = Vec::new();
+    let mut push_ring = |ring: &[(i32, i32)], ring_closes: bool| {
+        records.push(ShapeRecord::StyleChange(Box::new(StyleChangeData {
+            move_to: Some(Point::new(Twips::new(ring[0].0), Twips::new(ring[0].1))),
+            fill_style_0: None,
+            fill_style_1: fill_idx,
+            line_style: line_idx,
+            new_styles: None,
+        })));
+        let last = if ring_closes { ring.len() } else { ring.len() - 1 };
+        for i in 0..last {
+            let (cx, cy) = ring[i];
+            let (nx, ny) = ring[(i + 1) % ring.len()]; // wraps to the start only when closing
+            records.push(ShapeRecord::StraightEdge {
+                delta: PointDelta::new(Twips::new(nx - cx), Twips::new(ny - cy)),
+            });
+        }
+    };
+    for (i, ring) in rings.iter().enumerate() {
+        push_ring(ring, if i == 0 { close } else { true });
     }
 
     Shape {
@@ -872,6 +925,38 @@ mod tests {
         }
     }
 
+    /// Item 8: a CompoundPath donut (outer 200x200 square + oppositely-wound 80x80
+    /// hole) parses, planarizes, and compiles to ONE shape carrying two rings — the
+    /// hole survives so the fill has a window.
+    #[test]
+    fn compiles_brush_donut_wick() {
+        let bytes = include_bytes!("../fixtures/brush-donut.wick");
+        let swf = compile_wick(bytes).expect("compile brush-donut.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let shapes: Vec<&Shape> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::DefineShape(s) => Some(&**s),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shapes.len(), 1, "the donut is one filled shape");
+        let shape = shapes[0];
+        assert_eq!(shape.styles.fill_styles.len(), 1, "one fill");
+
+        // Each ring begins with a move-to StyleChange; a donut has two (outer + hole).
+        let move_tos = shape
+            .shape
+            .iter()
+            .filter(|r| matches!(r, ShapeRecord::StyleChange(s) if s.move_to.is_some()))
+            .count();
+        assert_eq!(move_tos, 2, "outer ring + one hole ring");
+        assert_eq!(straight_edges(shape), 8, "two 4-sided rings");
+    }
+
     /// Phase 1b parser: a real frame-by-frame `.wick` (3 keyframes over 12 playhead
     /// positions, one layer) drawn in wickeditor.com and exported by the engine.
     #[test]
@@ -986,6 +1071,7 @@ mod tests {
 
         let triangle = |x: f64| Contour {
             points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
+            holes: vec![],
             closed: true,
             fill: Some(swf::Color::from_rgb(0xff0000, 255)),
             stroke: None,
@@ -1058,6 +1144,7 @@ mod tests {
         // style, and no closing edge (2 edges for 3 points, not 3).
         let contour = Contour {
             points: vec![(0.0, 0.0), (50.0, 0.0), (50.0, 50.0)],
+            holes: vec![],
             closed: false,
             fill: None,
             stroke: Some(wick::Stroke {
@@ -1093,6 +1180,7 @@ mod tests {
         // both indices on the style change, and a closing edge (4 edges for 4 points).
         let contour = Contour {
             points: vec![(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)],
+            holes: vec![],
             closed: true,
             fill: Some(Color::from_rgb(0x00ff00, 255)),
             stroke: Some(wick::Stroke {
@@ -1122,6 +1210,54 @@ mod tests {
         assert_eq!(straight_edges(&shape), 4, "4 points, closed -> 4 edges");
     }
 
+    // Twice the signed area of a twip ring (shoelace). Sign encodes winding; magnitude
+    // distinguishes the big outer boundary from a small hole.
+    fn signed_area2(ring: &[(i32, i32)]) -> i64 {
+        let n = ring.len();
+        let mut a: i64 = 0;
+        for i in 0..n {
+            let (x0, y0) = ring[i];
+            let (x1, y1) = ring[(i + 1) % n];
+            a += i64::from(x0) * i64::from(y1) - i64::from(x1) * i64::from(y0);
+        }
+        a
+    }
+
+    #[test]
+    fn planarize_makes_donut_hole() {
+        // Outer square and an OPPOSITELY-wound inner square (how paper.js/potrace encode
+        // a hole). Under non-zero, i_overlay must return the outer plus a hole wound the
+        // other way -- not a solid-filled square.
+        let outer = vec![(0, 0), (100, 0), (100, 100), (0, 100)];
+        let hole = vec![(30, 30), (30, 70), (70, 70), (70, 30)]; // reversed orientation
+        let rings = planarize(&[outer, hole]);
+
+        assert_eq!(rings.len(), 2, "outer boundary + one hole survive");
+        let a0 = signed_area2(&rings[0]);
+        let a1 = signed_area2(&rings[1]);
+        assert!(
+            a0.signum() != a1.signum(),
+            "outer and hole wind opposite ({a0} vs {a1})"
+        );
+        assert!(
+            a0.abs() > a1.abs(),
+            "index 0 is the larger outer boundary"
+        );
+        assert_eq!(a1.abs(), 2 * 40 * 40, "the 40x40 hole is preserved");
+    }
+
+    #[test]
+    fn planarize_splits_figure_eight() {
+        // A self-crossing bowtie as a single contour. Under non-zero, i_overlay resolves
+        // the crossing into two separate lobes (two output shapes -> two rings here).
+        let bowtie = vec![(0, 0), (10, 10), (10, 0), (0, 10)];
+        let rings = planarize(&[bowtie]);
+        assert_eq!(rings.len(), 2, "crossing resolved into two lobes");
+        for r in &rings {
+            assert!(r.len() >= 3, "each lobe is a real polygon");
+        }
+    }
+
     /// Phase 1d: a nested clip compiles to a DefineSprite (its own timeline) that the
     /// root places once, carrying the clip's transform. Definitions hoist to the root.
     #[test]
@@ -1130,6 +1266,7 @@ mod tests {
 
         let tri = |x: f64| Contour {
             points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
+            holes: vec![],
             closed: true,
             fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
             stroke: None,
@@ -1367,6 +1504,7 @@ mod tests {
 
         let dot = Contour {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            holes: vec![],
             closed: true,
             fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
             stroke: None,
@@ -1454,6 +1592,7 @@ mod tests {
 
         let dot = Contour {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            holes: vec![],
             closed: true,
             fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
             stroke: None,

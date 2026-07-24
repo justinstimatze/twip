@@ -69,9 +69,13 @@ pub struct Tween {
 /// One contour in absolute stage pixels (y-down). A path may carry a fill, a
 /// stroke, or both; at least one is present or the parser drops it.
 pub struct Contour {
-    /// Polyline vertices. A filled or `closed` contour also closes from the last
-    /// vertex back to the first; an open stroke does not.
+    /// Outer polyline vertices. A filled or `closed` contour also closes from the
+    /// last vertex back to the first; an open stroke does not.
     pub points: Vec<(f64, f64)>,
+    /// Inner rings (holes), present only for a CompoundPath (e.g. a brush donut).
+    /// When non-empty, the compiler planarizes `points` + `holes` so the holes
+    /// render empty under the non-zero winding rule.
+    pub holes: Vec<Vec<(f64, f64)>>,
     /// Whether paper.js marked the path closed (a fill closes regardless).
     pub closed: bool,
     pub fill: Option<Color>,
@@ -271,19 +275,25 @@ fn parse_transform(clip: &Value) -> crate::Transform {
 }
 
 fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
-    // Path.json = ["Path", { segments, closed, fillColor, ... }] (raw paper.js exportJSON).
+    // Path.json = [class, props] (raw paper.js exportJSON). class is "Path" for a
+    // single path or "CompoundPath" for a brush stroke with holes; Raster/PointText
+    // are later phases.
     let json = path
         .get("json")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("Path.json not an array"))?;
-    if json.first().and_then(Value::as_str) != Some("Path") {
-        return Ok(None); // CompoundPath / Raster / PointText — later phases
-    }
     let props = json
         .get(1)
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow!("Path props missing"))?;
+    match json.first().and_then(Value::as_str) {
+        Some("Path") => single_path_to_contour(props),
+        Some("CompoundPath") => compound_to_contour(props),
+        _ => Ok(None),
+    }
+}
 
+fn single_path_to_contour(props: &serde_json::Map<String, Value>) -> Result<Option<Contour>> {
     let segs = props
         .get("segments")
         .and_then(Value::as_array)
@@ -306,7 +316,52 @@ fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
     }
     Ok(Some(Contour {
         points,
+        holes: vec![],
         closed,
+        fill,
+        stroke,
+    }))
+}
+
+/// A CompoundPath: style lives on the compound, geometry on its `children` paths
+/// (`["CompoundPath", { children: [["Path",{segments,closed}], ...], fillColor }]`).
+/// The child rings are collected as outer + holes; the compiler planarizes them so
+/// the holes render empty. Orientation is left to the planarizer, so which child is
+/// "outer" here does not matter.
+fn compound_to_contour(props: &serde_json::Map<String, Value>) -> Result<Option<Contour>> {
+    let children = props
+        .get("children")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("CompoundPath has no children"))?;
+
+    let mut rings: Vec<Vec<(f64, f64)>> = Vec::new();
+    for child in children {
+        let child = child.as_array().and_then(|c| c.get(1)?.as_object());
+        let Some(child) = child else { continue };
+        let Some(segs) = child.get("segments").and_then(Value::as_array) else {
+            continue;
+        };
+        let closed = child.get("closed").and_then(Value::as_bool).unwrap_or(true);
+        let ring = flatten_segments(segs, closed);
+        if ring.len() >= 3 {
+            rings.push(ring);
+        }
+    }
+    if rings.is_empty() {
+        return Ok(None);
+    }
+
+    // A brush stroke is a solid fill; strokes on a CompoundPath are unusual but honored.
+    let fill = props.get("fillColor").map(parse_color);
+    let stroke = parse_stroke(props);
+    if fill.is_none() && stroke.is_none() {
+        return Ok(None);
+    }
+    let points = rings.remove(0);
+    Ok(Some(Contour {
+        points,
+        holes: rings,
+        closed: true,
         fill,
         stroke,
     }))
