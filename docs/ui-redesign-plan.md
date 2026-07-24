@@ -165,13 +165,50 @@ download), and a property trap on `window.mocha` that wraps `run()` to observe t
 events. Wired as `pnpm test` in `engine/`, `pnpm test-engine` from `editor/`. Also added
 `engine`'s missing `build` script.
 
-**Baseline: 539 passed, 8 failed.** All eight fail in the committed `dist/wickengine.js`,
-untouched by any of this — they are what the suite has been doing unobserved. Two are tests
-leaking globals (`tempHolder`, `_scriptOnErrorCallback`); two are `unload` scripts not
-running when a clip stops being visible; three are SVG render layer-naming
-(`wick_project_outer` where `wick_project_bg` is expected). The eighth is worth a look
-before it bites the tween work: **`Wick.Tween #interpolate should tween rotation correctly
-(using no. of rotations param)` expects 270 and gets 90.00000000000001.**
+**Baseline: 8 deterministic failures**, out of 547 cases, in about 10 seconds. All eight fail
+in the committed `dist/wickengine.js`, untouched by any of this — they are what the suite has
+been doing unobserved. Two are tests leaking globals (`tempHolder`,
+`_scriptOnErrorCallback`); two are `unload` scripts not running when a clip stops being
+visible; three are SVG render layer-naming (`wick_project_outer` where `wick_project_bg` is
+expected).
+
+One is worth a look before it bites the tween work: **`Wick.Tween #interpolate should tween
+rotation correctly (using no. of rotations param)` expects 270 and gets 90.00000000000001.**
+
+A ninth is **flaky and load-correlated** rather than deterministic: `Wick.AutoSave
+getSortedAutosavedProjects` blows mocha's default 2000ms timeout. Across seven runs it
+appeared in five — the five where builds were running concurrently — and not in the two on an
+idle box. Treat 8 as the baseline; if this one fails on a quiet machine it is a real
+regression, not the machine being busy.
+
+**Verified in Chrome.** The editor loads and is interactive at 1568px: full chrome, engine
+bundle, timeline, tooltips on hover (which exercises the new `pointerCannotHover()` path —
+desktop Chrome reports `(hover: none)` false, so tooltips still render). On a cold reload the
+console carries **eight messages and zero errors** — engine version, two Vite HMR lines,
+"Project Mounted", and the same four after a reload.
+
+That last part is a fix nobody asked for. The react-reflex `offsetHeight` null-ref that fired
+at every mount came from a **conditionally rendered `ReflexElement`** — the right sidebar's
+`{!(renderSize === "small") && <ReflexElement>}`, which handed react-reflex a `false` child
+to measure. Unwrapping it as part of removing the small-screen fork removed the error.
+
+**Narrow widths, measured.** Every width below now renders the desktop tree, since the fork
+that used to swap it out is gone. Swept at 1440 / 1024 / 900 / 768 / 375 in a headless
+Playwright viewport (the Claude-in-Chrome extension's `resize_window` is useless here —
+headed Chrome under Wayland cannot set its own geometry). **Zero console errors and zero
+horizontal page overflow at every width**; the canvas scales down proportionally, 1181px wide
+at 1440 to 168px at 375.
+
+768 is cramped but coherent: the toolbox drops to its two-row `toolbox-container-medium`
+layout showing five tools, the canvas is 510px, the timeline shows nine frames, and the
+Inspector and Asset Library keep the right column.
+
+375 is not an authoring surface. The menu bar's "support us" button overlaps the project
+title and the right-hand menu runs off the edge; the Inspector takes roughly half the width;
+the canvas is a 168px sliver; the timeline shows one frame and the layer name truncates to
+"Laye". Nothing throws and nothing overflows — it clips instead. So the survey's prescription
+(hard minimum authoring width ~1024, switch layout below it rather than shrink, view-only
+below 768) is confirmed as needed rather than merely advisable, and Phase 1a owns it.
 
 ## Phase 1 — the chrome, on Tailwind + shadcn
 

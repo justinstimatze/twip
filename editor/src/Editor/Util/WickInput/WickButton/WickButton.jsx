@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { isMobile } from 'react-device-detect';
 import classNames from 'classnames';
 /**
  * Wick Button
@@ -40,8 +39,7 @@ export default function WickButton(props) {
   return (
     <button
       {...props.buttonProps}
-      onTouchStart={isMobile ? handleClick : undefined}
-      onClick={isMobile ? undefined : handleClick}
+      onClick={handleClick}
       className={classNames("wick-button ", props.className)}>
       {props.children}
     </button>

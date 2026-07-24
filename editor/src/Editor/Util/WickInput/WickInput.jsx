@@ -29,7 +29,7 @@ import WickButton from './WickButton/WickButton';
 
 import { Input } from 'reactstrap';
 import WickTextInput from './WickTextInput/WickTextInput';
-import { isMobile } from 'react-device-detect';
+import { pointerCannotHover } from '../pointer';
 import classNames from 'classnames';
 /**
  * Creates an input to be used in the Wick Editor
@@ -53,7 +53,7 @@ class WickInput extends Component {
   render() {
     let tooltipID = this.props.tooltipID === undefined ? 'action-button-tooltip-nyi' : this.props.tooltipID;
 
-    if (this.props.tooltip && !isMobile) {
+    if (this.props.tooltip && !pointerCannotHover()) {
       return (
         <div
           data-tip
@@ -74,7 +74,7 @@ class WickInput extends Component {
 
     return (
       <ReactTooltip
-        disable={isMobile}
+        disable={pointerCannotHover()}
         id={tooltipID}
         type='info'
         place={this.props.tooltipPlace === undefined ? 'bottom' : this.props.tooltipPlace}

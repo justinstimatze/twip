@@ -30,7 +30,6 @@ import SettingsModal from '../SettingsModal/SettingsModal';
 import BuiltinLibrary from '../BuiltinLibrary/BuiltinLibrary';
 import EditorInfo from '../EditorInfo/EditorInfo';
 import OpenSourceNotices from '../OpenSourceNotices/OpenSourceNotices';
-import MobileMenu from '../MobileMenu/MobileMenu';
 import SavedProjects from '../SavedProjects/SavedProjects';
 import SimpleProjectSettings from '../SimpleProjectSettings/SimpleProjectSettings';
 import SupportUs from '../SupportUs/SupportUs';
@@ -146,13 +145,6 @@ class ModalHandler extends Component {
           toggle={this.props.closeActiveModal}
           open={this.props.activeModalName === 'OpenSourceNotices'}
           />
-        <MobileMenu
-          openProjectFileDialog={this.props.openProjectFileDialog}
-          openNewProjectConfirmation={this.props.openNewProjectConfirmation}
-          openModal={this.props.openModal}
-          toggle={this.props.closeActiveModal}
-          open={this.props.activeModalName === 'MobileMenuModal'}
-        />
         <SavedProjects
           openModal={this.props.openModal}
           toggle={this.props.closeActiveModal}

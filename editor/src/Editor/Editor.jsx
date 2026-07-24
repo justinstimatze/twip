@@ -45,7 +45,6 @@ import Canvas from './Panels/Canvas/Canvas';
 import Inspector from './Panels/Inspector/Inspector';
 import MenuBar from './Panels/MenuBar/MenuBar';
 import Timeline from './Panels/Timeline/Timeline';
-import MobileContainer from './Panels/MobileContainer/MobileContainer'
 import DeleteCopyPaste from './Panels/DeleteCopyPaste/DeleteCopyPaste';
 import CanvasTransforms from './Panels/CanvasTransforms/CanvasTransforms';
 import Toolbox from './Panels/Toolbox/Toolbox';
@@ -969,7 +968,6 @@ class Editor extends EditorCore {
           {/* Header */}
           <DockedPanel showOverlay={this.state.previewPlaying}>
             <MenuBar
-              renderSize={renderSize}
               openModal={this.openModal}
               projectName={this.project.name}
               openProjectFileDialog={this.openProjectFileDialog}
@@ -988,7 +986,7 @@ class Editor extends EditorCore {
         {/* Main Editor Panel */}
 
         <div id="editor-body">
-          <div className={classNames({"mobile-editor-body": (renderSize === "small")})} id="flexible-container">
+          <div id="flexible-container">
             {/*App*/}
             <ReflexContainer windowResizeAware={true} orientation="vertical">
               {/* Middle Panel */}
@@ -1101,8 +1099,7 @@ class Editor extends EditorCore {
                       </ReflexContainer>
                     </ReflexElement>
 
-                    {(renderSize === "small") && <ReflexSplitter {...this.resizeProps} className="mobile-reflex-splitter"/>}
-                    {!(renderSize === "small") && <ReflexSplitter {...this.resizeProps}/>}
+                    <ReflexSplitter {...this.resizeProps}/>
 
                     {/*Timeline*/}
                     <ReflexElement
@@ -1111,54 +1108,6 @@ class Editor extends EditorCore {
                       onResize={this.resizeProps.onResize}
                       onStopResize={this.resizeProps.onStopTimelineResize}>
                       <DockedPanel  showOverlay={this.state.previewPlaying}>
-                      {renderSize === "small" 
-                      && <MobileContainer
-                          project={this.project}
-                          projectDidChange={this.projectDidChange}
-                          projectData={this.state.project}
-                          getSelectedTimelineObjects={this.getSelectedTimelineObjects}
-                          setOnionSkinOptions={this.setOnionSkinOptions}
-                          getOnionSkinOptions={this.getOnionSkinOptions}
-                          setFocusObject={this.setFocusObject}
-                          addTweenKeyframe={this.addTweenKeyframe}
-                          onRef={ref => this.timelineComponent = ref}
-                          dragSoundOntoTimeline={this.dragSoundOntoTimeline}
-
-                          getToolSetting={this.getToolSetting}
-                          setToolSetting={this.setToolSetting}
-                          getActiveTool={this.getActiveTool}
-                          getSelectionType={this.getSelectionType}
-                          getAllSoundAssets={this.getAllSoundAssets}
-                          getAllSelectionAttributes={this.getAllSelectionAttributes}
-                          setSelectionAttribute={this.setSelectionAttribute}
-                          editorActions={this.actionMapInterface.editorActions}
-                          selectionIsScriptable={this.selectionIsScriptable}
-                          script={this.getSelectedObjectScript()}
-                          scriptInfoInterface={this.scriptInfoInterface}
-                          deleteScript={this.deleteScript}
-                          editScript={this.editScript}
-                          fontInfoInterface={this.fontInfoInterface}
-                          
-                          importFileAsAsset={this.importFileAsAsset}
-                          colorPickerType={this.state.colorPickerType}
-                          changeColorPickerType={this.changeColorPickerType}
-                          updateLastColors={this.updateLastColors}
-                          lastColorsUsed={this.state.lastColorsUsed}
-                          getClipAnimationTypes={this.getClipAnimationTypes}
-                          
-                          assets={this.project.getAssets()}
-                          openModal={this.openModal}
-                          openImportAssetFileDialog={this.openImportAssetFileDialog}
-                          selectObjects={this.selectObjects}
-                          clearSelection={this.clearSelection}
-                          isObjectSelected={this.isObjectSelected}
-                          createAssets={this.createAssets} 
-                          importProjectAsWickFile={this.importProjectAsWickFile}
-                          createImageFromAsset={this.createImageFromAsset}
-                          toast={this.toast}
-                          deleteSelectedObjects={this.deleteSelectedObjects}
-                          addSoundToActiveFrame={this.addSoundToActiveFrame}/>}
-                        {renderSize !== "small" &&
                         <Timeline
                           project={this.project}
                           projectDidChange={this.projectDidChange}
@@ -1170,7 +1119,7 @@ class Editor extends EditorCore {
                           addTweenKeyframe={this.addTweenKeyframe}
                           onRef={ref => this.timelineComponent = ref}
                           dragSoundOntoTimeline={this.dragSoundOntoTimeline}
-                        />}
+                        />
                       </DockedPanel>
                     </ReflexElement>
                   </ReflexContainer>
@@ -1178,8 +1127,7 @@ class Editor extends EditorCore {
               </ReflexElement>
 
               {/* Right Sidebar */}
-              {!(renderSize === "small") && <ReflexSplitter {...this.resizeProps}/>}
-              {!(renderSize === "small") &&
+              <ReflexSplitter {...this.resizeProps}/>
 
                 <ReflexElement
                 size={250}
@@ -1267,7 +1215,6 @@ class Editor extends EditorCore {
                   </ReflexElement> }
                 </ReflexContainer>
               </ReflexElement>
-              }
             </ReflexContainer>
           </div>
           {this.state.codeEditorOpen &&

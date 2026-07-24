@@ -209,7 +209,11 @@ possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
    no error came from either. Console noise at mount is all third-party and pre-dates this — a
    react-reflex `offsetHeight` null-ref from the conditionally-rendered `ReflexElement` at
    `Editor.jsx:1081`, a `Popover2` `componentWillReceiveProps` deprecation, and Ruffle's audio
-   teardown racing its own destroyed instance.
+   teardown racing its own destroyed instance. **The react-reflex one is FIXED as of Phase 0**
+   — the culprit was the right sidebar's `{!(renderSize === "small") && <ReflexElement>}`
+   handing react-reflex a `false` child to measure; unwrapping it while removing the
+   small-screen fork removed the error. Chrome-verified 2026-07-24: cold reload gives 8 console
+   messages and ZERO errors.
    **SWF IS THE PRIMARY EXPORT** (Justin, 2026-07-24: "swf export is probably the main export
    people will want... if they're using this project. but it's hidden on a secondary tab"). It
    was first filed under Interactive alongside ZIP and HTML, which was wrong twice over: it
@@ -303,10 +307,12 @@ from reading the code plus a localforage dump in the browser:
    `undefined` on touch UAs — that button was unactivatable by keyboard there. **`engine/tests/
    run.mjs` (new) runs the 71-file mocha suite headless** via Playwright + system Chrome
    (`channel: 'chrome'`, no browser download); `pnpm test` in `engine/`, `pnpm test-engine`
-   from `editor/`. **Baseline 539 passed / 8 failed, all pre-existing in the committed
-   `dist/wickengine.js`.** One deserves attention before more tween work: `Wick.Tween
-   #interpolate should tween rotation correctly (using no. of rotations param)` expects 270,
-   gets 90.00000000000001.
+   from `editor/`; whole suite runs in ~10s. **Baseline 8 deterministic failures out of 547,
+   all pre-existing in the committed `dist/wickengine.js`.** One deserves attention before more
+   tween work: `Wick.Tween #interpolate should tween rotation correctly (using no. of rotations
+   param)` expects 270, gets 90.00000000000001. A 9th is FLAKY, not deterministic — `Wick.AutoSave
+   getSortedAutosavedProjects` blows mocha's 2000ms default under load (appeared in 5 of 7 runs,
+   never on an idle box). `--grep <pattern>` and `--headed` both work.
 5. **Rebrand / attribution pass.** HARD GATE on any sharing or distribution — details under
    item 9's backlog. No urgency while the repo is private and undistributed.
 6. **Nested-clip frame scripts + PRESS handlers.** The deferred lifetime wall (item 10):

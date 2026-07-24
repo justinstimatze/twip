@@ -5,7 +5,7 @@ import PlayButton from 'Editor/Util/PlayButton/PlayButton';
 import ReactTooltip from 'react-tooltip';
 import HotKeyInterface from 'Editor/hotKeyMap';
 import './_canvastransforms.scss';
-import { isMobile } from 'react-device-detect';
+import { pointerCannotHover } from 'Editor/Util/pointer';
 import classNames from 'classnames';
 class CanvasTransforms extends Component {
   getHotkey (action) {
@@ -147,7 +147,7 @@ class CanvasTransforms extends Component {
   renderPlayButtonTooltip = () => {
     return (
       <ReactTooltip
-        disable={isMobile}
+        disable={pointerCannotHover()}
         id={'play-button-object'}
         type='info'
         place={'top'}
