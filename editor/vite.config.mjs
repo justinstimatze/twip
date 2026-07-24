@@ -24,6 +24,19 @@ export default defineConfig({
   optimizeDeps: {
     esbuildOptions: { loader: { '.js': 'jsx' } },
   },
+  // The CRA->Vite move swapped node-sass for dart-sass, which deprecates the global
+  // darken()/lighten() that _wickbrand.scss uses throughout. Every rebuild printed
+  // dozens of identical warnings and buried real output. Silenced rather than migrated
+  // to color.adjust(): this SCSS is replaced wholesale by the Tailwind redesign, so
+  // rewriting the colour maths now is throwaway work. If that redesign is ever dropped,
+  // this becomes real debt — sass ships an automated migrator for it.
+  css: {
+    preprocessorOptions: {
+      scss: {
+        silenceDeprecations: ['color-functions', 'global-builtin', 'import'],
+      },
+    },
+  },
   // CRA exposed process.env.PUBLIC_URL (the public/ base). twip serves at root,
   // so it is the empty string — `process.env.PUBLIC_URL + '/x'` becomes '/x'.
   // NODE_ENV is replaced by Vite itself. Avoids editing the source call sites.

@@ -32,7 +32,8 @@ class ExportOptions extends Component {
     this.placeholderName = 'Filename';
     this.state = {
       name: this.props.projectName || '',
-      subTab: 'Animation',
+      // SWF is what twip exists to produce, so it is the tab you land on.
+      subTab: 'SWF',
       exportWidth: 1920,
       exportHeight: 1080,
       exportResolution: "1080p",
@@ -321,7 +322,7 @@ class ExportOptions extends Component {
   renderInteractiveInfo = () => {
     return (
       // Unlike Animation and Images, this tab never threaded isMobile, so it stayed a
-      // row on a phone. Survivable at two cards; adding SWF makes it three across.
+      // row on a phone however narrow the screen got.
       <div className={classNames("export-info-container", this.props.isMobile && "mobile")}>
         <div className={classNames("export-info-item", this.props.isMobile && "mobile")}>
           <ObjectInfo
@@ -359,16 +360,26 @@ class ExportOptions extends Component {
             />
           </div>
         </div>
-        <div className={classNames("export-info-item", this.props.isMobile && "mobile")}>
+      </div>
+    );
+  }
+
+  // Renders the body of the "SWF" tab. One full-width card rather than a third
+  // column alongside ZIP and HTML: this is the export twip exists for, and three
+  // cards in a 450px modal squeezed every row onto two lines, overflowing the
+  // fixed-height info box.
+  renderSWFInfo = () => {
+    return (
+      <div className="export-info-container">
+        <div className="wide-export-info-item">
           <ObjectInfo
             className="export-object-info"
             title="SWF"
             rows={[
-              { text: "Fully Interactive",     icon: "check" },
-              { text: "Exports a .swf file",   icon: "check" },
-              { text: "Needs a Flash player",  icon: "cancel" }
-            ]}>
-          </ObjectInfo>
+              { text: "Fully interactive — clips, buttons, and frame scripts", icon: "check" },
+              { text: "Exports a single .swf file", icon: "check" },
+              { text: "Plays in Ruffle — no browser plugin needed", icon: "check" }
+            ]} />
           <div className="export-modal-button-container">
             <ActionButton
               color='gray-green'
@@ -482,6 +493,12 @@ class ExportOptions extends Component {
 
     let allowedExportTypes = window.allowedExportTypes.concat([]);
 
+    // SWF leads, and unconditionally: window.allowedExportTypes is a platform hook that
+    // filehandler.js defaults to the four inherited Wick categories, so gating twip's
+    // primary export on a list that predates it would let a host silently drop it.
+    // Filtered rather than plain-prepended so a host that DOES list it gets one tab, not two.
+    let tabNames = ['SWF'].concat(allowedExportTypes.filter(t => t !== 'SWF'));
+
     return (
       <WickModal
       open={this.props.open}
@@ -499,8 +516,9 @@ class ExportOptions extends Component {
               aria-label="project name" />
           </div>
           <TabbedInterface
-            tabNames={allowedExportTypes}
+            tabNames={tabNames}
             onTabSelect={this.setSubTab}>
+              { this.renderSWFInfo() }
               { allowedExportTypes.indexOf('Animation') > -1 && this.renderAnimatedInfo()}
               { allowedExportTypes.indexOf('Interactive') > -1 && this.renderInteractiveInfo()}
               { allowedExportTypes.indexOf('Audio') > -1 && this.renderAudioInfo()}

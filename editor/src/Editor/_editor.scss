@@ -285,7 +285,10 @@ body {
   border-left: $splitter-width solid $splitter-color !important;
   width: $splitter-width !important;
   cursor: col-resize;
-  margin: 0 -$splitter-width;
+  // Parens are load-bearing: `0 -$splitter-width` reads as the subtraction 0 - 3px, so
+  // this emitted `margin:-3px` (all four sides) instead of no vertical and -3px
+  // horizontal. Line 275 above gets it right only because its `-` leads the value.
+  margin: 0 (-$splitter-width);
   height: 100%; }
 
 .reflex-container.vertical > .reflex-splitter.reflex-thin.active,

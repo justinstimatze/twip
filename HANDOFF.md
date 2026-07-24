@@ -198,13 +198,26 @@ possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
    has no mold — `collect2: fatal error: cannot find 'ld'` in proc-macro2's build script.
    Fixed in `scripts/oracle-setup.sh` (`RUSTFLAGS=` for the vendored build) — full writeup
    under queue item 11. Re-run pending.
-2. **PARTLY DONE 2026-07-24 — export vs preview split.** `EditorCore.compileProjectToSWFBlob()`
-   is the one compile path; `previewProjectAsSWF` (the **SWF** button) plays it in Ruffle and
-   `exportProjectAsSWF` writes a `.swf` through `window.saveFileFromWick`, reachable from the
-   export modal's Interactive tab. Builds clean and the wiring traces end-to-end, but THE
-   BUTTONS HAVE NOT BEEN CLICKED — a Vite build does not catch runtime errors (that is exactly
-   how `require is not defined` survived the CRA migration). Run the dev server + bridge and
-   exercise both paths before calling this done.
+2. **DONE 2026-07-24 — export vs preview split, clicked and confirmed in Chrome.**
+   `EditorCore.compileProjectToSWFBlob()` is the one compile path; `previewProjectAsSWF` (the
+   **SWF** button) plays it in Ruffle and `exportProjectAsSWF` writes a `.swf` through
+   `window.saveFileFromWick`. Both paths exercised: Ruffle loaded the blob, the file saved, and
+   no error came from either. Console noise at mount is all third-party and pre-dates this — a
+   react-reflex `offsetHeight` null-ref from the conditionally-rendered `ReflexElement` at
+   `Editor.jsx:1081`, a `Popover2` `componentWillReceiveProps` deprecation, and Ruffle's audio
+   teardown racing its own destroyed instance.
+   **SWF IS THE PRIMARY EXPORT** (Justin, 2026-07-24: "swf export is probably the main export
+   people will want... if they're using this project. but it's hidden on a secondary tab"). It
+   was first filed under Interactive alongside ZIP and HTML, which was wrong twice over: it
+   buried the one export twip exists for, and three cards in a 450px modal squeezed every row
+   onto two lines and overflowed `.export-object-info`'s hard `height: 120px` onto the buttons.
+   Now its own tab, FIRST and the default `subTab`, as one full-width card; Interactive is back
+   to the two it was built for. Treat this as the standing rule for the redesign (#4): SWF
+   leads, the inherited Wick export categories are secondary.
+   Two follow-ons left alone deliberately: the mobile modal (`renderMobile`) offers only
+   GIF/Video and has no SWF at all; and `TabbedInterface.jsx:75` pairs children to tabs by raw
+   array index, so a platform setting a SUBSET of `window.allowedExportTypes` renders blank
+   bodies — broken the same way before this change, and the redesign replaces the component.
 3. **DONE 2026-07-24 — the two un-eyeballed Ruffle visuals, verified better than by eye.**
    frame-stop: rendered frames 1/2/5/12 of `frame-stop.swf` and of `frame-by-frame.swf` (the
    same flipbook WITHOUT `stop();`) — the stopped one hashes identically at all four while the
@@ -213,6 +226,25 @@ possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
    cannot be triggered headlessly; what IS settled is that the sprite still alternates A-B-A-B
    across frames 0–3, ruling out a clip action mis-attached so it fires at load. That pressing
    stops it remains browser-only.
+NEW, FOUND 2026-07-24, UNRANKED (Justin's call where it goes) — **autosave prompts every
+launch and Load restores nothing.** Not from the export work; inherited. Diagnosis so far,
+from reading the code plus a localforage dump in the browser:
+   * Saving WORKS and runs continuously — the probed entry was 78s old, `objectsData` present.
+     So the quota/failed-write theory is dead. Five entries had accumulated.
+   * `EditorCore.clearAutoSavedProject` calls `AutoSave.delete(this.project.uuid)` — the
+     CURRENT project's uuid, while the autosave belongs to a different one. So **Delete has
+     never deleted anything**, which is why entries pile up. Confirmed by reading; needs no
+     browser. Fix: delete the uuid actually being offered.
+   * `EditorCore.jsx:1485` `this.project = project || new window.Wick.Project()` turns a failed
+     load into a silent BLANK PROJECT — which is exactly what "clicked yes, nothing happened"
+     looks like. The guard above it, `// if (!project) return;`, is commented out, so someone
+     already hit this and hid it rather than surfacing it. Whatever the root cause, this should
+     report instead of handing back an empty canvas.
+   * OPEN: whether the autosaves contain a real project or an empty one. `setupNewProject`
+     fires `projectDidChange` at startup, which requests an autosave of the blank project just
+     created — so every session may be writing an empty autosave, and Load would then be
+     working correctly and restoring genuine emptiness. Settle it by dumping
+     `objectsData.map(o => o.classname)` for the newest entry: no `Path` among them means empty.
 4. **Scope the UI redesign.** `docs/ui-research.md` is the survey; this turns it into a plan.
    Stack already decided — Vite + React + Tailwind/shadcn, editor-only, no Next/gallery.
    Fold the leftover tooling (turbo/biome/vitest, TS) and the rebrand pass into this rather

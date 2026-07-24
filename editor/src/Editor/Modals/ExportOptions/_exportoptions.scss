@@ -116,7 +116,10 @@ $info-left-margin: 12px;
 }
 
 .export-object-info {
-  height: 120px; 
+  // min-height, not height: a hard height sized for three unwrapped rows lets any row
+  // that wraps spill out the bottom of the box and collide with the button beneath it.
+  // The 120px floor keeps cards on a row the same size when their text differs.
+  min-height: 120px;
 }
 
 .export-object-info-off {
