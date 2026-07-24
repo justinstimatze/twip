@@ -261,11 +261,44 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    up — deferred until a real fixture demands it. brush-donut.wick is hand-built from test1.wick's
    real object graph with a format-faithful CompoundPath json (paper.js source-confirmed), not a
    fresh engine export.
-9. **Editor fork** (StickmanRed/wick-editor): pin Node-14, Tauri 2 shell, Export button →
-   twip compiler, Ruffle preview tab. Independent of 2–8; the first Export milestone needs only
-   static shapes, which already work. Biggest single rock, delivers the "Flash that just works"
-   experience — but de-risks nothing about the compiler, so it sits below the cheap parser
-   closes. Clean swap upward if Justin wants to start the editor now instead.
+9. **Editor fork** (StickmanRed/wick-editor) — IN PROGRESS 2026-07-23. Two milestones DONE
+   (build de-risk + web-bridge Export); Tauri shell + repo creation remain (both gated).
+   - **Fork worktree**: `~/Documents/wick-editor`, copied from the read-only reference, `upstream`
+     = StickmanRed. Re-verified StickmanRed is the live fork (54 ahead / 0 behind Wicklets, 17★,
+     pushed 2026-07-09; every other fork ★0 and staler); worktree at its current HEAD `b05793b`.
+   - **REPO-STRUCTURE DECISION CHANGED** (Justin, 2026-07-23): go MONOREPO — editor vendored under
+     `twip/editor/`, Tauri wrapping both — superseding the old "two separate repos" stance. Reasons:
+     (a) GitHub won't let a fork of a public repo be private, so "our private fork" is really a
+     private mirror either way; twip is already private, so the editor riding in it is private for
+     free. (b) Tauri wants the Rust + web frontend in one tree. COST accepted: the combined repo
+     becomes GPLv3-covered for distribution (Wick code is GPLv3); Justin is fine with GPLv3. The
+     compiler crate can still be extracted MIT later if ever wanted. Worktree NOT yet relocated —
+     vendoring method (plain copy vs git-subtree for upstream pulls) is a packaging-time call.
+   - **Node-14 pinned + builds**: `.nvmrc`→14, `BUILD.md`. The frozen webpack-4 CRA (react-scripts
+     2.0.5) builds clean on Node 14.21.3 / npm 6.14.18. GOTCHAS baked into the fork: node-sass 4.14.1
+     needs `npm rebuild node-sass` (a broad `--ignore-scripts` on install skips its ABI-83 binding
+     fetch); and `.env` needs `SKIP_PREFLIGHT_CHECK=true` because CRA preflight trips on a stray
+     `~/node_modules/eslint` on this box. Editor RUNS + renders (Chrome-verified: full UI, engine
+     bundle loads, no console errors).
+   - **Web-bridge Export MVP DONE + Chrome-verified end-to-end**: draw → click **SWF** → Ruffle plays
+     the compiled output, one button. Pieces:
+     * `dev/twip_bridge.py` — throwaway local server (port 8752): `POST /compile` .wick bytes →
+       shells the release `twip` CLI → returns `.swf` with CORS. Exists only until the Tauri shell
+       makes compile an in-process Rust call; do not grow it.
+     * Editor changes (6 files, all additive): `MenuBar.jsx` "SWF" button → `EditorCore.exportProjectToSWF`
+       (serialize via `window.Wick.WickFile.toWickFile(this.project, cb)` → `fetch` POST to the bridge
+       → object URL → open `SwfPreview` modal); new `Modals/SwfPreview/SwfPreview.jsx` (Ruffle player
+       from `window.RufflePlayer.newest().createPlayer()`, sized to project w/h); registered in
+       `ModalHandler.jsx`; `swfPreviewUrl` state threaded via `Editor.jsx` + `EditorWrapper.jsx`;
+       Ruffle script-tagged in `public/index.html` (self-hosted build under `public/corelibs/ruffle/`).
+     * TIMING FIX: react-modal mounts its portal AFTER `componentDidUpdate`, so the container ref is
+       null on first fire — `loadSwf` retries on `requestAnimationFrame` until it mounts.
+     * Ruffle = stock nightly 2026-07-24 selfhosted (NOT the pinned rev 645449a). Fine for a dev
+       preview; only the golden-PNG oracle (#11) needs the rev to match.
+   - **REMAINING (both gated on Justin)**: (a) Tauri 2 desktop shell — the design endpoint, in-process
+     Rust Export replacing the bridge; needs `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev`
+     (+Tauri chain) — runtime webkit2gtk-4.1 is present but dev headers aren't. (b) Create the private
+     mirror / do the monorepo vendor. Neither started; both are outward/system changes awaiting a yes.
 10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
 11. Ruffle golden-PNG oracle (lavapipe-blessed).
 
