@@ -72,7 +72,11 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
   commits changed zero build config. package.json has postinstall electron-builder — delete
   it / --ignore-scripts for browser-only work. Editor consumes a COMMITTED prebuilt engine
   bundle (public/corelibs/wick-engine/wickengine.js, 2.27MB, kept current by the fork) — the
-  gulp engine build is fully skippable. Built gh-pages assets use absolute /wick-editor/
+  gulp engine build is skippable for compiler work, but it DOES run now (2026-07-24: 741ms on
+  Node 24, after adding the missing `merge-stream` devDep and renaming `imageSequence.js` →
+  `ImageSequence.js` to match the gulpfile glob — it only ever worked on a case-insensitive
+  filesystem). Needed for any timeline/GUI work; see `docs/ui-redesign-plan.md`.
+  Built gh-pages assets use absolute /wick-editor/
   paths (homepage field) — serve parent dir or rebuild with homepage: ".".
 - **swf crate**: crates.io 0.2.2 (published 2025-01-20) is an 18-month-stale DECOY wearing
   the same version number as ruffle master's swf/ (40+ commits divergence). MUST use a git
@@ -245,10 +249,64 @@ from reading the code plus a localforage dump in the browser:
      created — so every session may be writing an empty autosave, and Load would then be
      working correctly and restoring genuine emptiness. Settle it by dumping
      `objectsData.map(o => o.classname)` for the newest entry: no `Path` among them means empty.
-4. **Scope the UI redesign.** `docs/ui-research.md` is the survey; this turns it into a plan.
-   Stack already decided — Vite + React + Tailwind/shadcn, editor-only, no Next/gallery.
-   Fold the leftover tooling (turbo/biome/vitest, TS) and the rebrand pass into this rather
-   than sweeping the editor twice.
+4. **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
+   now a phased plan. Stack was already decided (Vite + React + Tailwind/shadcn, editor-only,
+   no Next/gallery); what the scoping added is that the editor is three layers and the
+   survey's asks split unevenly across them. React chrome is 19.4k JS + 6.8k SCSS. **The
+   timeline is not React** — it is 3,723 lines of paper.js painted on a canvas in
+   `editor/engine/src/gui/`, and `Panels/Timeline/Timeline.jsx` is 182 lines that hand the
+   engine a div. Same for the stage (`Panels/Canvas/Canvas.jsx:52`). So auto-keyframing, the
+   graph easing editor, per-property tracks, and **every accessibility target in the survey**
+   (a `role="grid"` timeline, a Mirror DOM, `aria-live` playhead) are engine work, not chrome
+   work — a `<canvas>` has no accessible tree. Phases: 0 prune
+   (delete the parallel `Mobile*` tree, drop the unused deps), 1 chrome on
+   Tailwind/shadcn, 2 the timeline in DOM (its own project, unlocks six survey items at
+   once), 3 mechanics. Tooling (TS/biome/vitest/turbo), the React 18 upgrade, and the rebrand
+   (item 5) are folded in at named points rather than swept separately. React 18 turns out to
+   be a *consequence* of the redesign: after phases 0–1 remove ~18 libs, the blockers are
+   react-dnd, react-ace, console-feed, react-hotkeys, react-color, react-sizeme,
+   react-spinners, react-reflex.
+   **DECIDED 2026-07-24 (Justin, "let's just do the rewrite with 2026 sota"): Phase 2 is a
+   full DOM rewrite of `engine/src/gui/`.** Not on a11y grounds — the canvas already clears
+   WCAG 2.5.8 hit targets (`GUIElement.js:207` cells are 38×42), already has a density model
+   (`GRID_SMALL/NORMAL/LARGE_CELL_*`, switched only by `IS_MOBILE` today), already themes
+   from one constants block, and `hotKeyMap.js` already maps 13 timeline operations. What it
+   lacks is perception and focus (no SR enumeration, no focus model), and a Mirror DOM would
+   have bought that alone for much less. The decision is about the paradigm: imperative
+   `draw()` with hand-rolled hit-testing in `GUIElement.js` makes every future timeline
+   feature expensive. **The seam is clean** — outside `src/gui/`, only `base/Base.js`
+   (`_generateGUIElement` :587, accessors :365-371) and `base/Project.js:157` touch it; the
+   `guiElements` in `Paper.SelectionWidget.js` are the unrelated on-stage handles. Sequencing
+   changed with the decision: 1a (shell/tokens/primitives) → 2 (timeline) → 1b (remaining
+   panels), so the hardest component validates the design system while there is room to
+   change it.
+   **MOBILE STAYS IN SCOPE** (Justin, 2026-07-24: "can we still support mobile in other
+   modern ways?"). What Phase 0 deletes is the parallel `Mobile*` component tree — 2,861
+   lines that are a *fork of the Inspector* (`MobileInspectorRowTypes/` mirrors the desktop
+   input types one for one), switched by `react-device-detect` with `renderSize` threaded as
+   a prop 101 times across 11 files. Replaced by one responsive tree with container queries
+   plus bottom sheets at narrow widths. Mobile gets BETTER in four places: Ruffle plays twip's
+   `.swf` output in mobile browsers so view-only is nearly free; a DOM timeline inherits touch
+   scroll/momentum/pinch and `GUIElement.js:211` already has a 62×52 touch density; Tauri 2
+   (`src-tauri/Cargo.toml:18`) already targets iOS/Android, giving the deferred Tauri item a
+   second reason. **Highest-leverage single fix: `engine/src/view/paper-ext/View.pressure.js`
+   is 34 lines reading pressure via the jQuery `pressure.js` plugin (Apple Force Touch / 3D
+   Touch — dead since 2018), so an Apple Pencil supplies nothing today.** Port it to Pointer
+   Events (`pressure`, `tiltX/tiltY`, `twist`, `pointerType`); downstream is already correct
+   — `tools/Brush.js:142` feeds `croquis.down(x, y, this.pressure)` and `lib/croquis.js` is a
+   pressure brush lib. Tablet-with-stylus is a first-class drawing target, not a degradation.
+   **PHASE 0 DONE 2026-07-24.** 24 files deleted (the three `Mobile*` dirs); `Editor.jsx` lost
+   the `renderSize === "small"` layout fork and the right sidebar now renders at every width;
+   deps 40 → 28 (`react-rnd` STAYS — `PopOuts/WickCodeEditor` uses it, not just mobile).
+   `react-device-detect`'s 3 sites → `Util/pointer.js` `pointerCannotHover()`
+   (`matchMedia('(hover: none)')`), which also fixed `WickButton` setting `onClick` to
+   `undefined` on touch UAs — that button was unactivatable by keyboard there. **`engine/tests/
+   run.mjs` (new) runs the 71-file mocha suite headless** via Playwright + system Chrome
+   (`channel: 'chrome'`, no browser download); `pnpm test` in `engine/`, `pnpm test-engine`
+   from `editor/`. **Baseline 539 passed / 8 failed, all pre-existing in the committed
+   `dist/wickengine.js`.** One deserves attention before more tween work: `Wick.Tween
+   #interpolate should tween rotation correctly (using no. of rotations param)` expects 270,
+   gets 90.00000000000001.
 5. **Rebrand / attribution pass.** HARD GATE on any sharing or distribution — details under
    item 9's backlog. No urgency while the repo is private and undistributed.
 6. **Nested-clip frame scripts + PRESS handlers.** The deferred lifetime wall (item 10):
