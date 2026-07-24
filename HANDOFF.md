@@ -194,14 +194,17 @@ parser has now seen real multi-frame, tweened, nested, scripted, and skewed `.wi
 What's left is item 9's editor backlog plus a few things the last few commits made newly
 possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
 
-1. **DONE 2026-07-24 — fired `golden.yml` for the first time; it failed, and the cause was
-   ours.** Written while twip had no remote, which stopped being true at push `a0ed7f0`, so
-   all seven goldens were blessed on one developer box and validated nowhere else. Run
-   `30118810306` died in 75s: `.cargo/config.toml`'s `-fuse-ld=mold` leaked into the ruffle
-   build (cargo walks UP for config, so `oracle/ruffle` inherits the repo's) and the runner
-   has no mold — `collect2: fatal error: cannot find 'ld'` in proc-macro2's build script.
-   Fixed in `scripts/oracle-setup.sh` (`RUSTFLAGS=` for the vendored build) — full writeup
-   under queue item 11. Re-run pending.
+1. **DONE 2026-07-24 — `golden.yml` is GREEN** (run `30132465564`, 8m7s, all 7 fixtures
+   `0 outliers, max diff 0`). Written while twip had no remote, which stopped being true at
+   push `a0ed7f0`, so all seven goldens had been blessed on one developer box and validated
+   nowhere else. Three separate things were wrong; full writeup under queue item 11.
+   `30118810306` died in 75s on `-fuse-ld=mold` leaking into the ruffle build; the fix in
+   `scripts/oracle-setup.sh` covered only that build, and the `Golden oracle` step would have
+   died the same way one step later. `30132117895` died in ruffle_core's build script for want
+   of a JRE. And the backend was never going to match: `ubuntu-latest` is two Ubuntu releases
+   behind this box, so the job now runs in `container: ubuntu:26.04`, which carries the same
+   mesa 26.0.3-1ubuntu1 and reproduced the committed goldens bit-identically. See `948188e`,
+   `23de698`.
 2. **DONE 2026-07-24 — export vs preview split, clicked and confirmed in Chrome.**
    `EditorCore.compileProjectToSWFBlob()` is the one compile path; `previewProjectAsSWF` (the
    **SWF** button) plays it in Ruffle and `exportProjectAsSWF` writes a `.swf` through
@@ -614,10 +617,47 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
       diff 0** (bit-exact same-backend). Eyeballed: test1 (ellipse + outlined square),
       brush-donut (blue shape WITH its center hole — planarize survives to raster),
       skew-tween (blue square sheared into a parallelogram, horizontals held).
-    * **CI** `.github/workflows/golden.yml` (manual `workflow_dispatch`; installs
-      mesa-vulkan-drivers, builds exporter, runs the feature). No longer a scaffold — the
-      remote exists (known-gap #5 closed). A different CI lavapipe/mesa may still need a
-      one-time re-bless.
+    * **CI** `.github/workflows/golden.yml` (manual `workflow_dispatch`) — **GREEN as of run
+      `30132465564`, 2026-07-24**: 8m7s cold, all 7 fixtures `0 outliers, max diff 0`, so the
+      goldens are now validated somewhere other than the box that blessed them. The re-bless
+      the old note anticipated never became necessary, because the job runs in
+      `container: ubuntu:26.04` rather than on `ubuntu-latest` — see the container entry
+      below for why that was the load-bearing decision.
+      Cold cost is much lower than this file used to claim: the full ruffle clone + release
+      build of `-p exporter` is **5m45s**, not 20-40 min, and the workflow now caches the 19MB
+      exporter binary (keyed on rev + container) so a warm run skips the clone and the build
+      entirely. `Swatinem/rust-cache`'s `key: ruffle-645449a` never cached that — it caches
+      `./target`, not `oracle/ruffle/target`, so the comment claiming otherwise was describing
+      an intent the config did not implement.
+      A `bless` dispatch input plus an always-on artifact upload of `target/golden` +
+      `tests/goldens` is the escape hatch if mesa ever does move: dispatch with `bless=true`,
+      download, commit. Not a `TOLERANCE` bump, which would blind the oracle to exactly the
+      rendering regressions it exists to catch.
+    * **THE BACKEND IS PART OF THE CONTRACT — hence the container.** Goldens are
+      pixel-compared, so whatever blessed one has to be what checks it. lavapipe makes that
+      reproducible across machines only at a fixed mesa version; AA fringes move between mesa
+      releases, and `ubuntu-latest` is two Ubuntu releases behind this box. The original plan
+      was "if CI's lavapipe differs, re-bless from a CI artifact" — but goldens blessed on
+      CI's lavapipe would then fail locally. They can only serve one backend. So the job runs
+      in `container: ubuntu:26.04`.
+      Verified before pushing rather than by round-tripping CI: `docker run ubuntu:26.04`
+      installs mesa-vulkan-drivers **26.0.3-1ubuntu1**, the same version this box has, and
+      re-rendering all 7 fixture SWFs through the host-built exporter inside that container
+      reproduced `tests/goldens/` with **zero differing channels** — bit-identical, not merely
+      within `TOLERANCE`. CI's `stable` is rustc 1.97.1, which is also the rustup toolchain
+      that built the local exporter. The container then reproduced it again for real.
+      The mesa version is deliberately NOT pinned in apt: an SRU that moves pixels fails the
+      comparison loudly with an outlier count, and the `System dependencies` step prints the
+      installed version directly above it in the same log.
+    * **A bare container costs what the runner image was giving away.** `ubuntu:26.04` has no
+      git, curl, ca-certificates, build-essential or pkg-config, all of which checkout and
+      rustup need. The non-obvious one is **`default-jre-headless`**: `ruffle_core`'s build
+      script runs `tools/asc/asc.jar` (Adobe's ActionScript compiler) under `java` via
+      `tools/asc/src/lib.rs:49` to build `playerglobal_avm2`, and panics with "Java could not
+      be found on your computer" without it (run `30132117895`, ~5 min in). `ubuntu-latest`
+      ships a JDK, so this was invisible until the job moved into a container. Nothing in the
+      fixtures reaches AVM2 — they are all AVM1 — but ruffle_core does not build without it.
+      `ubuntu:26.04`'s `default-jre-headless` is OpenJDK 25.0.3, the same JVM as this box.
     * **FIRST RUN 2026-07-24 — failed in 75s, and the cause was twip's own cargo config.**
       Run `30118810306`: `collect2: fatal error: cannot find 'ld'` linking proc-macro2's build
       script, from `-fuse-ld=mold` reaching a runner with no mold. Chain: cargo discovers
@@ -635,6 +675,15 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
       `-D warnings` on ruffle's own crates would detonate on any rev bump that warns.
       Re-verified locally: exporter rebuilt without mold, all 7 goldens still **0 outliers,
       max diff 0** — linker choice does not perturb raster output.
+      **That fix was half of one.** It neutralized the config for the *vendored ruffle* build
+      only. The `Golden oracle` step runs `cargo test` in the repo root, where the same
+      `[target.x86_64-unknown-linux-gnu]` block applies and the job env still set no
+      `RUSTFLAGS` — so it would have hit the identical `cannot find 'ld'` one step later, and
+      the second run would have looked like a brand-new failure. golden.yml now sets
+      job-level `RUSTFLAGS: -D warnings`, the same value ci.yml uses. The general shape:
+      **a config block that matches a triple matches every machine with that triple**, so ask
+      of anything new that runs cargo here whether it wants the repo's linker policy or the
+      compiler defaults, and say so explicitly. There is no third answer that stays correct.
     * **`oracle-setup.sh` preflights the toolchain** (added 2026-07-24 after it bit): the
       script always honored `CARGO=` for the 1.94+ requirement but never checked it, so a bare
       invocation on this box silently picked system 1.93, failed ~20 min later at

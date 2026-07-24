@@ -1,8 +1,15 @@
 name: golden
 
-# Ruffle golden-PNG oracle (test layer 2). SEPARATE from ci.yml and manual-only:
-# building ruffle's exporter is ~20-40 min, far too heavy to gate every push. Run it
-# on demand from the Actions tab.
+# Ruffle golden-PNG oracle (test layer 2). SEPARATE from ci.yml, manual-only: run it
+# from the Actions tab.
+#
+# The stated reason used to be a ~20-40 min exporter build. MEASURED on the first green
+# run (30132465564, 2026-07-24): full ruffle clone + release build of -p exporter took
+# 5m45s, whole job 8m7s cold, and the exporter cache below makes a warm run a fraction
+# of that. So cost is no longer the argument for keeping this off ci.yml — pixel
+# comparison against a versioned system rasterizer is. Moving it to `on: push` would be
+# a real option now; it would just mean a mesa SRU can red the build on a commit that
+# changed nothing.
 #
 # The goldens are pixel-compared, so the RENDERING BACKEND IS PART OF THE CONTRACT:
 # whatever blessed a golden must be what checks it. lavapipe is the deterministic
