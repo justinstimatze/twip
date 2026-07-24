@@ -348,7 +348,7 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
        `Modals/SupportUs/SupportUs.jsx` + `_supportus.scss` (Patreon link + patron names); patron names in
        `Modals/WelcomeMessage/WelcomeMessage.jsx`. HARD RULE: the stale Patreon link must be gone before ANY
        share/distribution (GPLv3 + not shipping a stale third-party donation ask). No urgency while private/undistributed.
-10. Frame actions + PRESS click handlers. **Milestone A DONE 2026-07-23 (frame actions).**
+10. Frame actions + PRESS click handlers. **DONE 2026-07-23 (both milestones).**
     Wick stores behavior as `scripts:[{name,src}]` on every Frame/Clip (engine bundle:
     `data.scripts = ...this._scripts`; 15 valid names incl. `default`/`load`/`mousepressed`);
     `src` is arbitrary JS. General JS→AVM1 is a permanent non-goal, so twip recognizes a
@@ -378,10 +378,20 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
       (fixtures/frame-stop.wick = frame-by-frame flipbook + `stop();` on keyframe 1 → 1 DoAction
       {Stop} before frame 1's ShowFrame). 24 lib tests green. Ruffle visual (flipbook halts on
       frame 1 vs strobing) not yet eyeballed — structural is the designated workhorse; /tmp SWF ready.
-    * **Milestone B PENDING** — clip `mousepressed`/`mouseclick` → `ClipEventFlag::PRESS` clip
-      actions on the sprite's `PlaceObject` (`clip_actions` field). Needs the owned handler bytes
-      reachable at the placement build inside `compile_timeline`, i.e. the deeper arena thread —
-      its own milestone so A shipped verified first.
+    * **Milestone B DONE 2026-07-23 (PRESS click handlers).** A clip's `mousepressed`/`mouseclick`
+      script (same recognized vocabulary) → a `PRESS` clip action on the sprite's initial
+      `PlaceObject`. The recognizer generalized to `recognize_actions(scripts, events)` with
+      `recognize_frame_actions` (default/load) and `recognize_clip_actions` (mousepressed/mouseclick)
+      wrappers; both mouse events map to `ClipEventFlag::PRESS` (tier-0 click; twip doesn't split
+      press vs click). `compile_timeline` records `clip_handlers: char_id → cmds`; `compile_document`
+      serializes them into a second byte arena keyed by id and, in the same assembly pass, rebuilds
+      each clip's initial `Place(id)` tag via `place_with_clip_actions` (destructure the `'static`
+      PlaceObject, reconstruct borrowing the arena — only that one tag takes the shorter lifetime,
+      the rest of the pipeline stays `Tag<'static>`). Attaches to Place, never Modify. Nested-clip
+      handlers share the nested-frame-script boundary (skipped + warned). Verified: `recognize_clip_actions_reads_mouse_events`,
+      `clip_click_emits_press_action` (synthetic — PRESS + Stop on the Place), and real
+      `compiles_clip_click_wick` (fixtures/clip-click.wick = nested-clip + `mousepressed:stop();` on
+      the placed clip). 27 lib tests green. Ruffle click-test not yet eyeballed (structural is the workhorse).
 11. Ruffle golden-PNG oracle (lavapipe-blessed).
 
 ## Plan

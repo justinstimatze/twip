@@ -13,9 +13,10 @@ use std::collections::BTreeMap;
 use swf::avm1::types::{Action, GotoFrame, GotoLabel};
 use swf::avm1::write::Writer as Avm1Writer;
 use swf::{
-    Color, ColorTransform, Compression, FillStyle, Fixed8, Fixed16, Header, LineStyle, Matrix,
-    PlaceObject, PlaceObjectAction, Point, PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord,
-    ShapeStyles, StyleChangeData, SwfStr, Tag, Twips, write_swf,
+    ClipAction, ClipActions, ClipEventFlag, Color, ColorTransform, Compression, FillStyle, Fixed8,
+    Fixed16, Header, LineStyle, Matrix, PlaceObject, PlaceObjectAction, Point, PointDelta,
+    Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, SwfStr, Tag, Twips,
+    write_swf,
 };
 use wick::{Contour, Script};
 
@@ -690,16 +691,14 @@ enum FrameCmd {
     GotoLabel(String, bool),
 }
 
-/// Scan a frame's scripts for the recognized command subset. Only the `default`
-/// and `load` scripts are read — both mean "at this frame" for this static subset
-/// (SWF has no per-tick frame script, so a `stop()` in either compiles the same).
-/// Returns the commands in source order plus any non-empty statements that were
-/// not recognized (the caller warns about these; visuals still export).
-fn recognize_frame_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
+/// Scan the scripts whose `name` is in `events` for the recognized command subset,
+/// returning the commands in source order plus any non-empty statements that were
+/// not recognized (callers warn about these; visuals still export).
+fn recognize_actions(scripts: &[Script], events: &[&str]) -> (Vec<FrameCmd>, Vec<String>) {
     let mut cmds = Vec::new();
     let mut unrecognized = Vec::new();
     for script in scripts {
-        if script.name != "default" && script.name != "load" {
+        if !events.contains(&script.name.as_str()) {
             continue;
         }
         for stmt in split_statements(&script.src) {
@@ -710,6 +709,20 @@ fn recognize_frame_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
         }
     }
     (cmds, unrecognized)
+}
+
+/// Frame actions: recognized commands in a keyframe's `default`/`load` scripts.
+/// Both names mean "at this frame" for this static subset (SWF has no per-tick
+/// frame script, so a `stop()` in either compiles the same).
+fn recognize_frame_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
+    recognize_actions(scripts, &["default", "load"])
+}
+
+/// Clip click handlers: recognized commands in a clip's `mousepressed`/`mouseclick`
+/// scripts. Both map to a SWF `PRESS` clip event (tier-0 click; HANDOFF) — twip does
+/// not distinguish press from click for the recognized command set.
+fn recognize_clip_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
+    recognize_actions(scripts, &["mousepressed", "mouseclick"])
 }
 
 /// Split JS source into trimmed, non-empty statements: drop `//` line comments,
@@ -817,15 +830,17 @@ fn frame_action_bytes(cmds: &[FrameCmd]) -> Vec<u8> {
 /// nested clips. SWF requires all DefineShape/DefineSprite tags at the root, before
 /// use — post-order recursion gives exactly that ordering.
 ///
-/// Also returns the frame actions: for each absolute frame number that carries a
-/// recognized script, the AVM1 bytes for a `DoAction` tag. The caller owns these
-/// (they outlive the borrowed `DoAction` tags) and inserts them before the matching
-/// `ShowFrame`.
+/// Collects two kinds of behavior for the caller to attach (both need owned AVM1
+/// bytes that outlive the borrowed tags): `frame_actions` maps an absolute frame
+/// number to a keyframe's recognized commands (→ a `DoAction` before that frame's
+/// `ShowFrame`), and `clip_handlers` maps a clip's character id to its recognized
+/// click commands (→ `PRESS` clip actions on that sprite's initial `PlaceObject`).
 fn compile_timeline(
     layers: &[wick::Layer],
     next_id: &mut u16,
     defs: &mut Vec<Tag<'static>>,
     frame_actions: &mut BTreeMap<u16, Vec<FrameCmd>>,
+    clip_handlers: &mut BTreeMap<u16, Vec<FrameCmd>>,
 ) -> Vec<Tag<'static>> {
     let num_layers = layers.len();
 
@@ -866,16 +881,24 @@ fn compile_timeline(
             // Wick puts at most one clip on a tweened frame; the tween track drives that
             // clip. Any further clips (unusual) are placed statically at their own transform.
             for (ci, clip) in frame.clips.iter().enumerate() {
-                // A nested clip's frame scripts belong inside its DefineSprite body,
-                // which would force the whole (currently 'static) tag pipeline to hold
-                // borrowed DoAction tags — deferred past milestone A. Collect + warn.
+                // A nested clip's frame scripts / click handlers belong inside its
+                // DefineSprite body, which would force the whole (currently 'static)
+                // tag pipeline to hold borrowed tags — deferred. Collect + warn.
                 let mut nested_actions: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
-                let body = compile_timeline(&clip.layers, next_id, defs, &mut nested_actions);
-                if !nested_actions.is_empty() {
+                let mut nested_handlers: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+                let body = compile_timeline(
+                    &clip.layers,
+                    next_id,
+                    defs,
+                    &mut nested_actions,
+                    &mut nested_handlers,
+                );
+                if !nested_actions.is_empty() || !nested_handlers.is_empty() {
                     eprintln!(
-                        "twip: note: frame scripts inside a nested clip are not yet compiled \
-                         ({} keyframe(s) skipped)",
-                        nested_actions.len()
+                        "twip: note: scripts inside a nested clip are not yet compiled \
+                         ({} frame + {} click handler(s) skipped)",
+                        nested_actions.len(),
+                        nested_handlers.len()
                     );
                 }
                 let num_frames = body
@@ -889,6 +912,19 @@ fn compile_timeline(
                     num_frames: num_frames.max(1),
                     tags: body,
                 }));
+                // A recognized click handler on THIS (root-level) clip attaches to its
+                // initial Place tag in compile_document — the character id is the key.
+                let (chandlers, cunrec) = recognize_clip_actions(&clip.scripts);
+                if !cunrec.is_empty() {
+                    eprintln!(
+                        "twip: {} uncompiled clip-script statement(s) on a clip: {}",
+                        cunrec.len(),
+                        cunrec.join("; ")
+                    );
+                }
+                if !chandlers.is_empty() {
+                    clip_handlers.insert(id, chandlers);
+                }
                 if ci == 0 && !frame.tweens.is_empty() {
                     let keys = frame
                         .tweens
@@ -973,15 +1009,74 @@ fn compile_timeline(
     control
 }
 
+/// Rebuild a sprite's initial `PlaceObject` with a `PRESS` clip action carrying
+/// `action_data`. Destructures the owned (`'static`) place tag and reconstructs it
+/// borrowing the arena bytes, so only this one tag takes the shorter lifetime.
+fn place_with_clip_actions<'a>(po: Box<PlaceObject<'static>>, action_data: &'a [u8]) -> Tag<'a> {
+    let PlaceObject {
+        version,
+        action,
+        depth,
+        matrix,
+        color_transform,
+        ratio,
+        name,
+        clip_depth,
+        class_name,
+        filters,
+        background_color,
+        blend_mode,
+        clip_actions: _,
+        has_image,
+        is_bitmap_cached,
+        is_visible,
+        amf_data,
+    } = *po;
+    Tag::PlaceObject(Box::new(PlaceObject {
+        version,
+        action,
+        depth,
+        matrix,
+        color_transform,
+        ratio,
+        name,
+        clip_depth,
+        class_name,
+        filters,
+        background_color,
+        blend_mode,
+        clip_actions: Some(ClipActions {
+            all_event_flags: ClipEventFlag::PRESS,
+            records: vec![ClipAction {
+                events: ClipEventFlag::PRESS,
+                key_code: None,
+                action_data,
+            }],
+        }),
+        has_image,
+        is_bitmap_cached,
+        is_visible,
+        amf_data,
+    }))
+}
+
 /// Compile a parsed document into an SWF timeline (frame-by-frame, with nested clips).
 ///
-/// Recognized frame scripts (stop/play/gotoAndPlay/gotoAndStop) become `DoAction`
-/// tags spliced in before the `ShowFrame` of their keyframe.
+/// Recognized frame scripts become `DoAction` tags spliced before their keyframe's
+/// `ShowFrame`; recognized clip click scripts become `PRESS` clip actions on the
+/// sprite's initial `PlaceObject`.
 pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
     let mut next_id: u16 = 1;
     let mut defs: Vec<Tag> = Vec::new();
     let mut frame_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
-    let control = compile_timeline(&doc.layers, &mut next_id, &mut defs, &mut frame_cmds);
+    let mut clip_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+    let control = compile_timeline(
+        &doc.layers,
+        &mut next_id,
+        &mut defs,
+        &mut frame_cmds,
+        &mut clip_cmds,
+    );
 
     let total: u16 = control
         .iter()
@@ -990,30 +1085,48 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
         .try_into()
         .unwrap_or(u16::MAX);
 
-    // Serialize each keyframe's recognized commands to owned AVM1 buffers. This
-    // arena outlives the borrowed `DoAction` tags assembled below (all local to
-    // this function, so the borrow is sound without a codebase-wide lifetime).
-    let action_arena: BTreeMap<u16, Vec<u8>> = frame_cmds
-        .into_iter()
-        .filter_map(|(frame_no, cmds)| {
-            let bytes = frame_action_bytes(&cmds);
-            (!bytes.is_empty()).then_some((frame_no, bytes))
-        })
-        .collect();
+    // Serialize recognized commands to owned AVM1 buffers. Both arenas outlive the
+    // borrowed tags assembled below (all local to this function, so the borrow is
+    // sound without a codebase-wide lifetime): `action_arena` keyed by frame number,
+    // `clip_arena` by character id.
+    let serialize = |m: BTreeMap<u16, Vec<FrameCmd>>| -> BTreeMap<u16, Vec<u8>> {
+        m.into_iter()
+            .filter_map(|(k, cmds)| {
+                let bytes = frame_action_bytes(&cmds);
+                (!bytes.is_empty()).then_some((k, bytes))
+            })
+            .collect()
+    };
+    let action_arena = serialize(frame_cmds);
+    let clip_arena = serialize(clip_cmds);
 
-    // Definitions first, then the control stream with a DoAction spliced in before
-    // the ShowFrame of each frame that carries one. `Tag<'static>` def/control tags
-    // coerce to the arena's borrow lifetime on push.
+    // Definitions first, then the control stream: a DoAction spliced before the
+    // ShowFrame of each frame that carries one, and a PRESS clip action attached to
+    // the initial Place of each clip that carries one. `Tag<'static>` tags coerce to
+    // the arenas' borrow lifetime on push.
     let mut tags: Vec<Tag> = defs;
     let mut frame_no: u16 = 0;
     for tag in control {
-        if matches!(tag, Tag::ShowFrame) {
-            frame_no += 1;
-            if let Some(bytes) = action_arena.get(&frame_no) {
-                tags.push(Tag::DoAction(bytes.as_slice()));
+        match tag {
+            Tag::ShowFrame => {
+                frame_no += 1;
+                if let Some(bytes) = action_arena.get(&frame_no) {
+                    tags.push(Tag::DoAction(bytes.as_slice()));
+                }
+                tags.push(Tag::ShowFrame);
             }
+            Tag::PlaceObject(po) => {
+                let handler = match &po.action {
+                    PlaceObjectAction::Place(id) => clip_arena.get(id),
+                    _ => None,
+                };
+                match handler {
+                    Some(bytes) => tags.push(place_with_clip_actions(po, bytes.as_slice())),
+                    None => tags.push(Tag::PlaceObject(po)),
+                }
+            }
+            other => tags.push(other),
         }
-        tags.push(tag);
     }
 
     let header = Header {
@@ -2129,5 +2242,130 @@ mod tests {
         );
         // The unrecognized bucket carries the leftover statement.
         assert_eq!(s("frobnicate(9)").1, vec!["frobnicate(9)".to_string()]);
+    }
+
+    // --- Item 10 milestone B: clip PRESS click handlers -----------------------
+
+    /// Find the first `PlaceObject` carrying clip actions and return its decoded
+    /// `(events, actions)`.
+    fn first_clip_action<'a>(parsed: &swf::Swf<'a>) -> (ClipEventFlag, Vec<Action<'a>>) {
+        let po = parsed
+            .tags
+            .iter()
+            .find_map(|t| match t {
+                Tag::PlaceObject(po) if po.clip_actions.is_some() => Some(po),
+                _ => None,
+            })
+            .expect("a PlaceObject with clip actions");
+        let ca = po.clip_actions.as_ref().unwrap();
+        let rec = &ca.records[0];
+        (rec.events, decode_actions(rec.action_data))
+    }
+
+    #[test]
+    fn recognize_clip_actions_reads_mouse_events() {
+        use wick::Script;
+        let mk = |name: &str| {
+            recognize_clip_actions(&[Script {
+                name: name.to_string(),
+                src: "gotoAndPlay(1);".to_string(),
+            }])
+            .0
+        };
+        assert_eq!(mk("mousepressed"), vec![FrameCmd::GotoAndPlay(0)]);
+        assert_eq!(mk("mouseclick"), vec![FrameCmd::GotoAndPlay(0)]);
+        // A frame-event script is not a clip action.
+        assert!(mk("default").is_empty(), "default is a frame script, not a click");
+    }
+
+    #[test]
+    fn clip_click_emits_press_action() {
+        use wick::{Clip, Contour, Document, Frame, Layer, Script};
+        let dot = Contour {
+            points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            holes: vec![],
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+            stroke: None,
+        };
+        // A clip with a mousepressed handler, placed on the root timeline.
+        let clip = Clip {
+            scripts: vec![Script {
+                name: "mousepressed".to_string(),
+                src: "stop();".to_string(),
+            }],
+            transform: Transform {
+                x: 20.0,
+                y: 20.0,
+                scale_x: 1.0,
+                scale_y: 1.0,
+                rotation_deg: 0.0,
+                opacity: 1.0,
+            },
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![dot],
+                    clips: vec![],
+                    tweens: vec![],
+                    scripts: Vec::new(),
+                }],
+            }],
+        };
+        let doc = Document {
+            width: 200.0,
+            height: 200.0,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![],
+                    clips: vec![clip],
+                    tweens: vec![],
+                    scripts: Vec::new(),
+                }],
+            }],
+        };
+
+        let swf = compile_document(&doc).expect("compile");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let (events, actions) = first_clip_action(&parsed);
+        assert!(events.contains(ClipEventFlag::PRESS), "handler fires on PRESS");
+        assert_eq!(actions, vec![Action::Stop], "mousepressed stop() -> Stop");
+
+        // The clip action rides on the sprite's initial Place, not a Modify.
+        let placed_sprite = parsed.tags.iter().any(|t| matches!(
+            t,
+            Tag::PlaceObject(po)
+                if po.clip_actions.is_some()
+                    && matches!(po.action, PlaceObjectAction::Place(_))
+        ));
+        assert!(placed_sprite, "clip actions attach to the Place, not a Modify");
+    }
+
+    /// Item 10 milestone B end-to-end: a real `.wick` whose placed clip carries a
+    /// `mousepressed: stop();` handler emits a `PRESS` clip action decoding to `Stop`.
+    #[test]
+    fn compiles_clip_click_wick() {
+        let bytes = include_bytes!("../fixtures/clip-click.wick");
+        let swf = compile_wick(bytes).expect("compile clip-click.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        assert_eq!(
+            parsed
+                .tags
+                .iter()
+                .filter(|t| matches!(t, Tag::PlaceObject(po) if po.clip_actions.is_some()))
+                .count(),
+            1,
+            "one clip carries a click handler"
+        );
+        let (events, actions) = first_clip_action(&parsed);
+        assert!(events.contains(ClipEventFlag::PRESS));
+        assert_eq!(actions, vec![Action::Stop]);
     }
 }
