@@ -42,6 +42,10 @@ pub struct Frame {
     pub contours: Vec<Contour>,
     pub clips: Vec<Clip>,
     pub tweens: Vec<Tween>,
+    /// Wick behavior scripts on this frame (`[{name, src}]`). The compiler
+    /// recognizes a small command subset (stop/play/gotoAndPlay/gotoAndStop) in
+    /// the `default`/`load` scripts and emits AVM1; the rest is left uncompiled.
+    pub scripts: Vec<Script>,
 }
 
 /// A nested clip: its own transform (placed on the parent frame) plus its own
@@ -49,6 +53,17 @@ pub struct Frame {
 pub struct Clip {
     pub transform: crate::Transform,
     pub layers: Vec<Layer>,
+    /// Wick behavior scripts on this clip. Milestone B recognizes
+    /// `mousepressed`/`mouseclick` here and emits PRESS clip actions; unused for now.
+    pub scripts: Vec<Script>,
+}
+
+/// A Wick behavior script: a `name` from the engine's fixed set (`default`,
+/// `mousepressed`, `load`, …) and its JavaScript `src`. twip compiles only a
+/// small recognized command subset; see `recognize_frame_actions` in lib.rs.
+pub struct Script {
+    pub name: String,
+    pub src: String,
 }
 
 /// A motion-tween keyframe: the frame's clip should hold `transform` at this
@@ -218,6 +233,7 @@ fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
                 contours,
                 clips,
                 tweens,
+                scripts: parse_scripts(frame_obj),
             });
         }
         layers.push(Layer { frames });
@@ -232,7 +248,32 @@ fn parse_clip(clip: &Value, objects: &Objects) -> Result<Clip> {
         .find(|v| classname(v) == Some("Timeline"))
         .ok_or_else(|| anyhow!("Clip has no Timeline"))?;
     let layers = parse_timeline(timeline, objects)?;
-    Ok(Clip { transform, layers })
+    Ok(Clip {
+        transform,
+        layers,
+        scripts: parse_scripts(clip),
+    })
+}
+
+/// Read a Tickable's inline `scripts` array (`[{name, src}]`). Wick serializes
+/// this directly on the object's `data` (engine: `data.scripts = ... this._scripts`),
+/// not as a UUID child reference. Missing/malformed entries are skipped.
+fn parse_scripts(obj: &Value) -> Vec<Script> {
+    obj.get("scripts")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| {
+                    let name = s.get("name").and_then(Value::as_str)?;
+                    let src = s.get("src").and_then(Value::as_str).unwrap_or("");
+                    Some(Script {
+                        name: name.to_string(),
+                        src: src.to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// A Tween's `transformation` is the same inline shape a Clip carries, plus a

@@ -10,12 +10,14 @@ pub mod wick;
 
 use anyhow::Result;
 use std::collections::BTreeMap;
+use swf::avm1::types::{Action, GotoFrame, GotoLabel};
+use swf::avm1::write::Writer as Avm1Writer;
 use swf::{
     Color, ColorTransform, Compression, FillStyle, Fixed8, Fixed16, Header, LineStyle, Matrix,
     PlaceObject, PlaceObjectAction, Point, PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord,
-    ShapeStyles, StyleChangeData, Tag, Twips, write_swf,
+    ShapeStyles, StyleChangeData, SwfStr, Tag, Twips, write_swf,
 };
-use wick::Contour;
+use wick::{Contour, Script};
 
 /// Returns the crate version.
 pub fn version() -> &'static str {
@@ -672,15 +674,158 @@ fn place_placement(action: PlaceObjectAction, p: &Placement, depth: u16) -> Tag<
     }))
 }
 
+/// A recognized frame command — the small vocabulary of Wick frame-script JS that
+/// twip compiles to AVM1. General JS→AVM1 is a permanent non-goal (HANDOFF), so
+/// anything outside this set is left uncompiled (see [`recognize_frame_actions`]).
+/// Frame numbers are already 0-indexed for SWF (Wick/Flash `gotoAnd*(n)` is 1-indexed).
+#[derive(Debug, Clone, PartialEq)]
+enum FrameCmd {
+    Stop,
+    Play,
+    /// `gotoAndStop(n)` — SWF `GotoFrame` moves the playhead and stops.
+    GotoFrame(u16),
+    /// `gotoAndPlay(n)` — `GotoFrame` then `Play`.
+    GotoAndPlay(u16),
+    /// `gotoAndStop("label")` / `gotoAndPlay("label")`; bool = keep playing.
+    GotoLabel(String, bool),
+}
+
+/// Scan a frame's scripts for the recognized command subset. Only the `default`
+/// and `load` scripts are read — both mean "at this frame" for this static subset
+/// (SWF has no per-tick frame script, so a `stop()` in either compiles the same).
+/// Returns the commands in source order plus any non-empty statements that were
+/// not recognized (the caller warns about these; visuals still export).
+fn recognize_frame_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
+    let mut cmds = Vec::new();
+    let mut unrecognized = Vec::new();
+    for script in scripts {
+        if script.name != "default" && script.name != "load" {
+            continue;
+        }
+        for stmt in split_statements(&script.src) {
+            match parse_stmt(&stmt) {
+                Some(cmd) => cmds.push(cmd),
+                None => unrecognized.push(stmt),
+            }
+        }
+    }
+    (cmds, unrecognized)
+}
+
+/// Split JS source into trimmed, non-empty statements: drop `//` line comments,
+/// then split on newlines and `;`. Good enough for the flat command subset twip
+/// recognizes; it does not attempt to parse general JavaScript.
+fn split_statements(src: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in src.lines() {
+        let code = match line.find("//") {
+            Some(i) => &line[..i],
+            None => line,
+        };
+        for part in code.split(';') {
+            let t = part.trim();
+            if !t.is_empty() {
+                out.push(t.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Match one statement against the recognized vocabulary (with an optional `this.`
+/// receiver). Returns `None` for anything else.
+fn parse_stmt(stmt: &str) -> Option<FrameCmd> {
+    let s = stmt.strip_prefix("this.").unwrap_or(stmt).trim();
+    match s {
+        "stop()" => return Some(FrameCmd::Stop),
+        "play()" => return Some(FrameCmd::Play),
+        _ => {}
+    }
+    if let Some(arg) = call_arg(s, "gotoAndPlay") {
+        return goto_arg(arg, true);
+    }
+    if let Some(arg) = call_arg(s, "gotoAndStop") {
+        return goto_arg(arg, false);
+    }
+    None
+}
+
+/// If `s` is exactly `name( <arg> )`, return the trimmed `<arg>`.
+fn call_arg<'a>(s: &'a str, name: &str) -> Option<&'a str> {
+    let rest = s.strip_prefix(name)?.trim_start();
+    let inner = rest.strip_prefix('(')?.strip_suffix(')')?;
+    Some(inner.trim())
+}
+
+/// Interpret a `gotoAnd*` argument: a quoted `"label"`/`'label'` → [`FrameCmd::GotoLabel`],
+/// or a positive integer frame (1-indexed → 0-indexed SWF). `play` picks play vs stop.
+fn goto_arg(arg: &str, play: bool) -> Option<FrameCmd> {
+    let quoted = |q: char| arg.len() >= 2 && arg.starts_with(q) && arg.ends_with(q);
+    if quoted('"') || quoted('\'') {
+        let label = &arg[1..arg.len() - 1];
+        if label.is_empty() {
+            return None;
+        }
+        return Some(FrameCmd::GotoLabel(label.to_string(), play));
+    }
+    let n: u32 = arg.parse().ok()?;
+    let frame = n.saturating_sub(1).min(u16::MAX as u32) as u16;
+    Some(if play {
+        FrameCmd::GotoAndPlay(frame)
+    } else {
+        FrameCmd::GotoFrame(frame)
+    })
+}
+
+/// Serialize recognized frame commands to an AVM1 action-record buffer for a
+/// `DoAction` tag. The writer does NOT append `Action::End` — this does (per the
+/// swf crate's action-list convention). Returns an empty buffer for no commands.
+fn frame_action_bytes(cmds: &[FrameCmd]) -> Vec<u8> {
+    let mut buf = Vec::new();
+    if cmds.is_empty() {
+        return buf;
+    }
+    let mut w = Avm1Writer::new(&mut buf, 8);
+    // Writing to a Vec is infallible; ignore the io::Result.
+    for cmd in cmds {
+        let _ = match cmd {
+            FrameCmd::Stop => w.write_action(&Action::Stop),
+            FrameCmd::Play => w.write_action(&Action::Play),
+            FrameCmd::GotoFrame(f) => w.write_action(&Action::GotoFrame(GotoFrame { frame: *f })),
+            FrameCmd::GotoAndPlay(f) => w
+                .write_action(&Action::GotoFrame(GotoFrame { frame: *f }))
+                .and_then(|()| w.write_action(&Action::Play)),
+            FrameCmd::GotoLabel(label, play) => {
+                let r = w.write_action(&Action::GotoLabel(GotoLabel {
+                    label: SwfStr::from_utf8_str(label),
+                }));
+                if *play {
+                    r.and_then(|()| w.write_action(&Action::Play))
+                } else {
+                    r
+                }
+            }
+        };
+    }
+    let _ = w.write_action(&Action::End);
+    buf
+}
+
 /// Compile a timeline (a list of layers) into its control-tag stream (Place/Remove/
 /// ShowFrame), pushing any shape/sprite DEFINITIONS onto the shared `defs` list in
 /// dependency order (children before the DefineSprite that uses them). Recurses for
 /// nested clips. SWF requires all DefineShape/DefineSprite tags at the root, before
 /// use — post-order recursion gives exactly that ordering.
+///
+/// Also returns the frame actions: for each absolute frame number that carries a
+/// recognized script, the AVM1 bytes for a `DoAction` tag. The caller owns these
+/// (they outlive the borrowed `DoAction` tags) and inserts them before the matching
+/// `ShowFrame`.
 fn compile_timeline(
     layers: &[wick::Layer],
     next_id: &mut u16,
     defs: &mut Vec<Tag<'static>>,
+    frame_actions: &mut BTreeMap<u16, Vec<FrameCmd>>,
 ) -> Vec<Tag<'static>> {
     let num_layers = layers.len();
 
@@ -691,6 +836,22 @@ fn compile_timeline(
     for layer in layers {
         let mut layer_slots = Vec::with_capacity(layer.frames.len());
         for frame in &layer.frames {
+            // Frame scripts fire when the playhead ENTERS the keyframe (Flash frame
+            // action), so key the actions by the keyframe's start. Multiple layers'
+            // scripts on the same start-frame concatenate.
+            let (cmds, unrecognized) = recognize_frame_actions(&frame.scripts);
+            if !unrecognized.is_empty() {
+                eprintln!(
+                    "twip: {} uncompiled frame-script statement(s) on frame {}: {}",
+                    unrecognized.len(),
+                    frame.start,
+                    unrecognized.join("; ")
+                );
+            }
+            if !cmds.is_empty() {
+                frame_actions.entry(frame.start).or_default().extend(cmds);
+            }
+
             let mut items = Vec::new();
             for contour in &frame.contours {
                 let id = *next_id;
@@ -705,7 +866,18 @@ fn compile_timeline(
             // Wick puts at most one clip on a tweened frame; the tween track drives that
             // clip. Any further clips (unusual) are placed statically at their own transform.
             for (ci, clip) in frame.clips.iter().enumerate() {
-                let body = compile_timeline(&clip.layers, next_id, defs);
+                // A nested clip's frame scripts belong inside its DefineSprite body,
+                // which would force the whole (currently 'static) tag pipeline to hold
+                // borrowed DoAction tags — deferred past milestone A. Collect + warn.
+                let mut nested_actions: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+                let body = compile_timeline(&clip.layers, next_id, defs, &mut nested_actions);
+                if !nested_actions.is_empty() {
+                    eprintln!(
+                        "twip: note: frame scripts inside a nested clip are not yet compiled \
+                         ({} keyframe(s) skipped)",
+                        nested_actions.len()
+                    );
+                }
                 let num_frames = body
                     .iter()
                     .filter(|t| matches!(t, Tag::ShowFrame))
@@ -802,17 +974,47 @@ fn compile_timeline(
 }
 
 /// Compile a parsed document into an SWF timeline (frame-by-frame, with nested clips).
+///
+/// Recognized frame scripts (stop/play/gotoAndPlay/gotoAndStop) become `DoAction`
+/// tags spliced in before the `ShowFrame` of their keyframe.
 pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
     let mut next_id: u16 = 1;
-    let mut tags: Vec<Tag> = Vec::new();
-    let control = compile_timeline(&doc.layers, &mut next_id, &mut tags);
+    let mut defs: Vec<Tag> = Vec::new();
+    let mut frame_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+    let control = compile_timeline(&doc.layers, &mut next_id, &mut defs, &mut frame_cmds);
+
     let total: u16 = control
         .iter()
         .filter(|t| matches!(t, Tag::ShowFrame))
         .count()
         .try_into()
         .unwrap_or(u16::MAX);
-    tags.extend(control);
+
+    // Serialize each keyframe's recognized commands to owned AVM1 buffers. This
+    // arena outlives the borrowed `DoAction` tags assembled below (all local to
+    // this function, so the borrow is sound without a codebase-wide lifetime).
+    let action_arena: BTreeMap<u16, Vec<u8>> = frame_cmds
+        .into_iter()
+        .filter_map(|(frame_no, cmds)| {
+            let bytes = frame_action_bytes(&cmds);
+            (!bytes.is_empty()).then_some((frame_no, bytes))
+        })
+        .collect();
+
+    // Definitions first, then the control stream with a DoAction spliced in before
+    // the ShowFrame of each frame that carries one. `Tag<'static>` def/control tags
+    // coerce to the arena's borrow lifetime on push.
+    let mut tags: Vec<Tag> = defs;
+    let mut frame_no: u16 = 0;
+    for tag in control {
+        if matches!(tag, Tag::ShowFrame) {
+            frame_no += 1;
+            if let Some(bytes) = action_arena.get(&frame_no) {
+                tags.push(Tag::DoAction(bytes.as_slice()));
+            }
+        }
+        tags.push(tag);
+    }
 
     let header = Header {
         compression: Compression::None,
@@ -989,6 +1191,41 @@ mod tests {
         );
     }
 
+    /// Item 10 milestone A end-to-end: a real `.wick` (frame-by-frame with a
+    /// `stop();` default script on keyframe 1) emits one `DoAction` carrying `Stop`,
+    /// placed before frame 1's `ShowFrame`.
+    #[test]
+    fn compiles_frame_stop_wick() {
+        let bytes = include_bytes!("../fixtures/frame-stop.wick");
+        let swf = compile_wick(bytes).expect("compile frame-stop.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let do_actions: Vec<&[u8]> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::DoAction(b) => Some(*b),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(do_actions.len(), 1, "exactly one frame carries a stop()");
+        assert_eq!(decode_actions(do_actions[0]), vec![Action::Stop]);
+
+        // The DoAction sits before the first ShowFrame (frame 1's keyframe).
+        let do_idx = parsed
+            .tags
+            .iter()
+            .position(|t| matches!(t, Tag::DoAction(_)))
+            .unwrap();
+        let first_sf = parsed
+            .tags
+            .iter()
+            .position(|t| matches!(t, Tag::ShowFrame))
+            .unwrap();
+        assert!(do_idx < first_sf, "stop() runs on frame 1, before its ShowFrame");
+    }
+
     /// Phase 1 depth mapping: a real two-layer `.wick`. Wick layer index 0 is frontmost,
     /// which must map to the HIGHER SWF depth band (higher depth = drawn on top).
     #[test]
@@ -1086,6 +1323,7 @@ mod tests {
                         end: 1,
                         contours: vec![triangle(0.0)],
                         clips: vec![],
+                        scripts: Vec::new(),
                         tweens: vec![],
                     },
                     Frame {
@@ -1093,6 +1331,7 @@ mod tests {
                         end: 2,
                         contours: vec![triangle(50.0)],
                         clips: vec![],
+                        scripts: Vec::new(),
                         tweens: vec![],
                     },
                 ],
@@ -1273,6 +1512,7 @@ mod tests {
         };
         // A clip whose OWN timeline is a 2-keyframe animation, placed at (100, 50).
         let clip = Clip {
+            scripts: Vec::new(),
             transform: Transform {
                 x: 100.0,
                 y: 50.0,
@@ -1288,6 +1528,7 @@ mod tests {
                         end: 1,
                         contours: vec![tri(0.0)],
                         clips: vec![],
+                        scripts: Vec::new(),
                         tweens: vec![],
                     },
                     Frame {
@@ -1295,6 +1536,7 @@ mod tests {
                         end: 2,
                         contours: vec![tri(20.0)],
                         clips: vec![],
+                        scripts: Vec::new(),
                         tweens: vec![],
                     },
                 ],
@@ -1309,6 +1551,7 @@ mod tests {
                     end: 1,
                     contours: vec![],
                     clips: vec![clip],
+                    scripts: Vec::new(),
                     tweens: vec![],
                 }],
             }],
@@ -1510,6 +1753,7 @@ mod tests {
             stroke: None,
         };
         let clip = Clip {
+            scripts: Vec::new(),
             transform: Transform {
                 x: 0.0,
                 y: 0.0,
@@ -1524,6 +1768,7 @@ mod tests {
                     end: 1,
                     contours: vec![dot],
                     clips: vec![],
+                    scripts: Vec::new(),
                     tweens: vec![],
                 }],
             }],
@@ -1550,6 +1795,7 @@ mod tests {
                     end: 5,
                     contours: vec![],
                     clips: vec![clip],
+                    scripts: Vec::new(),
                     tweens: vec![key(1, 0.0), key(5, 100.0)],
                 }],
             }],
@@ -1606,6 +1852,7 @@ mod tests {
             opacity: 1.0,
         };
         let clip = Clip {
+            scripts: Vec::new(),
             transform: ident,
             layers: vec![Layer {
                 frames: vec![Frame {
@@ -1613,6 +1860,7 @@ mod tests {
                     end: 1,
                     contours: vec![dot],
                     clips: vec![],
+                    scripts: Vec::new(),
                     tweens: vec![],
                 }],
             }],
@@ -1632,6 +1880,7 @@ mod tests {
                     end: 5,
                     contours: vec![],
                     clips: vec![clip],
+                    scripts: Vec::new(),
                     tweens: vec![key(1, 0.0, "out-back"), key(5, 100.0, "none")],
                 }],
             }],
@@ -1711,5 +1960,174 @@ mod tests {
             .expect("a PlaceObject");
         assert!(place.matrix.is_some(), "carries a transform matrix");
         assert!(place.color_transform.is_some(), "carries an opacity CXFORM");
+    }
+
+    // --- Item 10 milestone A: frame actions -----------------------------------
+
+    /// Decode a `DoAction` byte buffer into its action records (dropping the
+    /// terminating `Action::End`).
+    fn decode_actions(bytes: &[u8]) -> Vec<Action<'_>> {
+        let mut r = swf::avm1::read::Reader::new(bytes, 8);
+        let mut out = Vec::new();
+        while let Ok(action) = r.read_action() {
+            if action == Action::End {
+                break;
+            }
+            out.push(action);
+        }
+        out
+    }
+
+    /// Build a one-layer, one-frame document whose single keyframe carries `src`
+    /// as a `default` frame script (plus a small square so there's something to draw).
+    fn doc_with_frame_script(src: &str) -> wick::Document {
+        use wick::{Contour, Document, Frame, Layer, Script};
+        let square = Contour {
+            points: vec![(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)],
+            holes: vec![],
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
+            stroke: None,
+        };
+        Document {
+            width: 200.0,
+            height: 200.0,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![square],
+                    clips: vec![],
+                    tweens: vec![],
+                    scripts: vec![Script {
+                        name: "default".to_string(),
+                        src: src.to_string(),
+                    }],
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn frame_stop_emits_doaction() {
+        let swf = compile_document(&doc_with_frame_script("stop();")).expect("compile");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let do_idx = parsed
+            .tags
+            .iter()
+            .position(|t| matches!(t, Tag::DoAction(_)))
+            .expect("a DoAction tag");
+        let sf_idx = parsed
+            .tags
+            .iter()
+            .position(|t| matches!(t, Tag::ShowFrame))
+            .expect("a ShowFrame");
+        assert!(do_idx < sf_idx, "DoAction precedes the frame's ShowFrame");
+
+        let bytes = match &parsed.tags[do_idx] {
+            Tag::DoAction(b) => *b,
+            _ => unreachable!(),
+        };
+        assert_eq!(decode_actions(bytes), vec![Action::Stop], "stop() -> Stop");
+    }
+
+    #[test]
+    fn gotoandplay_emits_goto_and_play() {
+        // gotoAndPlay(2): 1-indexed source -> 0-indexed GotoFrame{1}, then Play.
+        let swf = compile_document(&doc_with_frame_script("gotoAndPlay(2);")).expect("compile");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let bytes = parsed
+            .tags
+            .iter()
+            .find_map(|t| match t {
+                Tag::DoAction(b) => Some(*b),
+                _ => None,
+            })
+            .expect("a DoAction tag");
+        assert_eq!(
+            decode_actions(bytes),
+            vec![Action::GotoFrame(GotoFrame { frame: 1 }), Action::Play],
+            "gotoAndPlay(2) -> GotoFrame{{1}} + Play"
+        );
+    }
+
+    #[test]
+    fn gotoandstop_emits_bare_gotoframe() {
+        let swf = compile_document(&doc_with_frame_script("this.gotoAndStop(3);")).expect("compile");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let bytes = parsed
+            .tags
+            .iter()
+            .find_map(|t| match t {
+                Tag::DoAction(b) => Some(*b),
+                _ => None,
+            })
+            .expect("a DoAction tag");
+        assert_eq!(
+            decode_actions(bytes),
+            vec![Action::GotoFrame(GotoFrame { frame: 2 })],
+            "gotoAndStop(3) -> bare GotoFrame{{2}} (no Play)"
+        );
+    }
+
+    #[test]
+    fn unrecognized_script_is_skipped_not_fatal() {
+        // A script outside the recognized vocabulary must not fail the compile, and
+        // must emit no DoAction — the visuals still export.
+        let swf = compile_document(&doc_with_frame_script(
+            "var t = wickCustomThing(42); t.spin();",
+        ))
+        .expect("compile still succeeds");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        assert!(
+            !parsed.tags.iter().any(|t| matches!(t, Tag::DoAction(_))),
+            "no DoAction for an unrecognized script"
+        );
+        assert!(
+            parsed.tags.iter().any(|t| matches!(t, Tag::DefineShape(_))),
+            "the shape still exports"
+        );
+    }
+
+    #[test]
+    fn recognizer_parses_the_vocabulary() {
+        use wick::Script;
+        let s = |src: &str| {
+            recognize_frame_actions(&[Script {
+                name: "default".to_string(),
+                src: src.to_string(),
+            }])
+        };
+        assert_eq!(s("stop();").0, vec![FrameCmd::Stop]);
+        assert_eq!(s("play()").0, vec![FrameCmd::Play]);
+        assert_eq!(s("gotoAndPlay(5);").0, vec![FrameCmd::GotoAndPlay(4)]);
+        assert_eq!(s("gotoAndStop(1);").0, vec![FrameCmd::GotoFrame(0)]);
+        assert_eq!(
+            s("gotoAndPlay(\"intro\");").0,
+            vec![FrameCmd::GotoLabel("intro".to_string(), true)]
+        );
+        // Comments and blank lines are ignored; multiple statements accumulate.
+        assert_eq!(
+            s("// jump back\nstop(); play();").0,
+            vec![FrameCmd::Stop, FrameCmd::Play]
+        );
+        // A script that is only recognized on the wrong event name is not a frame action.
+        assert!(
+            recognize_frame_actions(&[Script {
+                name: "mousepressed".to_string(),
+                src: "stop();".to_string(),
+            }])
+            .0
+            .is_empty(),
+            "mousepressed is a milestone-B clip event, not a frame action"
+        );
+        // The unrecognized bucket carries the leftover statement.
+        assert_eq!(s("frobnicate(9)").1, vec!["frobnicate(9)".to_string()]);
     }
 }

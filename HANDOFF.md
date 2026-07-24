@@ -348,9 +348,40 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
        `Modals/SupportUs/SupportUs.jsx` + `_supportus.scss` (Patreon link + patron names); patron names in
        `Modals/WelcomeMessage/WelcomeMessage.jsx`. HARD RULE: the stale Patreon link must be gone before ANY
        share/distribution (GPLv3 + not shipping a stale third-party donation ask). No urgency while private/undistributed.
-10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
-11. Ruffle golden-PNG oracle (lavapipe-blessed).
-10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
+10. Frame actions + PRESS click handlers. **Milestone A DONE 2026-07-23 (frame actions).**
+    Wick stores behavior as `scripts:[{name,src}]` on every Frame/Clip (engine bundle:
+    `data.scripts = ...this._scripts`; 15 valid names incl. `default`/`load`/`mousepressed`);
+    `src` is arbitrary JS. General JS→AVM1 is a permanent non-goal, so twip recognizes a
+    fixed vocabulary — `stop() play() gotoAndPlay(n) gotoAndStop(n)`, numeric or `"label"`
+    arg, optional `this.` — in the `default`+`load` frame scripts and emits AVM1; anything
+    else warns (`eprintln!`) and is skipped (visuals still export). Pieces:
+    * Parser (`src/wick.rs`): `Script{name,src}`; `scripts:Vec<Script>` on `wick::Frame`+`Clip`;
+      `parse_scripts` reads the inline `scripts` array (not a UUID child). The `.wick` format
+      already carries `scripts:[{name:"default",src:""}]` per frame — verified against a real
+      save, so no format guessing.
+    * Recognizer/emit (`src/lib.rs`): `recognize_frame_actions` → `Vec<FrameCmd>` + unrecognized
+      bucket; `frame_action_bytes` writes the AVM1 record buffer via `swf::avm1::write::Writer`
+      (Action::Stop/Play/GotoFrame{n-1, 0-indexed}/GotoLabel; manual `Action::End`).
+    * Wiring: `compile_timeline` collects actions into a `BTreeMap<u16 frame_no, Vec<FrameCmd>>`
+      keyed by keyframe start (Flash frame action = fires on entry). `compile_document` freezes
+      them into an owned byte arena `BTreeMap<u16,Vec<u8>>` and splices `Tag::DoAction(&arena[i])`
+      before the matching frame's `ShowFrame` — a LOCALIZED borrow (arena outlives the borrowed
+      tags within the fn), keeping the rest of the pipeline on `Tag<'static>` (def/control tags
+      coerce). GOTCHA: `DoAction`/`ClipAction.action_data` both BORROW `&[u8]`; that's why the
+      arena exists instead of leaking.
+    * Nested-clip frame scripts are NOT compiled yet (would force the sprite body / whole `defs`
+      pipeline off `'static`) — collected + warned, deferred. Milestone B (PRESS) hits the same
+      wall, which is why it's split out.
+    * Verified: structural oracle green — `frame_stop_emits_doaction`, `gotoandplay_emits_goto_and_play`,
+      `gotoandstop_emits_bare_gotoframe`, `unrecognized_script_is_skipped_not_fatal`,
+      `recognizer_parses_the_vocabulary`, and real `compiles_frame_stop_wick`
+      (fixtures/frame-stop.wick = frame-by-frame flipbook + `stop();` on keyframe 1 → 1 DoAction
+      {Stop} before frame 1's ShowFrame). 24 lib tests green. Ruffle visual (flipbook halts on
+      frame 1 vs strobing) not yet eyeballed — structural is the designated workhorse; /tmp SWF ready.
+    * **Milestone B PENDING** — clip `mousepressed`/`mouseclick` → `ClipEventFlag::PRESS` clip
+      actions on the sprite's `PlaceObject` (`clip_actions` field). Needs the owned handler bytes
+      reachable at the placement build inside `compile_timeline`, i.e. the deeper arena thread —
+      its own milestone so A shipped verified first.
 11. Ruffle golden-PNG oracle (lavapipe-blessed).
 
 ## Plan

@@ -34,6 +34,7 @@ fn main() -> std::io::Result<()> {
                 contours: vec![square(x, 180.0, 40.0)],
                 clips: vec![],
                 tweens: vec![],
+                scripts: Vec::new(),
             }
         })
         .collect();
