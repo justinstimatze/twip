@@ -222,7 +222,25 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    easingType from a zip); trajectory is the textbook triple-bounce (out to 434, back to 369, up to
    454, settle at 460). No Ruffle screenshot this time — the 1e-9 oracle pins the curve far tighter
    than eyeballing a frame could, and the compile path is the same one #5 already Ruffle-verified.
-7. Strokes (LineStyle2). Independent of the timeline work.
+7. **DONE 2026-07-23 — Strokes (LineStyle2).** A `.wick` path can now carry a fill, a stroke, or
+   both. `wick::Contour` gained `closed: bool`, `fill: Option<Color>`, `stroke: Option<Stroke>`
+   (was a bare required `fill: Color`); `Stroke {color, width, cap, join, miter_limit}` with
+   `StrokeCap {Butt,Round,Square}` / `StrokeJoin {Miter,Round,Bevel}`. Parser reads paper.js
+   `strokeColor`/`strokeWidth`/`strokeCap`/`strokeJoin`/`miterLimit` (same top-level props as
+   `fillColor`); a stroke-only open path (no `fillColor`) is no longer dropped — it needs >=2 points
+   vs >=3 for a fill. FORMAT ground-truthed from the vendored paper.js source
+   (`engine/lib/paper.js` Style `itemDefaults`): defaults are width 1 / cap 'butt' / join 'miter' /
+   miterLimit 10, and paper.js OMITS props left at default — matching the parser's fallbacks, and
+   confirmed live by test1.wick's real export (`strokeColor:[0,0,0]`, `strokeCap:"round"`,
+   strokeWidth absent). Compiler: `contour_to_shape` emits `fill_style_1`/`line_style` only for the
+   styles present, populates `fill_styles`/`line_styles` accordingly, maps butt->SWF `None` cap,
+   and closes the edge loop only when the path is filled or `closed` (open strokes don't wrap;
+   `LineStyle.allow_close` set to match). DefineShape4 already in use serializes line styles as
+   LineStyle2 (caps/joins). Verified: `stroke_only_open_path_emits_line_no_fill` (3-pt open line ->
+   2 edges, line style w/ round cap + bevel join, no fill), `filled_stroked_closed_path_emits_both`
+   (4-pt closed square -> 4 edges, both styles, butt->None cap, miter join), the real
+   `compiles_test1_wick` now asserts both engine-authored shapes gain a black round-capped 1px
+   stroke, and Ruffle (green rectangle renders with its thin black outline — dropped before #7).
 8. Planarization via i_overlay (brush donut, figure-eight, self-crossing) — the hard 20%, own
    fixtures needed.
 9. **Editor fork** (StickmanRed/wick-editor): pin Node-14, Tauri 2 shell, Export button →

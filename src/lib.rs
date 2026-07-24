@@ -11,9 +11,9 @@ pub mod wick;
 use anyhow::Result;
 use std::collections::BTreeMap;
 use swf::{
-    Color, ColorTransform, Compression, FillStyle, Fixed8, Fixed16, Header, Matrix, PlaceObject,
-    PlaceObjectAction, Point, PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles,
-    StyleChangeData, Tag, Twips, write_swf,
+    Color, ColorTransform, Compression, FillStyle, Fixed8, Fixed16, Header, LineStyle, Matrix,
+    PlaceObject, PlaceObjectAction, Point, PointDelta, Rectangle, Shape, ShapeFlag, ShapeRecord,
+    ShapeStyles, StyleChangeData, Tag, Twips, write_swf,
 };
 use wick::Contour;
 
@@ -180,7 +180,9 @@ pub fn tween_demo_swf() -> Vec<u8> {
     const FRAMES: u16 = 48;
     let contour = wick::Contour {
         points: vec![(-20.0, -20.0), (20.0, -20.0), (20.0, 20.0), (-20.0, 20.0)],
-        fill: Color::from_rgb(0xff3030, 255),
+        closed: true,
+        fill: Some(Color::from_rgb(0xff3030, 255)),
+        stroke: None,
     };
     let mut tags: Vec<Tag> = vec![Tag::DefineShape(Box::new(contour_to_shape(1, &contour)))];
 
@@ -270,7 +272,29 @@ pub fn hello_square_swf() -> Vec<u8> {
     out
 }
 
-/// Convert one flattened contour into a filled `DefineShape4`.
+/// Build the SWF LineStyle2 for a parsed stroke.
+fn stroke_to_line_style(stroke: &wick::Stroke, close: bool) -> LineStyle {
+    use swf::{LineCapStyle, LineJoinStyle};
+    let cap = match stroke.cap {
+        wick::StrokeCap::Butt => LineCapStyle::None,
+        wick::StrokeCap::Round => LineCapStyle::Round,
+        wick::StrokeCap::Square => LineCapStyle::Square,
+    };
+    let join = match stroke.join {
+        wick::StrokeJoin::Round => LineJoinStyle::Round,
+        wick::StrokeJoin::Bevel => LineJoinStyle::Bevel,
+        wick::StrokeJoin::Miter => LineJoinStyle::Miter(Fixed8::from_f64(stroke.miter_limit)),
+    };
+    LineStyle::new()
+        .with_width(Twips::from_pixels(stroke.width))
+        .with_color(stroke.color)
+        .with_start_cap(cap)
+        .with_end_cap(cap)
+        .with_join_style(join)
+        .with_allow_close(close)
+}
+
+/// Convert one flattened contour into a `DefineShape4` with its fill and/or stroke.
 fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
     // Absolute pixels -> twips (i32) first, then take deltas, so rounding can't drift.
     let twips: Vec<(i32, i32)> = contour
@@ -293,16 +317,20 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
         y_max: Twips::new(y_max),
     };
 
+    // A fill always closes the area; an open stroke stops at the last vertex.
+    let close = contour.fill.is_some() || contour.closed;
+
     let mut records = vec![ShapeRecord::StyleChange(Box::new(StyleChangeData {
         move_to: Some(Point::new(Twips::new(twips[0].0), Twips::new(twips[0].1))),
         fill_style_0: None,
-        fill_style_1: Some(1),
-        line_style: None,
+        fill_style_1: contour.fill.as_ref().map(|_| 1), // 1-based into fill_styles
+        line_style: contour.stroke.as_ref().map(|_| 1), // 1-based into line_styles
         new_styles: None,
     }))];
-    for i in 0..twips.len() {
+    let last = if close { twips.len() } else { twips.len() - 1 };
+    for i in 0..last {
         let (cx, cy) = twips[i];
-        let (nx, ny) = twips[(i + 1) % twips.len()]; // last edge closes back to the start
+        let (nx, ny) = twips[(i + 1) % twips.len()]; // wraps to the start only when closing
         records.push(ShapeRecord::StraightEdge {
             delta: PointDelta::new(Twips::new(nx - cx), Twips::new(ny - cy)),
         });
@@ -315,8 +343,15 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
         edge_bounds: bounds,
         flags: ShapeFlag::NON_ZERO_WINDING_RULE,
         styles: ShapeStyles {
-            fill_styles: vec![FillStyle::Color(contour.fill)],
-            line_styles: vec![],
+            fill_styles: contour
+                .fill
+                .map(|c| vec![FillStyle::Color(c)])
+                .unwrap_or_default(),
+            line_styles: contour
+                .stroke
+                .as_ref()
+                .map(|s| vec![stroke_to_line_style(s, close)])
+                .unwrap_or_default(),
         },
         shape: records,
     }
@@ -815,6 +850,26 @@ mod tests {
         assert_eq!(shapes, 2, "black ellipse + green rectangle");
         assert_eq!(places, 2, "each shape placed once");
         assert_eq!(show_frames, 1, "single static frame");
+
+        // Both engine-authored paths carry strokeColor:[0,0,0] + strokeCap:"round"
+        // with strokeWidth omitted (paper.js default 1). Each shape must now have a
+        // fill AND a black round-capped hairline stroke.
+        use swf::LineCapStyle;
+        for tag in &parsed.tags {
+            if let Tag::DefineShape(shape) = tag {
+                assert_eq!(shape.styles.fill_styles.len(), 1, "each shape keeps its fill");
+                assert_eq!(shape.styles.line_styles.len(), 1, "each shape gains a stroke");
+                let ls = &shape.styles.line_styles[0];
+                assert_eq!(ls.width(), Twips::from_pixels(1.0), "default strokeWidth 1px");
+                assert_eq!(
+                    *ls.fill_style(),
+                    FillStyle::Color(Color::from_rgb(0x000000, 255)),
+                    "black stroke"
+                );
+                assert_eq!(ls.start_cap(), LineCapStyle::Round, "strokeCap round");
+                assert_eq!(ls.end_cap(), LineCapStyle::Round);
+            }
+        }
     }
 
     /// Phase 1b parser: a real frame-by-frame `.wick` (3 keyframes over 12 playhead
@@ -931,7 +986,9 @@ mod tests {
 
         let triangle = |x: f64| Contour {
             points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
-            fill: swf::Color::from_rgb(0xff0000, 255),
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0xff0000, 255)),
+            stroke: None,
         };
         let doc = Document {
             width: 100.0,
@@ -979,6 +1036,92 @@ mod tests {
         );
     }
 
+    fn straight_edges(shape: &Shape) -> usize {
+        shape
+            .shape
+            .iter()
+            .filter(|r| matches!(r, ShapeRecord::StraightEdge { .. }))
+            .count()
+    }
+
+    fn first_style_change(shape: &Shape) -> &StyleChangeData {
+        match &shape.shape[0] {
+            ShapeRecord::StyleChange(s) => s,
+            _ => panic!("first record is not a style change"),
+        }
+    }
+
+    #[test]
+    fn stroke_only_open_path_emits_line_no_fill() {
+        use swf::{LineCapStyle, LineJoinStyle};
+        // An open 3-point polyline with a stroke and no fill: line style set, no fill
+        // style, and no closing edge (2 edges for 3 points, not 3).
+        let contour = Contour {
+            points: vec![(0.0, 0.0), (50.0, 0.0), (50.0, 50.0)],
+            closed: false,
+            fill: None,
+            stroke: Some(wick::Stroke {
+                color: Color::from_rgb(0xff0000, 255),
+                width: 4.0,
+                cap: wick::StrokeCap::Round,
+                join: wick::StrokeJoin::Bevel,
+                miter_limit: 10.0,
+            }),
+        };
+        let shape = contour_to_shape(7, &contour);
+
+        assert!(shape.styles.fill_styles.is_empty(), "no fill");
+        assert_eq!(shape.styles.line_styles.len(), 1, "one line style");
+        let ls = &shape.styles.line_styles[0];
+        assert_eq!(ls.width(), Twips::from_pixels(4.0));
+        assert_eq!(*ls.fill_style(), FillStyle::Color(Color::from_rgb(0xff0000, 255)));
+        assert_eq!(ls.start_cap(), LineCapStyle::Round);
+        assert_eq!(ls.end_cap(), LineCapStyle::Round);
+        assert_eq!(ls.join_style(), LineJoinStyle::Bevel);
+        assert!(!ls.allow_close(), "open path does not auto-close the stroke");
+
+        let sc = first_style_change(&shape);
+        assert_eq!(sc.fill_style_1, None, "no fill index");
+        assert_eq!(sc.line_style, Some(1), "line style index 1");
+        assert_eq!(straight_edges(&shape), 2, "3 points, open -> 2 edges");
+    }
+
+    #[test]
+    fn filled_stroked_closed_path_emits_both() {
+        use swf::{LineCapStyle, LineJoinStyle};
+        // A closed square with both a fill and a stroke: both style arrays populated,
+        // both indices on the style change, and a closing edge (4 edges for 4 points).
+        let contour = Contour {
+            points: vec![(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)],
+            closed: true,
+            fill: Some(Color::from_rgb(0x00ff00, 255)),
+            stroke: Some(wick::Stroke {
+                color: Color::from_rgb(0x000000, 255),
+                width: 2.0,
+                cap: wick::StrokeCap::Butt,
+                join: wick::StrokeJoin::Miter,
+                miter_limit: 10.0,
+            }),
+        };
+        let shape = contour_to_shape(8, &contour);
+
+        assert_eq!(shape.styles.fill_styles.len(), 1, "one fill");
+        assert_eq!(shape.styles.line_styles.len(), 1, "one line");
+        let ls = &shape.styles.line_styles[0];
+        assert_eq!(ls.width(), Twips::from_pixels(2.0));
+        assert_eq!(ls.start_cap(), LineCapStyle::None, "paper.js butt -> SWF no cap");
+        assert_eq!(
+            ls.join_style(),
+            LineJoinStyle::Miter(Fixed8::from_f64(10.0))
+        );
+        assert!(ls.allow_close(), "closed path auto-closes the stroke");
+
+        let sc = first_style_change(&shape);
+        assert_eq!(sc.fill_style_1, Some(1), "fill index 1");
+        assert_eq!(sc.line_style, Some(1), "line index 1");
+        assert_eq!(straight_edges(&shape), 4, "4 points, closed -> 4 edges");
+    }
+
     /// Phase 1d: a nested clip compiles to a DefineSprite (its own timeline) that the
     /// root places once, carrying the clip's transform. Definitions hoist to the root.
     #[test]
@@ -987,7 +1130,9 @@ mod tests {
 
         let tri = |x: f64| Contour {
             points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
-            fill: swf::Color::from_rgb(0x00ff00, 255),
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
+            stroke: None,
         };
         // A clip whose OWN timeline is a 2-keyframe animation, placed at (100, 50).
         let clip = Clip {
@@ -1222,7 +1367,9 @@ mod tests {
 
         let dot = Contour {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
-            fill: swf::Color::from_rgb(0x0000ff, 255),
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+            stroke: None,
         };
         let clip = Clip {
             transform: Transform {
@@ -1307,7 +1454,9 @@ mod tests {
 
         let dot = Contour {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
-            fill: swf::Color::from_rgb(0x0000ff, 255),
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+            stroke: None,
         };
         let ident = Transform {
             x: 0.0,

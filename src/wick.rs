@@ -1,7 +1,7 @@
-//! Parse a `.wick` document (zip + `project.json`) into flat, filled contours
-//! ready to become SWF shapes.
+//! Parse a `.wick` document (zip + `project.json`) into flat contours
+//! (fill and/or stroke) ready to become SWF shapes.
 //!
-//! Scope: static shapes (fills only) plus nested clips (recursive timelines).
+//! Scope: static shapes (fills and strokes) plus nested clips (recursive timelines).
 //! Curves are flattened to polylines; the format details were ground-truthed
 //! against a real save (see HANDOFF.md "Known gaps #1"): `objects` is a flat
 //! UUID-keyed map, parents reference children by UUID, and `Selection` objects
@@ -66,11 +66,42 @@ pub struct Tween {
     pub easing: String,
 }
 
-/// One closed contour with a solid fill, in absolute stage pixels (y-down).
+/// One contour in absolute stage pixels (y-down). A path may carry a fill, a
+/// stroke, or both; at least one is present or the parser drops it.
 pub struct Contour {
-    /// Polyline vertices; the contour closes from the last back to the first.
+    /// Polyline vertices. A filled or `closed` contour also closes from the last
+    /// vertex back to the first; an open stroke does not.
     pub points: Vec<(f64, f64)>,
-    pub fill: Color,
+    /// Whether paper.js marked the path closed (a fill closes regardless).
+    pub closed: bool,
+    pub fill: Option<Color>,
+    pub stroke: Option<Stroke>,
+}
+
+/// A stroke outline: paper.js `strokeColor` / `strokeWidth` / `strokeCap` /
+/// `strokeJoin`, mapped to SWF LineStyle2 at compile.
+pub struct Stroke {
+    pub color: Color,
+    /// Width in stage pixels.
+    pub width: f64,
+    pub cap: StrokeCap,
+    pub join: StrokeJoin,
+    /// Miter limit, only meaningful for `StrokeJoin::Miter`.
+    pub miter_limit: f64,
+}
+
+/// paper.js `strokeCap`. `Butt` (the paper.js default) is SWF's "no cap".
+pub enum StrokeCap {
+    Butt,
+    Round,
+    Square,
+}
+
+/// paper.js `strokeJoin`.
+pub enum StrokeJoin {
+    Miter,
+    Round,
+    Bevel,
 }
 
 fn classname(v: &Value) -> Option<&str> {
@@ -253,10 +284,6 @@ fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow!("Path props missing"))?;
 
-    let fill = match props.get("fillColor") {
-        Some(v) => parse_color(v),
-        None => return Ok(None), // stroke-only path — fills come first
-    };
     let segs = props
         .get("segments")
         .and_then(Value::as_array)
@@ -267,10 +294,54 @@ fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
         .unwrap_or(false);
 
     let points = flatten_segments(segs, closed);
-    if points.len() < 3 {
+
+    // A fill needs a closed area (>=3 points); a stroke can be a bare 2-point line.
+    let fill = props
+        .get("fillColor")
+        .map(parse_color)
+        .filter(|_| points.len() >= 3);
+    let stroke = parse_stroke(props).filter(|_| points.len() >= 2);
+    if fill.is_none() && stroke.is_none() {
         return Ok(None);
     }
-    Ok(Some(Contour { points, fill }))
+    Ok(Some(Contour {
+        points,
+        closed,
+        fill,
+        stroke,
+    }))
+}
+
+/// Pull a stroke off a paper.js Path's props, or `None` if it has no `strokeColor`.
+/// paper.js omits style keys left at their defaults, so width/cap/join fall back to
+/// paper's own defaults (1px, butt, miter, miterLimit 10).
+fn parse_stroke(props: &serde_json::Map<String, Value>) -> Option<Stroke> {
+    let color = props.get("strokeColor").map(parse_color)?;
+    let width = props
+        .get("strokeWidth")
+        .and_then(Value::as_f64)
+        .unwrap_or(1.0);
+    let cap = match props.get("strokeCap").and_then(Value::as_str) {
+        Some("round") => StrokeCap::Round,
+        Some("square") => StrokeCap::Square,
+        _ => StrokeCap::Butt,
+    };
+    let join = match props.get("strokeJoin").and_then(Value::as_str) {
+        Some("round") => StrokeJoin::Round,
+        Some("bevel") => StrokeJoin::Bevel,
+        _ => StrokeJoin::Miter,
+    };
+    let miter_limit = props
+        .get("miterLimit")
+        .and_then(Value::as_f64)
+        .unwrap_or(10.0);
+    Some(Stroke {
+        color,
+        width,
+        cap,
+        join,
+        miter_limit,
+    })
 }
 
 /// paper.js colors are `[r,g,b]`/`[r,g,b,a]` floats in 0..1, or a hex string.
