@@ -341,6 +341,13 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
      * **Export vs preview split**: **SWF** button = in-app Ruffle preview (current behavior); **export** =
        save a `.swf` file to disk (file dialog → write bytes). The earlier "make export produce SWF" resolves
        to this — export writes a file, SWF previews.
+     * **Rebrand / attribution pass** (Justin, 2026-07-23: "what to do with the stale patreon link and names").
+       Two piles: (1) MUST KEEP — the `Copyright 2020 WICKLETS LLC` headers in every file + LICENSE (GPLv3 §5);
+       add a "twip is based on Wick Editor by Wicklets LLC (GPLv3)" credit rather than erasing origin. (2) REMOVE
+       (not license-bound) — the donation/identity content: `Panels/MenuBar/MenuBar.jsx` "support us" button;
+       `Modals/SupportUs/SupportUs.jsx` + `_supportus.scss` (Patreon link + patron names); patron names in
+       `Modals/WelcomeMessage/WelcomeMessage.jsx`. HARD RULE: the stale Patreon link must be gone before ANY
+       share/distribution (GPLv3 + not shipping a stale third-party donation ask). No urgency while private/undistributed.
 10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
 11. Ruffle golden-PNG oracle (lavapipe-blessed).
 10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
