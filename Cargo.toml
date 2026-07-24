@@ -32,6 +32,13 @@ golden = ["dep:image"]
 [workspace]
 exclude = ["editor", "oracle"]
 
+# Cut debuginfo from full to line-tables-only for the everyday build/test loop.
+# Keeps file:line in panic backtraces (all this crate's asserts need) while
+# dropping the variable/type debuginfo that dominates debug-build codegen and
+# link time. Reversible: delete this block to restore full `debug = 2`.
+[profile.dev]
+debug = "line-tables-only"
+
 [lib]
 name = "twip"
 path = "src/lib.rs"

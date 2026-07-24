@@ -3,3 +3,11 @@
 # gates OUR crate. (An env RUSTFLAGS, if set, overrides this — CI sets its own.) Lifted from camber.
 [build]
 rustflags = ["-D", "warnings"]
+
+# Use mold as the linker on this host (gcc 15 drives it via -fuse-ld=mold; mold is on PATH).
+# GOTCHA: cargo does NOT merge [build] rustflags with [target.*] rustflags — when a matching
+# target block exists its rustflags fully REPLACE [build]'s. So the `-D warnings` gate is repeated
+# here; drop it and warnings stop failing the build on this triple. Everything is still portable:
+# on any other host/triple this block doesn't match and [build] alone applies (GNU ld, warnings gated).
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-D", "warnings", "-C", "link-arg=-fuse-ld=mold"]

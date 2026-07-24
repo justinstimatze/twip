@@ -1,14 +1,15 @@
 #!/bin/bash
 # check.sh — the single check suite, run by BOTH the local pre-commit hook
 # (.githooks/pre-commit) and CI (.github/workflows/ci.yml), so local and CI
-# strictness can't drift. Builds and tests ALWAYS gate. clippy gates when clippy
-# is installed (as on CI) and skips with a note otherwise; formatting is advisory
+# strictness can't drift. Builds and tests ALWAYS gate. formatting is advisory
 # (report-only) either way.
 #
-# This dev box runs a source-tarball rustc with no rustfmt/clippy, so locally only
-# build + test gate here; CI (dtolnay stable, which honours rust-toolchain.toml)
-# adds the clippy gate. Flip fmt to a hard gate (add `|| fail=1`) once it's verified
-# clean everywhere and rustfmt is reliably available. Pattern lifted from rtux.
+# clippy is the gate ON CI ONLY (a full clippy pass roughly doubles the local
+# commit loop, and this box now has clippy via a user-space rustup). It runs when
+# $CI is set (GitHub Actions sets CI=true) — so every push is still gated — and is
+# skipped on local commits. Set RUN_CLIPPY=1 to force it locally before a push.
+# Flip fmt to a hard gate (add `|| fail=1`) once it's verified clean everywhere and
+# rustfmt is reliably available. Pattern lifted from rtux.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
@@ -24,10 +25,14 @@ else
 fi
 
 step "clippy"
-if cargo clippy --version >/dev/null 2>&1; then
-    cargo clippy --all-targets -- -D warnings || fail=1
+if [[ -n "${CI:-}" || -n "${RUN_CLIPPY:-}" ]]; then
+    if cargo clippy --version >/dev/null 2>&1; then
+        cargo clippy --all-targets -- -D warnings || fail=1
+    else
+        echo "  clippy not installed — skipping (rustup component add clippy)"
+    fi
 else
-    echo "  clippy not installed — skipping (rustup component add clippy)"
+    echo "  clippy skipped locally (gated in CI; set RUN_CLIPPY=1 to run here)"
 fi
 
 step "build"
