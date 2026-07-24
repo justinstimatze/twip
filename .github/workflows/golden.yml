@@ -54,11 +54,20 @@ jobs:
       # to be installed: git (checkout), curl+ca-certificates (rustup), build-essential
       # (cc, the linker). The rest is ruffle's own LINUX_DEPENDENCIES from its
       # test_rust.yml, plus mesa-vulkan-drivers for lavapipe.
+      #
+      # default-jre-headless is the non-obvious one: ruffle_core's build script runs
+      # tools/asc/asc.jar (Adobe's ActionScript compiler) under `java` to build
+      # playerglobal_avm2, and panics with "Java could not be found" without it (run
+      # 30132117895). ubuntu-latest ships a JDK, which is why this only appears once
+      # the job moves into a container. Nothing here reaches AVM2 — the fixtures are
+      # all AVM1 — but ruffle_core does not build without it. ubuntu:26.04's
+      # default-jre-headless is OpenJDK 25.0.3, the same JVM as the dev box, and
+      # asc.jar runs on it (checked in a container before this landed).
       - name: System dependencies
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            git curl ca-certificates build-essential pkg-config \
+            git curl ca-certificates build-essential pkg-config default-jre-headless \
             mesa-vulkan-drivers libasound2-dev libudev-dev libfontconfig-dev
           dpkg-query -W -f='lavapipe from mesa-vulkan-drivers ${Version}\n' mesa-vulkan-drivers
           # The workspace is bind-mounted from the host, so its uid does not match the
