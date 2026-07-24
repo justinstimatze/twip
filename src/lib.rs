@@ -2049,6 +2049,74 @@ mod tests {
         assert!((m.opacity - 0.5).abs() < 1e-9);
     }
 
+    // --- Tween semantics: twip uses per-property lerp, NOT the fork's matrix
+    // round-trip (tweenMethod 'normal' = decompose -> lerp -> recompose). The two
+    // agree exactly for well-behaved transforms; they diverge only where the fork's
+    // round-trip is broken, and there twip is the correct one. These two tests pin
+    // that intentional divergence so a future "match the fork" change can't silently
+    // reintroduce the bug. See HANDOFF "Tween semantics (DECIDED)"; the fork's
+    // corruption is reproduced verbatim in scripts/oracle-tween.js.
+
+    /// A horizontal-flip tween (scaleX 1 -> -1) passes through scaleX 0. The fork's
+    /// 'normal' path NaNs exactly there (0/0 in the matrix recompose) and flips the
+    /// sign back to positive for scaleX < 0 (measured). twip lerps scaleX linearly
+    /// through zero and keeps the sign, so the matrix is finite and a real mirror.
+    #[test]
+    fn negative_scale_flip_tween_stays_signed_and_finite() {
+        let start = Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation_deg: 0.0,
+            opacity: 1.0,
+        };
+        let end = Transform {
+            scale_x: -1.0,
+            ..start
+        };
+        for (t, want_sx) in [(0.0, 1.0), (0.25, 0.5), (0.5, 0.0), (0.75, -0.5), (1.0, -1.0)] {
+            let mid = lerp_transform(&start, &end, t);
+            assert!((mid.scale_x - want_sx).abs() < 1e-9, "scaleX lerps linearly at t={t}");
+            // rotation=0, so matrix.a = scaleX*cos(0) = scaleX: the signed scale is kept,
+            // not turned into a 180deg rotation the way the fork's decompose does.
+            let a = mid.matrix().a.to_f64();
+            assert!(a.is_finite(), "matrix.a finite at t={t}");
+            assert!((a - want_sx).abs() < 1e-9, "matrix.a keeps signed scaleX at t={t}");
+        }
+    }
+
+    /// A rotation tween 0 -> 180deg sweeps through 90deg, where the fork's decompose
+    /// reconstruct misbehaves. twip lerps the angle directly, so cos/sin stay finite
+    /// the whole way and the rotation is monotonic.
+    #[test]
+    fn rotation_tween_through_90_degrees_stays_finite() {
+        let start = Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation_deg: 0.0,
+            opacity: 1.0,
+        };
+        let end = Transform {
+            rotation_deg: 180.0,
+            ..start
+        };
+        for t in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let mid = lerp_transform(&start, &end, t);
+            assert!((mid.rotation_deg - 180.0 * t).abs() < 1e-9, "rotation lerps linearly at t={t}");
+            let m = mid.matrix();
+            for v in [m.a.to_f64(), m.b.to_f64(), m.c.to_f64(), m.d.to_f64()] {
+                assert!(v.is_finite(), "matrix component finite at t={t}");
+            }
+        }
+        // At the midpoint (90deg) the fork's path is degenerate; twip gives a~0, b~1.
+        let m = lerp_transform(&start, &end, 0.5).matrix();
+        assert!(m.a.to_f64().abs() < 1e-9, "90deg: matrix.a ~ 0");
+        assert!((m.b.to_f64() - 1.0).abs() < 1e-9, "90deg: matrix.b ~ 1");
+    }
+
     /// Phase 1c: the baked tween places a matrix + CXFORM on every frame.
     #[test]
     fn tween_demo_has_matrix_and_cxform() {

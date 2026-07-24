@@ -116,11 +116,26 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
   fits twip integer coords with no float-epsilon fragility. Pipeline: flatten paper.js cubics
   to polylines at twip resolution → i_overlay union (nonzero) → assign FillStyle0/1 edge sides;
   kurbo does the curve math (cubic→quadratic). Validate in Phase 1.
-- **Tweens**: fork's new default tweenMethod 'normal' goes through paper.Matrix.decompose +
-  a buggy reconstruct (dead `skew.x === 0` guard; NaN when lerped rotation crosses ±90°;
-  breaks under negative scale). Upstream Wicklets = plain per-property lerp. DECIDE before
-  building: bug-for-bug replication vs patching the fork to sane semantics. Tween lerps
-  x, y, scaleX, scaleY, rotation, skew, OPACITY, + fullRotations (valB += 360*n).
+- **Tween semantics — DECIDED 2026-07-24: per-property lerp, not the fork's matrix
+  round-trip.** The fork's default `tweenMethod:'normal'` `interpolate()` decomposes each
+  endpoint to paper values, lerps every property, then RECOMPOSES through a matrix round-trip
+  (`fromMatrix(toMatrixPaper(...))`). twip's `interp_tween`/`lerp_transform` lerps x, y, scaleX,
+  scaleY, rotation, OPACITY per-property and builds the SWF matrix directly (+ fullRotations:
+  valB += 360*n) — i.e. the fork's `tweenMethod:'skew'` path, minus the round-trip.
+  WHY per-property: the round-trip is an exact identity for well-behaved transforms, so the two
+  agree bit-for-bit on every normal tween (the item-5 midpoint check matched the fork's own
+  `interpolate`, and scripts/oracle-tween.js confirms the round-trip is identity for well-behaved
+  transforms). It is only reachable where it is BROKEN — measured by reproducing
+  toMatrixPaper+fromMatrix verbatim (scripts/oracle-tween.js): at scaleX=0 it yields NaN
+  (0/0 in the recompose), for scaleX<0 it silently flips the sign positive and snaps rotation to
+  ±180, and the `skew.x === 0` guard is dead (skew is a Number, so `.x` is undefined). Matching
+  bug-for-bug would mean emitting NaN and turning a mirror into a rotation; nobody authored that.
+  The intentional divergence is pinned by `negative_scale_flip_tween_stays_signed_and_finite`
+  and `rotation_tween_through_90_degrees_stays_finite` so a future "match the fork" change can't
+  silently reintroduce the bug.
+  KNOWN GAP: twip's `Transform` has no skew field, so twip currently DROPS skew (the fork lerps
+  it). Skew is rare and dropping it removes the decompose fragility; adding signed skew is a
+  separate decision if a real fixture needs it.
   Opacity ⇒ PlaceObject color_transform (CXFORM alpha multiply) per baked frame, or fades
   export opaque. 27 easing functions in Tween.js must match numerically — generate expected
   values by CALLING THE FORK'S OWN JS (small Node script dumping JSON), don't re-derive.
