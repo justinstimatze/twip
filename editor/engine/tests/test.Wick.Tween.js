@@ -149,7 +149,16 @@ describe('Wick.Tween', function() {
             expect(tweenC.transformation.y).to.equal(0);
             expect(tweenC.transformation.scaleX).to.equal(1);
             expect(tweenC.transformation.scaleY).to.equal(1);
-            expect(tweenC.transformation.rotation).to.equal(270);
+            // The lerp reaches 270 (0 -> 180 + 360*fullRotations, halfway), but tweenMethod
+            // 'normal' round-trips through Transformation.toMatrixPaper/fromMatrix, and a
+            // 2D matrix cannot tell 270 from -90 — atan2 only ever returns (-180, 180].
+            // Asserting the literal 270 was therefore unsatisfiable by construction. What
+            // is worth pinning is the ORIENTATION, and that assertion has teeth: before the
+            // sign fix in Transformation.js:145 this came back +90, a different matrix and a
+            // visibly wrong quarter turn. Each frame re-interpolates from the keys rather
+            // than chaining, so nothing downstream needs the accumulated 270 as a number.
+            const rotation = tweenC.transformation.rotation;
+            expect(((rotation % 360) + 360) % 360).to.be.closeTo(270, 1e-9);
             expect(tweenC.transformation.opacity).to.equal(1);
         });
 

@@ -142,7 +142,7 @@ Wick.Transformation = class {
                 det = scaleY * r,
                 at = Math.tan(skewRad) * r * r;
             a = Math.cos(rotateRad) * r;
-            b = Math.sqrt(r * r - a * a) * (rotateRad > 0 ? 1 : -1);
+            b = Math.sin(rotateRad) * r;
             d = (b*at + a*det) / (a*a + b*b);
             c = (at - b*d) / a;
         }
