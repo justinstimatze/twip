@@ -65,9 +65,10 @@ class MenuBar extends Component {
             action={() => {this.props.exporting ? this.props.openExportMedia() : this.props.openExportOptions()}}
           />
 
+          {/* Previews in Ruffle; writing a .swf to disk is under "export". */}
           <MenuBarButton
             text="SWF"
-            action={this.props.exportProjectToSWF}
+            action={this.props.previewProjectAsSWF}
           />
 
           <MenuBarButton

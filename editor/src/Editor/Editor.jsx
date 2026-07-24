@@ -975,7 +975,7 @@ class Editor extends EditorCore {
               openProjectFileDialog={this.openProjectFileDialog}
               openNewProjectConfirmation={this.openNewProjectConfirmation}
               exportProjectAsWickFile={this.exportProjectAsWickFile}
-              exportProjectToSWF={this.exportProjectToSWF}
+              previewProjectAsSWF={this.previewProjectAsSWF}
               importProjectAsWickFile={this.importProjectAsWickFile}
               exporting={this.state.exporting}
               toast={this.toast} 

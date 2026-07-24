@@ -77,7 +77,7 @@ class ExportOptions extends Component {
 
   /**
    * Creates an item of type and toggles the modal.
-   * @param {string} type Either 'GIF', 'VIDEO', 'ZIP', or 'HTML'.
+   * @param {string} type Either 'GIF', 'VIDEO', 'ZIP', 'HTML', or 'SWF'.
    */
   createAndToggle = (type) => {
     let name = this.state.name !== "" ? this.state.name : (type);
@@ -97,6 +97,9 @@ class ExportOptions extends Component {
       this.props.toggle();
     } else if (type === 'HTML') {
       this.props.exportProjectAsStandaloneHTML(args);
+      this.props.toggle();
+    } else if (type === 'SWF') {
+      this.props.exportProjectAsSWF(args);
       this.props.toggle();
     } else if (type === 'IMAGE_SEQUENCE') {
       this.props.exportProjectAsImageSequence(args);
@@ -317,8 +320,10 @@ class ExportOptions extends Component {
   // Renders the body of the "Interactive" tab.
   renderInteractiveInfo = () => {
     return (
-      <div className="export-info-container">
-        <div className="export-info-item">
+      // Unlike Animation and Images, this tab never threaded isMobile, so it stayed a
+      // row on a phone. Survivable at two cards; adding SWF makes it three across.
+      <div className={classNames("export-info-container", this.props.isMobile && "mobile")}>
+        <div className={classNames("export-info-item", this.props.isMobile && "mobile")}>
           <ObjectInfo
             className="export-object-info"
             title="ZIP Archive"
@@ -336,7 +341,7 @@ class ExportOptions extends Component {
             />
           </div>
         </div>
-        <div className="export-info-item">
+        <div className={classNames("export-info-item", this.props.isMobile && "mobile")}>
           <ObjectInfo
             className="export-object-info"
             title="HTML"
@@ -351,6 +356,24 @@ class ExportOptions extends Component {
               color='gray-green'
               action={() => { this.createAndToggle("HTML") }}
               text="Export HTML"
+            />
+          </div>
+        </div>
+        <div className={classNames("export-info-item", this.props.isMobile && "mobile")}>
+          <ObjectInfo
+            className="export-object-info"
+            title="SWF"
+            rows={[
+              { text: "Fully Interactive",     icon: "check" },
+              { text: "Exports a .swf file",   icon: "check" },
+              { text: "Needs a Flash player",  icon: "cancel" }
+            ]}>
+          </ObjectInfo>
+          <div className="export-modal-button-container">
+            <ActionButton
+              color='gray-green'
+              action={() => { this.createAndToggle("SWF") }}
+              text="Export SWF"
             />
           </div>
         </div>

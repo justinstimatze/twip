@@ -183,12 +183,57 @@ AA noise is blind to easing errors. Three layers instead:
    ruffle's tests/framework image_comparison).
 3. Wick-vs-Ruffle side-by-side = manual eyeball tool only, never CI.
 
-## Working queue (reranked 2026-07-23)
+## Next up (reranked 2026-07-24)
 
-The phase list below is the record of what each phase *is*. This is the order to actually
-work in. The organizing fact: emission is Ruffle-verified for 0/1a/1b/1c, but the parser has
-only touched real data for 1a (test1.wick) — 1b/1c parsing has never seen a real multi-frame
-or tweened `.wick`. The queue follows the risk, not the phase numbers.
+Items 1–8, 10, 11 below are DONE, and so is the compiler risk they were ordered by: the
+parser has now seen real multi-frame, tweened, nested, scripted, and skewed `.wick` data.
+What's left is item 9's editor backlog plus a few things the last few commits made newly
+possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
+
+1. **DONE 2026-07-24 — fired `golden.yml` for the first time; it failed, and the cause was
+   ours.** Written while twip had no remote, which stopped being true at push `a0ed7f0`, so
+   all seven goldens were blessed on one developer box and validated nowhere else. Run
+   `30118810306` died in 75s: `.cargo/config.toml`'s `-fuse-ld=mold` leaked into the ruffle
+   build (cargo walks UP for config, so `oracle/ruffle` inherits the repo's) and the runner
+   has no mold — `collect2: fatal error: cannot find 'ld'` in proc-macro2's build script.
+   Fixed in `scripts/oracle-setup.sh` (`RUSTFLAGS=` for the vendored build) — full writeup
+   under queue item 11. Re-run pending.
+2. **PARTLY DONE 2026-07-24 — export vs preview split.** `EditorCore.compileProjectToSWFBlob()`
+   is the one compile path; `previewProjectAsSWF` (the **SWF** button) plays it in Ruffle and
+   `exportProjectAsSWF` writes a `.swf` through `window.saveFileFromWick`, reachable from the
+   export modal's Interactive tab. Builds clean and the wiring traces end-to-end, but THE
+   BUTTONS HAVE NOT BEEN CLICKED — a Vite build does not catch runtime errors (that is exactly
+   how `require is not defined` survived the CRA migration). Run the dev server + bridge and
+   exercise both paths before calling this done.
+3. **DONE 2026-07-24 — the two un-eyeballed Ruffle visuals, verified better than by eye.**
+   frame-stop: rendered frames 1/2/5/12 of `frame-stop.swf` and of `frame-by-frame.swf` (the
+   same flipbook WITHOUT `stop();`) — the stopped one hashes identically at all four while the
+   control moves through three distinct keyframes, so the `DoAction` really does halt the
+   playhead, not merely parse. clip-click: the exporter has no input injection, so a PRESS
+   cannot be triggered headlessly; what IS settled is that the sprite still alternates A-B-A-B
+   across frames 0–3, ruling out a clip action mis-attached so it fires at load. That pressing
+   stops it remains browser-only.
+4. **Scope the UI redesign.** `docs/ui-research.md` is the survey; this turns it into a plan.
+   Stack already decided — Vite + React + Tailwind/shadcn, editor-only, no Next/gallery.
+   Fold the leftover tooling (turbo/biome/vitest, TS) and the rebrand pass into this rather
+   than sweeping the editor twice.
+5. **Rebrand / attribution pass.** HARD GATE on any sharing or distribution — details under
+   item 9's backlog. No urgency while the repo is private and undistributed.
+6. **Nested-clip frame scripts + PRESS handlers.** The deferred lifetime wall (item 10):
+   compiling scripts inside a sprite body would force the whole `defs` pipeline off
+   `'static`. Collected and warned today. No fixture demands it yet.
+
+DEFERRED (Justin, 2026-07-24: "put off 2 for a while") — **Tauri after the Vite move.**
+`editor/src-tauri/tauri.conf.json` has `frontendDist: "../build"` and NO `devUrl` /
+`beforeDevCommand`, so a production build still lines up (Vite's `outDir` is `build`) but
+`tauri dev` cannot serve the Vite dev server. The desktop shell has not been launched since
+the migration. Pick this up before anything depends on the desktop target.
+
+## Working queue (record of items 1–11)
+
+The phase list below is the record of what each phase *is* and what verified it. It was
+ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
+(test1.wick); that risk is now retired. Read it as history — the live ordering is above.
 
 1. **DONE 2026-07-23 — fixtures generated via Chrome automation.** Rather than hand-drawing,
    drove `window.Wick`/`window.editor` in wickeditor.com (v1.19.3) directly: built paths with
@@ -295,8 +340,10 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    up — deferred until a real fixture demands it. brush-donut.wick is hand-built from test1.wick's
    real object graph with a format-faithful CompoundPath json (paper.js source-confirmed), not a
    fresh engine export.
-9. **Editor fork** (StickmanRed/wick-editor) — IN PROGRESS 2026-07-23. THREE milestones DONE
-   (build de-risk + web-bridge Export + Tauri shell w/ in-process export); repo vendor remains.
+9. **Editor fork** (StickmanRed/wick-editor) — IN PROGRESS. Build de-risk, web-bridge Export,
+   Tauri shell w/ in-process export, monorepo vendor, and the Vite+pnpm migration are all DONE.
+   Open: export/preview split (Next-up #2), UI redesign (#4), rebrand (#5) — details in the
+   MODERNIZATION BACKLOG at the end of this item.
    - **Fork worktree**: `~/Documents/wick-editor`, copied from the read-only reference, `upstream`
      = StickmanRed. Re-verified StickmanRed is the live fork (54 ahead / 0 behind Wicklets, 17★,
      pushed 2026-07-09; every other fork ★0 and staler); worktree at its current HEAD `b05793b`.
@@ -308,7 +355,9 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
      becomes GPLv3-covered for distribution (Wick code is GPLv3); Justin is fine with GPLv3. The
      compiler crate can still be extracted MIT later if ever wanted. Worktree NOT yet relocated —
      vendoring method (plain copy vs git-subtree for upstream pulls) is a packaging-time call.
-   - **Node-14 pinned + builds**: `.nvmrc`→14, `BUILD.md`. The frozen webpack-4 CRA (react-scripts
+   - **Node-14 pinned + builds** — SUPERSEDED 2026-07-24 by the Vite+pnpm migration (`a0ed7f0`,
+     `.nvmrc`→22); kept because the gotchas below explain why the frozen stack was escaped.
+     `.nvmrc`→14, `BUILD.md`. The frozen webpack-4 CRA (react-scripts
      2.0.5) builds clean on Node 14.21.3 / npm 6.14.18. GOTCHAS baked into the fork: node-sass 4.14.1
      needs `npm rebuild node-sass` (a broad `--ignore-scripts` on install skips its ABI-83 binding
      fetch); and `.env` needs `SKIP_PREFLIGHT_CHECK=true` because CRA preflight trips on a stray
@@ -366,10 +415,11 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    - **THE FROZEN CRA IS PROVISIONAL** (Justin, 2026-07-23: "never planned to freeze the editor, it's just
      a quick test; we'll have to fork and modernize it"). The Node-14 / react-scripts-2 / webpack-4 / node-sass
      stack is scaffolding to get a working test loop, not the destination. MODERNIZATION BACKLOG:
-     * **Migrate off CRA → Vite + current React**, then pnpm + turbo + biome + vitest, Node-current.
-       Template to copy: Justin's `~/Documents/tttc-light-js` (pnpm@10 / Node≥25 / turbo / biome / vitest / TS
-       workspaces). pnpm/Node-25 CANNOT run the frozen stack (pnpm 10 needs Node≥18; its strict node_modules
-       breaks webpack-4-era packages) — so the tooling swap RIDES WITH the Vite migration, not before it.
+     * **DONE 2026-07-24 (`a0ed7f0`) — migrated off CRA → Vite 6 + pnpm 10, Node 20+.** React stayed
+       at 16.14 (the ~40 vendored UI libs predate 18). See `editor/BUILD.md`. The Node-14 pinning
+       described above this bullet is HISTORY, not current state. Still open from this bullet:
+       turbo + biome + vitest, and TS. Nothing forces them now that the build is modern — fold
+       them into the redesign pass rather than doing a second tooling sweep.
      * **Redesign the UI to 2026 UX** (Tailwind + shadcn per house frontend defaults) — do it in the same
        pass as the lib upgrades, not twice.
      * **Export vs preview split**: **SWF** button = in-app Ruffle preview (current behavior); **export** =
@@ -410,8 +460,14 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
       `gotoandstop_emits_bare_gotoframe`, `unrecognized_script_is_skipped_not_fatal`,
       `recognizer_parses_the_vocabulary`, and real `compiles_frame_stop_wick`
       (fixtures/frame-stop.wick = frame-by-frame flipbook + `stop();` on keyframe 1 → 1 DoAction
-      {Stop} before frame 1's ShowFrame). 24 lib tests green. Ruffle visual (flipbook halts on
-      frame 1 vs strobing) not yet eyeballed — structural is the designated workhorse; /tmp SWF ready.
+      {Stop} before frame 1's ShowFrame). 24 lib tests green.
+    * **Ruffle check 2026-07-24 — a differential, not an eyeball.** Rendered frames 1/2/5/12 of
+      BOTH `frame-stop.swf` and `frame-by-frame.swf` (the same flipbook minus the `stop();`) and
+      hashed them: frame-stop is byte-identical at all four, the control moves through three
+      distinct keyframes (red left → green right by frame 12). Two fixtures differing only by the
+      script, so the halt is attributable to the DoAction rather than to anything about the
+      timeline. This is why it beats looking at one frame: a single screenshot of a halted
+      flipbook and of a running one are indistinguishable.
     * **Milestone B DONE 2026-07-23 (PRESS click handlers).** A clip's `mousepressed`/`mouseclick`
       script (same recognized vocabulary) → a `PRESS` clip action on the sprite's initial
       `PlaceObject`. The recognizer generalized to `recognize_actions(scripts, events)` with
@@ -425,7 +481,13 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
       handlers share the nested-frame-script boundary (skipped + warned). Verified: `recognize_clip_actions_reads_mouse_events`,
       `clip_click_emits_press_action` (synthetic — PRESS + Stop on the Place), and real
       `compiles_clip_click_wick` (fixtures/clip-click.wick = nested-clip + `mousepressed:stop();` on
-      the placed clip). 27 lib tests green. Ruffle click-test not yet eyeballed (structural is the workhorse).
+      the placed clip). 27 lib tests green.
+    * **Ruffle check 2026-07-24, partial.** The exporter renders headlessly with no input, so a
+      PRESS cannot be injected — that pressing the clip stops it is verifiable only in a real
+      player. What the exporter DOES settle: frames 0–3 of `clip-click.swf` hash A-B-A-B, so the
+      nested sprite's 2-keyframe timeline is running and the clip action is not mis-attached in a
+      way that fires at load. `stop();` itself is proven separately under item 10's frame-stop
+      differential below.
 11. **DONE 2026-07-23 — Ruffle golden-PNG oracle (lavapipe-blessed).** Test layer 2
     (HANDOFF oracle design): render a twip-compiled SWF through ruffle's own `exporter`
     under lavapipe and diff against a committed golden PNG, catching *rendering*
@@ -456,9 +518,32 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
       diff 0** (bit-exact same-backend). Eyeballed: test1 (ellipse + outlined square),
       brush-donut (blue shape WITH its center hole — planarize survives to raster),
       skew-tween (blue square sheared into a parallelogram, horizontals held).
-    * **CI scaffold** `.github/workflows/golden.yml` (manual `workflow_dispatch`; installs
-      mesa-vulkan-drivers, builds exporter, runs the feature). SCAFFOLD — no remote yet
-      (known-gap #5); a different CI lavapipe/mesa may need a one-time re-bless.
+    * **CI** `.github/workflows/golden.yml` (manual `workflow_dispatch`; installs
+      mesa-vulkan-drivers, builds exporter, runs the feature). No longer a scaffold — the
+      remote exists (known-gap #5 closed). A different CI lavapipe/mesa may still need a
+      one-time re-bless.
+    * **FIRST RUN 2026-07-24 — failed in 75s, and the cause was twip's own cargo config.**
+      Run `30118810306`: `collect2: fatal error: cannot find 'ld'` linking proc-macro2's build
+      script, from `-fuse-ld=mold` reaching a runner with no mold. Chain: cargo discovers
+      config by walking UP from the cwd, so building in `oracle/ruffle` inherits the REPO
+      root's `.cargo/config.toml`, whose `[target.x86_64-unknown-linux-gnu]` block matches any
+      x86_64 linux — GitHub runners included. That block's own comment claimed portability
+      because "on any other host/triple this block doesn't match"; the triple is exactly what
+      DOES match. What kept `ci.yml` green is unrelated luck: it sets `RUSTFLAGS: -D warnings`
+      as an env var, and an env RUSTFLAGS overrides both config blocks wholesale. golden.yml
+      set none, so it was the single exposed workflow.
+      FIX in `scripts/oracle-setup.sh`: build the vendored ruffle under `RUSTFLAGS=` (empty,
+      not unset — verified empirically with a throwaway crate inside the repo tree that empty
+      drops BOTH `-fuse-ld=mold` and `-D warnings`). This is the right layer, not `apt install
+      mold` in CI: a third-party build should inherit none of our linker or lint policy, and
+      `-D warnings` on ruffle's own crates would detonate on any rev bump that warns.
+      Re-verified locally: exporter rebuilt without mold, all 7 goldens still **0 outliers,
+      max diff 0** — linker choice does not perturb raster output.
+    * **`oracle-setup.sh` preflights the toolchain** (added 2026-07-24 after it bit): the
+      script always honored `CARGO=` for the 1.94+ requirement but never checked it, so a bare
+      invocation on this box silently picked system 1.93, failed ~20 min later at
+      `ruffle_core` with E0658, AND left no exporter — cargo drops the old artifact once it
+      starts a rebuild it cannot finish. Now it refuses in one second with the exact command.
 
 ## Plan
 
@@ -575,7 +660,12 @@ cargo-machete / gitleaks (no Rust sibling uses them).
   with the web build, revisit for the single-binary goal.
 - Agent-memory routing (winze vs native MEMORY.md) — infra, not product; native for now.
 
-## Known gaps — do these FIRST
+## Known gaps (all closed as of 2026-07-24 — kept as the record of what each established)
+
+This section was the pre-execution blocker list. Every item is now closed; #2, #3 and #5
+were still worded as open blockers on 2026-07-24 and were corrected in place. Nothing here
+is work to do.
+
 
 1. **DONE — a real .wick inspected (`test1.wick`, 2026-07-23).** Confirmed: zip = `assets/` +
    `project.json`. `project.json` = `{project, objects}` where **`objects` is a FLAT MAP keyed
@@ -589,17 +679,25 @@ cargo-machete / gitleaks (no Rust sibling uses them).
    scripts = {name,src}. Deployed editor = wickengine **2021.1.22** (old; NOT the 2026 fork —
    fork files may add tween fields on top). Fixture is single-frame, 2 static shapes, 720×480
    @12fps — a ready Phase-1 fixture. Full dump preserved in scratchpad project.json.
-2. **Zero fixtures exist.** Need a small corpus saved from the deployed editor: single
-   shape; brush donut; self-crossing path; multi-layer overlap; motion tween; rotation-
-   through-90° tween; flip (negative scale) tween; fade tween; nested clip; clip+loose-path
-   tweened frame. (Justin draws these, or automate via browser tooling.)
-3. **Nothing has been executed.** Every claim above is repo-reading, not running code.
-   Phase 0 is the first execution of anything.
+2. **DONE — the fixture corpus exists** (`fixtures/`, 9 files): test1, frame-by-frame,
+   multi-layer, nested-clip, motion-tween, brush-donut, frame-stop, clip-click, skew-tween.
+   Most were generated by driving the deployed editor via Chrome automation (queue item 1);
+   brush-donut and skew-tween are hand-derived from real engine-exported object graphs.
+   Still unwritten, and still fine to add when something needs them: self-crossing path,
+   rotation-through-90° tween, flip (negative-scale) tween, fade tween, clip+loose-path on
+   one tweened frame. The negative-scale and rotation cases are covered by unit tests
+   (`negative_scale_flip_tween_stays_signed_and_finite`, `rotation_tween_through_90_…`)
+   rather than fixtures.
+3. **DONE — the code runs.** 32 lib tests, 7 Ruffle goldens, a CLI that compiles every
+   fixture to a valid v8 SWF, and an editor that round-trips draw → **SWF** → Ruffle. The
+   "every claim above is repo-reading" caveat expired on 2026-07-23.
 4. Reference clone DONE: `reference/wick-editor` (StickmanRed, depth-1, HEAD b05793b,
    2026-06-26; gitignored — has its own .git). Read-only.
-5. Repos not yet created: `gh repo create twip --private` (Rust compiler crate + CLI, main
-   branch, Cargo workspace) AND a fork of StickmanRed/wick-editor for the editor product. The
-   local `~/Documents/twip` dir is git-inited (HANDOFF committed); no GitHub remote yet.
+5. **DONE — `github.com/justinstimatze/twip`, private, default branch `main`** (verified
+   2026-07-24 via `gh repo view`). The separate editor fork this item asked for was
+   superseded by the monorepo decision (item 9): the editor is vendored at `editor/` and
+   rides in the same private repo. Consequence worth remembering: `.github/workflows/` is
+   live now, which is what makes "fire golden.yml" item 0 of the Next-up list.
 
 ## Session lineage
 

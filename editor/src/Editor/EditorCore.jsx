@@ -1055,38 +1055,83 @@ class EditorCore extends Component {
   }
 
   /**
-   * Export the current project to SWF via the twip compiler and preview it in Ruffle.
-   * Serializes the project to .wick bytes, compiles them (see compileWickToSWF for the
-   * Tauri-vs-bridge split), and opens the returned .swf in the SwfPreview modal.
+   * Serialize the current project to .wick bytes and compile them to a .swf Blob.
+   * The one compile path both SWF entry points share: previewProjectAsSWF plays the
+   * result in Ruffle, exportProjectAsSWF writes it to disk. See compileWickToSWF for
+   * the Tauri-vs-bridge split.
+   * @returns {Promise<Blob>} resolves to the .swf, rejects with a reportable Error.
    */
-  exportProjectToSWF = () => {
+  compileProjectToSWFBlob = () => {
+    return new Promise((resolve, reject) => {
+      window.Wick.WickFile.toWickFile(this.project, file => {
+        if (file === undefined) {
+          reject(new Error("could not serialize project."));
+          return;
+        }
+        this.wickFileToBytes(file)
+          .then(wickBytes => this.compileWickToSWF(wickBytes))
+          .then(resolve, reject);
+      });
+    });
+  }
+
+  /**
+   * Compile the project to SWF and PREVIEW it in the in-app Ruffle player. Nothing
+   * touches the filesystem — the .swf lives in an object URL for the SwfPreview modal.
+   * To write a file instead, see exportProjectAsSWF.
+   */
+  previewProjectAsSWF = () => {
     this.showWaitOverlay();
     let toastID = this.toast('Compiling project to SWF...', 'info', {autoClose: false});
 
-    window.Wick.WickFile.toWickFile(this.project, file => {
-      if (file === undefined) {
-        this.updateToast(toastID, {type: 'error', text: "Could not serialize project."});
+    this.compileProjectToSWFBlob()
+      .then(swfBlob => {
+        if (this.state.swfPreviewUrl) window.URL.revokeObjectURL(this.state.swfPreviewUrl);
+        let swfUrl = window.URL.createObjectURL(swfBlob);
+        this.updateToast(toastID, {type: 'success', text: "Compiled to SWF."});
+        this.setState({swfPreviewUrl: swfUrl});
+        this.openModal('SwfPreview');
         this.hideWaitOverlay();
-        return;
-      }
+      })
+      .catch(err => {
+        this.updateToast(toastID, {
+          type: 'error',
+          text: "SWF compile failed: " + (err && err.message ? err.message : err)});
+        this.hideWaitOverlay();
+      });
+  }
 
-      this.wickFileToBytes(file)
-        .then(wickBytes => this.compileWickToSWF(wickBytes))
-        .then(swfBlob => {
-          if (this.state.swfPreviewUrl) window.URL.revokeObjectURL(this.state.swfPreviewUrl);
-          let swfUrl = window.URL.createObjectURL(swfBlob);
-          this.updateToast(toastID, {type: 'success', text: "Compiled to SWF."});
-          this.setState({swfPreviewUrl: swfUrl});
-          this.openModal('SwfPreview');
+  /**
+   * Compile the project to SWF and SAVE it as a .swf file, via the same
+   * window.saveFileFromWick handler every other export uses (so a platform that
+   * overrides it — the Tauri shell, eventually — gets a native dialog for free).
+   * To play it in-app instead, see previewProjectAsSWF.
+   * @param {object} args - {name} output filename, defaults to the project name.
+   */
+  exportProjectAsSWF = (args) => {
+    args = args || {};
+    let outputName = args.name || this.project.name;
+    this.showWaitOverlay();
+    let toastID = this.toast('Exporting SWF...', 'info', {autoClose: false});
+
+    this.compileProjectToSWFBlob()
+      .then(swfBlob => {
+        let success = () => {
+          this.updateToast(toastID, {type: 'success', text: "Exported SWF."});
           this.hideWaitOverlay();
-        })
-        .catch(err => {
-          this.updateToast(toastID, {
-            type: 'error',
-            text: "SWF compile failed: " + (err && err.message ? err.message : err)});
+        };
+        let fail = () => {
+          this.updateToast(toastID, {type: 'error', text: "Could not save the SWF."});
           this.hideWaitOverlay();
-        });
-    });
+        };
+        window.saveFileFromWick(swfBlob, outputName, '.swf', success, fail);
+      })
+      .catch(err => {
+        this.updateToast(toastID, {
+          type: 'error',
+          text: "SWF export failed: " + (err && err.message ? err.message : err)});
+        this.hideWaitOverlay();
+      });
   }
 
   /**

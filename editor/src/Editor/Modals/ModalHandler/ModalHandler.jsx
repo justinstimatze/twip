@@ -77,6 +77,7 @@ class ModalHandler extends Component {
           exportProjectAsGif={this.props.exportProjectAsGif}
           exportProjectAsStandaloneZip={this.props.exportProjectAsStandaloneZip}
           exportProjectAsStandaloneHTML={this.props.exportProjectAsStandaloneHTML}
+          exportProjectAsSWF={this.props.exportProjectAsSWF}
           exportProjectAsVideo={this.props.exportProjectAsVideo}
           exportProjectAsImageSequence={this.props.exportProjectAsImageSequence}
           exportProjectAsAudioTrack={this.props.exportProjectAsAudioTrack}

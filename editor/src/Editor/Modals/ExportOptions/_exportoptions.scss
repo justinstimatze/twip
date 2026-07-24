@@ -72,21 +72,30 @@ $info-left-margin: 12px;
 
 .export-info-container {
   display: flex;
-  flex-direction: row; 
-  width: 100%; 
+  flex-direction: row;
+  width: 100%;
+  // `gap` rather than a margin on :last-child: that only ever spaced the second card,
+  // which was invisible while every tab held exactly two. The Interactive tab has three
+  // (ZIP, HTML, SWF), and the middle one would sit flush against its neighbour.
+  gap: $info-left-margin;
 }
 .export-info-container.mobile {
   flex-direction: column;
-}
-
-.export-info-container:not(.mobile) > div:last-child {
-  margin-left: $info-left-margin;
 }
 
 .export-info-item {
   display: flex;
   flex-direction: column;
   width: 50%;
+}
+
+// Equal columns for however many cards a tab has (two on Animation/Images, three on
+// Interactive). Overrides the 50% above, which summed past 100% at three and left the
+// sizing to flex-shrink. Row mode only — the mobile column keeps width: 100%.
+.export-info-container:not(.mobile) > .export-info-item {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
 }
 .export-info-item.mobile {
   width: 100%;

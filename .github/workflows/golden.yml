@@ -4,11 +4,13 @@ name: golden
 # building ruffle's exporter is ~20-40 min, far too heavy to gate every push. Run it
 # on demand from the Actions tab.
 #
-# SCAFFOLD: twip has no GitHub remote yet, so this has never executed. It activates
-# when the repo is pushed. CAVEAT: goldens are currently blessed on a developer box's
-# lavapipe; a different mesa/lavapipe version in CI can shift AA pixels, so the first
-# CI run may need a re-bless (TWIP_BLESS=1) committed from a CI artifact. Bless and
-# check must always share one backend — that's the oracle's correctness premise.
+# STATUS: first run was 2026-07-24 (`30118810306`) and it FAILED — the repo's own
+# .cargo/config.toml leaked `-fuse-ld=mold` into the vendored ruffle build and the runner
+# has no mold. Fixed in scripts/oracle-setup.sh (`RUSTFLAGS=`); see HANDOFF item 11. So the
+# goldens are still validated only on a developer box's lavapipe. CAVEAT for the first
+# GREEN run: a different mesa/lavapipe version in CI can shift AA pixels, so it may need a
+# re-bless (TWIP_BLESS=1) committed from a CI artifact. Bless and check must always share
+# one backend — that's the oracle's correctness premise.
 on:
   workflow_dispatch:
 

@@ -7,7 +7,14 @@ rustflags = ["-D", "warnings"]
 # Use mold as the linker on this host (gcc 15 drives it via -fuse-ld=mold; mold is on PATH).
 # GOTCHA: cargo does NOT merge [build] rustflags with [target.*] rustflags — when a matching
 # target block exists its rustflags fully REPLACE [build]'s. So the `-D warnings` gate is repeated
-# here; drop it and warnings stop failing the build on this triple. Everything is still portable:
-# on any other host/triple this block doesn't match and [build] alone applies (GNU ld, warnings gated).
+# here; drop it and warnings stop failing the build on this triple.
+#
+# PORTABILITY, precisely: this block matches on ANY x86_64 linux, GitHub runners included — it is
+# NOT self-limiting to this box. What saves the workflows is that an env RUSTFLAGS overrides these
+# blocks wholesale, and ci.yml sets `RUSTFLAGS: -D warnings`. golden.yml did not, so it inherited
+# `-fuse-ld=mold` onto a runner with no mold and died linking proc-macro2 (run 30118810306).
+# Anything that runs cargo in a subdirectory inherits this too, because config discovery walks UP
+# from the cwd — scripts/oracle-setup.sh now sets `RUSTFLAGS=` for exactly that reason. If you add
+# a workflow or script that builds anything here, decide which of those two it is.
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-D", "warnings", "-C", "link-arg=-fuse-ld=mold"]
