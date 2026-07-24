@@ -1012,7 +1012,7 @@ fn compile_timeline(
 /// Rebuild a sprite's initial `PlaceObject` with a `PRESS` clip action carrying
 /// `action_data`. Destructures the owned (`'static`) place tag and reconstructs it
 /// borrowing the arena bytes, so only this one tag takes the shorter lifetime.
-fn place_with_clip_actions<'a>(po: Box<PlaceObject<'static>>, action_data: &'a [u8]) -> Tag<'a> {
+fn place_with_clip_actions<'a>(po: PlaceObject<'static>, action_data: &'a [u8]) -> Tag<'a> {
     let PlaceObject {
         version,
         action,
@@ -1031,7 +1031,7 @@ fn place_with_clip_actions<'a>(po: Box<PlaceObject<'static>>, action_data: &'a [
         is_bitmap_cached,
         is_visible,
         amf_data,
-    } = *po;
+    } = po;
     Tag::PlaceObject(Box::new(PlaceObject {
         version,
         action,
@@ -1121,7 +1121,7 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
                     _ => None,
                 };
                 match handler {
-                    Some(bytes) => tags.push(place_with_clip_actions(po, bytes.as_slice())),
+                    Some(bytes) => tags.push(place_with_clip_actions(*po, bytes.as_slice())),
                     None => tags.push(Tag::PlaceObject(po)),
                 }
             }
