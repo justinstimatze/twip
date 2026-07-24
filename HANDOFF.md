@@ -204,11 +204,24 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
    synthetic `tween_interpolates_clip_placement` (x = 0,25,50,75,100 over 5 frames), real
    `compiles_motion_tween_wick` (fixtures/motion-tween.wick: clip tweened over 24 frames, 1 Place +
    23 Modify, frame1 tx=90/op=1 → frame24 tx=460/op=0.3), and Ruffle (slide+grow+rotate+fade loop).
-   OPEN: `easingType` is parsed and stored but only linear ("none") is applied — non-linear curves
-   silently fall back to linear until #6.
-6. Real easing — dump the 27 fns from the fork's own JS via a Node script. Only after #5. The seam
-   is ready: `fn ease(name, t) -> t` in lib.rs is called per-segment with the tween's `easingType`;
-   #6 is filling in that match. `full_rotations` is already threaded through `interp_tween`.
+6. **DONE 2026-07-23 — Real easing.** `fn ease(name, k)` in lib.rs now implements all 28
+   `easingType` strings from the Wick engine's `VALID_EASING_TYPES`, translated VERBATIM from the
+   fork's own tween.js (`reference/wick-editor/engine/lib/Tween.js`, `TWEEN.Easing`): none(linear),
+   Quadratic in/out/in-out, and Cubic/Quartic/Quintic/Sine/Exp/Circle/Back/Bounce × in/out/in-out.
+   Elastic exists in tween.js but Wick never exposes it, so it's omitted. Unknown names fall back to
+   linear (matches engine's `easingType || 'none'`). Back/Bounce return values OUTSIDE [0,1] on
+   purpose — nothing clamps `t`, so overshoot reaches the matrix. SEMANTICS confirmed from engine
+   source (not assumed): `Wick.Tween.interpolate` takes both the easing fn AND `fullRotations` from
+   `tweenA` (the segment's START key) — `var tweenFn = tweenA._getTweenFunction()`,
+   `valB += tweenA.fullRotations*360` — which is exactly what `interp_tween` reads (`a.easing`,
+   `a.full_rotations`). Verified: `easing_matches_tween_js` (all 28 × t∈{0,.25,.5,.75,1} vs oracle
+   values from running the fork's tween.js in Node, <1e-9; regen via scratchpad/oracle.js) and
+   `easing_overshoot_reaches_placement` (out-back midpoint lands at x=108.77px through the real
+   `compile_document` path — past the x=100 endpoint, proving un-clamped flow to the placement
+   matrix). Also compiled a real out-bounce `.wick` end-to-end (parse path handles non-`none`
+   easingType from a zip); trajectory is the textbook triple-bounce (out to 434, back to 369, up to
+   454, settle at 460). No Ruffle screenshot this time — the 1e-9 oracle pins the curve far tighter
+   than eyeballing a frame could, and the compile path is the same one #5 already Ruffle-verified.
 7. Strokes (LineStyle2). Independent of the timeline work.
 8. Planarization via i_overlay (brush donut, figure-eight, self-crossing) — the hard 20%, own
    fixtures needed.

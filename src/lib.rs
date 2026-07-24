@@ -358,10 +358,164 @@ enum Item {
     Tween { id: u16, keys: Vec<TweenKey> },
 }
 
-/// Map a Wick easing name to an eased `t` in [0, 1]. Only linear ("none") is honoured
-/// for now; the full 27-function table is item 6, and lands by extending this match.
-fn ease(_easing: &str, t: f64) -> f64 {
-    t
+/// Map a Wick easing name to an eased progress value. Translated verbatim from the
+/// Wick engine's tween.js (`TWEEN.Easing`) as exposed through `Wick.Tween` — the 28
+/// `easingType` strings in `VALID_EASING_TYPES`. Back and Bounce return values outside
+/// [0, 1] on purpose (overshoot/undershoot); callers must not clamp. Unknown names fall
+/// back to linear, matching the engine's `easingType || 'none'` default.
+fn ease(easing: &str, k: f64) -> f64 {
+    match easing {
+        // Quadratic
+        "in" => k * k,
+        "out" => k * (2.0 - k),
+        "in-out" => {
+            let k = k * 2.0;
+            if k < 1.0 {
+                0.5 * k * k
+            } else {
+                let k = k - 1.0;
+                -0.5 * (k * (k - 2.0) - 1.0)
+            }
+        }
+        // Cubic
+        "in-cubic" => k * k * k,
+        "out-cubic" => {
+            let k = k - 1.0;
+            k * k * k + 1.0
+        }
+        "in-out-cubic" => {
+            let k = k * 2.0;
+            if k < 1.0 {
+                0.5 * k * k * k
+            } else {
+                let k = k - 2.0;
+                0.5 * (k * k * k + 2.0)
+            }
+        }
+        // Quartic
+        "in-quartic" => k * k * k * k,
+        "out-quartic" => {
+            let k = k - 1.0;
+            1.0 - k * k * k * k
+        }
+        "in-out-quartic" => {
+            let k = k * 2.0;
+            if k < 1.0 {
+                0.5 * k * k * k * k
+            } else {
+                let k = k - 2.0;
+                -0.5 * (k * k * k * k - 2.0)
+            }
+        }
+        // Quintic
+        "in-quintic" => k * k * k * k * k,
+        "out-quintic" => {
+            let k = k - 1.0;
+            k * k * k * k * k + 1.0
+        }
+        "in-out-quintic" => {
+            let k = k * 2.0;
+            if k < 1.0 {
+                0.5 * k * k * k * k * k
+            } else {
+                let k = k - 2.0;
+                0.5 * (k * k * k * k * k + 2.0)
+            }
+        }
+        // Sinusoidal
+        "in-sine" => 1.0 - (k * std::f64::consts::FRAC_PI_2).cos(),
+        "out-sine" => (k * std::f64::consts::FRAC_PI_2).sin(),
+        "in-out-sine" => 0.5 * (1.0 - (std::f64::consts::PI * k).cos()),
+        // Exponential
+        "in-exp" => {
+            if k == 0.0 {
+                0.0
+            } else {
+                1024f64.powf(k - 1.0)
+            }
+        }
+        "out-exp" => {
+            if k == 1.0 {
+                1.0
+            } else {
+                1.0 - 2f64.powf(-10.0 * k)
+            }
+        }
+        "in-out-exp" => {
+            if k == 0.0 {
+                0.0
+            } else if k == 1.0 {
+                1.0
+            } else {
+                let k = k * 2.0;
+                if k < 1.0 {
+                    0.5 * 1024f64.powf(k - 1.0)
+                } else {
+                    0.5 * (-(2f64.powf(-10.0 * (k - 1.0))) + 2.0)
+                }
+            }
+        }
+        // Circular
+        "in-circle" => 1.0 - (1.0 - k * k).sqrt(),
+        "out-circle" => {
+            let k = k - 1.0;
+            (1.0 - k * k).sqrt()
+        }
+        "in-out-circle" => {
+            let k = k * 2.0;
+            if k < 1.0 {
+                -0.5 * ((1.0 - k * k).sqrt() - 1.0)
+            } else {
+                let k = k - 2.0;
+                0.5 * ((1.0 - k * k).sqrt() + 1.0)
+            }
+        }
+        // Back
+        "in-back" => {
+            let s = 1.70158;
+            k * k * ((s + 1.0) * k - s)
+        }
+        "out-back" => {
+            let s = 1.70158;
+            let k = k - 1.0;
+            k * k * ((s + 1.0) * k + s) + 1.0
+        }
+        "in-out-back" => {
+            let s = 1.70158 * 1.525;
+            let k = k * 2.0;
+            if k < 1.0 {
+                0.5 * (k * k * ((s + 1.0) * k - s))
+            } else {
+                let k = k - 2.0;
+                0.5 * (k * k * ((s + 1.0) * k + s) + 2.0)
+            }
+        }
+        // Bounce
+        "in-bounce" => 1.0 - ease("out-bounce", 1.0 - k),
+        "out-bounce" => {
+            if k < 1.0 / 2.75 {
+                7.5625 * k * k
+            } else if k < 2.0 / 2.75 {
+                let k = k - 1.5 / 2.75;
+                7.5625 * k * k + 0.75
+            } else if k < 2.5 / 2.75 {
+                let k = k - 2.25 / 2.75;
+                7.5625 * k * k + 0.9375
+            } else {
+                let k = k - 2.625 / 2.75;
+                7.5625 * k * k + 0.984375
+            }
+        }
+        "in-out-bounce" => {
+            if k < 0.5 {
+                ease("in-bounce", k * 2.0) * 0.5
+            } else {
+                ease("out-bounce", k * 2.0 - 1.0) * 0.5 + 0.5
+            }
+        }
+        // "none" and any unknown name
+        _ => k,
+    }
 }
 
 /// Interpolate a tween track to the transform it holds at `frame_no`. Clamps to the
@@ -1008,6 +1162,57 @@ mod tests {
     /// playhead 5) over a 5-frame span → the sprite is placed once and Modified each frame
     /// with a linearly interpolated x: 0, 25, 50, 75, 100 pixels.
     #[test]
+    fn easing_matches_tween_js() {
+        // Oracle values sampled from the Wick engine's own tween.js (`TWEEN.Easing`)
+        // via `reference/wick-editor/engine/lib/Tween.js` at t = 0, 0.25, 0.5, 0.75, 1.
+        // Regenerate with scratchpad/oracle.js if the vendored tween.js ever changes.
+        let ts = [0.0f64, 0.25, 0.5, 0.75, 1.0];
+        #[rustfmt::skip]
+        let cases: &[(&str, [f64; 5])] = &[
+            ("none", [0.000000000000, 0.250000000000, 0.500000000000, 0.750000000000, 1.000000000000]),
+            ("in", [0.000000000000, 0.062500000000, 0.250000000000, 0.562500000000, 1.000000000000]),
+            ("out", [0.000000000000, 0.437500000000, 0.750000000000, 0.937500000000, 1.000000000000]),
+            ("in-out", [0.000000000000, 0.125000000000, 0.500000000000, 0.875000000000, 1.000000000000]),
+            ("in-cubic", [0.000000000000, 0.015625000000, 0.125000000000, 0.421875000000, 1.000000000000]),
+            ("out-cubic", [0.000000000000, 0.578125000000, 0.875000000000, 0.984375000000, 1.000000000000]),
+            ("in-out-cubic", [0.000000000000, 0.062500000000, 0.500000000000, 0.937500000000, 1.000000000000]),
+            ("in-quartic", [0.000000000000, 0.003906250000, 0.062500000000, 0.316406250000, 1.000000000000]),
+            ("out-quartic", [0.000000000000, 0.683593750000, 0.937500000000, 0.996093750000, 1.000000000000]),
+            ("in-out-quartic", [0.000000000000, 0.031250000000, 0.500000000000, 0.968750000000, 1.000000000000]),
+            ("in-quintic", [0.000000000000, 0.000976562500, 0.031250000000, 0.237304687500, 1.000000000000]),
+            ("out-quintic", [0.000000000000, 0.762695312500, 0.968750000000, 0.999023437500, 1.000000000000]),
+            ("in-out-quintic", [0.000000000000, 0.015625000000, 0.500000000000, 0.984375000000, 1.000000000000]),
+            ("in-sine", [0.000000000000, 0.076120467489, 0.292893218813, 0.617316567635, 1.000000000000]),
+            ("out-sine", [0.000000000000, 0.382683432365, 0.707106781187, 0.923879532511, 1.000000000000]),
+            ("in-out-sine", [0.000000000000, 0.146446609407, 0.500000000000, 0.853553390593, 1.000000000000]),
+            ("in-exp", [0.000000000000, 0.005524271728, 0.031250000000, 0.176776695297, 1.000000000000]),
+            ("out-exp", [0.000000000000, 0.823223304703, 0.968750000000, 0.994475728272, 1.000000000000]),
+            ("in-out-exp", [0.000000000000, 0.015625000000, 0.500000000000, 0.984375000000, 1.000000000000]),
+            ("in-circle", [0.000000000000, 0.031754163448, 0.133974596216, 0.338562172234, 1.000000000000]),
+            ("out-circle", [0.000000000000, 0.661437827766, 0.866025403784, 0.968245836552, 1.000000000000]),
+            ("in-out-circle", [0.000000000000, 0.066987298108, 0.500000000000, 0.933012701892, 1.000000000000]),
+            ("in-back", [0.000000000000, -0.064136562500, -0.087697500000, 0.182590312500, 1.000000000000]),
+            ("out-back", [0.000000000000, 0.817409687500, 1.087697500000, 1.064136562500, 1.000000000000]),
+            ("in-out-back", [0.000000000000, -0.099681843750, 0.500000000000, 1.099681843750, 1.000000000000]),
+            ("in-bounce", [0.000000000000, 0.027343750000, 0.234375000000, 0.527343750000, 1.000000000000]),
+            ("out-bounce", [0.000000000000, 0.472656250000, 0.765625000000, 0.972656250000, 1.000000000000]),
+            ("in-out-bounce", [0.000000000000, 0.117187500000, 0.500000000000, 0.882812500000, 1.000000000000]),
+        ];
+        for (name, expected) in cases {
+            for (i, &t) in ts.iter().enumerate() {
+                let got = ease(name, t);
+                assert!(
+                    (got - expected[i]).abs() < 1e-9,
+                    "ease({name:?}, {t}) = {got}, tween.js = {}",
+                    expected[i]
+                );
+            }
+        }
+        // Unknown names fall back to linear, like the engine's `easingType || 'none'`.
+        assert_eq!(ease("bogus", 0.42), 0.42);
+    }
+
+    #[test]
     fn tween_interpolates_clip_placement() {
         use wick::{Clip, Contour, Document, Frame, Layer, Tween};
 
@@ -1087,6 +1292,81 @@ mod tests {
             .map(|&x| Twips::from_pixels(x).get())
             .collect();
         assert_eq!(txs, expect, "one Place + four Modify, linearly interpolated x");
+    }
+
+    #[test]
+    fn easing_overshoot_reaches_placement() {
+        // `out-back` overshoots to 1.0876975 at t=0.5 (oracle: tween.js Back.Out(0.5)).
+        // Driving x 0->100 with it, the midpoint frame must land past x=100 -- something
+        // impossible under linear easing and impossible if any stage clamps t to [0, 1].
+        use wick::{Clip, Contour, Document, Frame, Layer, Tween};
+
+        let dot = Contour {
+            points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            fill: swf::Color::from_rgb(0x0000ff, 255),
+        };
+        let ident = Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation_deg: 0.0,
+            opacity: 1.0,
+        };
+        let clip = Clip {
+            transform: ident,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![dot],
+                    clips: vec![],
+                    tweens: vec![],
+                }],
+            }],
+        };
+        let key = |playhead: u16, x: f64, easing: &str| Tween {
+            playhead,
+            transform: Transform { x, ..ident },
+            full_rotations: 0,
+            easing: easing.to_string(),
+        };
+        let doc = Document {
+            width: 200.0,
+            height: 200.0,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 5,
+                    contours: vec![],
+                    clips: vec![clip],
+                    tweens: vec![key(1, 0.0, "out-back"), key(5, 100.0, "none")],
+                }],
+            }],
+        };
+
+        let swf = compile_document(&doc).expect("compile tween");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let txs: Vec<i32> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => po.matrix.map(|m| m.tx.get()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(txs.len(), 5, "one Place + four Modify");
+        // Frame 3 of the 1..=5 span is t=0.5 -> x = 100 * 1.0876975 = 108.76975px.
+        let mid = Twips::from_pixels(100.0 * 1.0876975).get();
+        assert_eq!(txs[2], mid, "midpoint overshoots per out-back");
+        assert!(
+            txs[2] > txs[4],
+            "overshoot ({}) exceeds the endpoint x=100px ({}) -- not clamped",
+            txs[2],
+            txs[4]
+        );
     }
 
     /// Phase 1c: lerp is per-property linear.
