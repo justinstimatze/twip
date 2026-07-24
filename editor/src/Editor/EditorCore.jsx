@@ -1670,6 +1670,15 @@ class EditorCore extends Component {
       } else {
         this.showWaitOverlay();
         window.Wick.AutoSave.load(autosaveList[0].uuid, project => {
+          // setupNewProject falls back to `new Wick.Project()` when handed nothing, so a
+          // failed load is otherwise indistinguishable from a blank canvas — say so
+          // rather than let it look like the click did nothing.
+          if (!project) {
+            this.hideWaitOverlay();
+            this.toast('Could not restore the autosave — its data is missing or unreadable.', 'error');
+            callback();
+            return;
+          }
           this.setupNewProject(project);
           this.hideWaitOverlay();
           callback();
@@ -1679,22 +1688,71 @@ class EditorCore extends Component {
   }
 
   /**
-   * Check if auto saved project exists.
+   * Does this autosave hold anything worth offering to restore?
+   *
+   * An untouched project still serializes to a skeleton — Selection, the root Clip, and
+   * that clip's Timeline/Layer/Frame (five objects; `Project` is listed below too, since
+   * `ObjectCache.getActiveObjects` excludes it today but guarding costs nothing) — so a
+   * non-empty `objectsData` proves nothing on its own. What
+   * separates work from a blank canvas is the presence of objects that only exist once
+   * someone has drawn, imported, or tweened. Deliberately strict: anything unrecognized
+   * counts as content, because wrongly suppressing the prompt loses someone's work while
+   * wrongly showing it costs one click.
+   * @param {Object} autosaveData
+   * @returns {boolean}
+   */
+  autosaveHasContent = (autosaveData) => {
+    if (!autosaveData || !autosaveData.objectsData) return false;
+    let classnames = autosaveData.objectsData.map(object => object.classname);
+    let skeleton = ['Project', 'Selection', 'Clip', 'Timeline', 'Layer', 'Frame'];
+    // Anything not part of the empty-project skeleton is the user's.
+    if (classnames.some(name => skeleton.indexOf(name) === -1)) return true;
+    // More than one of any skeleton part means a second layer, frame, or nested clip.
+    return skeleton.some(part => classnames.filter(name => name === part).length > 1);
+  }
+
+  /**
+   * Check whether there is an autosave worth restoring.
+   *
+   * Was `autosaveList.length > 0`, which prompted on every launch: the editor autosaves
+   * the blank project it hands you at startup, so an untouched session writes an empty
+   * autosave that the next launch then offers to restore. Answering the prompt appeared
+   * to do nothing because there was genuinely nothing in it.
    * @param  {Function} callback a callback which receives a boolean.
-   * True if an autosave exists.
    */
   doesAutoSavedProjectExist = (callback) => {
     window.Wick.AutoSave.getAutosavesList(autosaveList => {
-      callback(autosaveList.length > 0);
+      if (!autosaveList[0]) {
+        callback(false);
+        return;
+      }
+      // getAutosavesList sorts newest-first and loadAutosavedProject only ever offers
+      // [0], so [0] is the one the prompt is about.
+      window.Wick.AutoSave.readAutosaveData(autosaveList[0].uuid, autosaveData => {
+        callback(this.autosaveHasContent(autosaveData));
+      });
     });
   }
 
   /**
-   * Clears any autosaved project from local storage.
+   * Clears the autosaved project that the prompt is offering.
+   *
+   * Was `AutoSave.delete(this.project.uuid)` — the uuid of the project currently OPEN,
+   * never the autosaved one, so Delete removed nothing and the prompt returned forever.
+   * Deletes the offered autosave only, not the whole list: the others are someone's work
+   * too, even though only the newest is ever reachable. `removeAutosaveFromList` filters
+   * by uuid, so this also clears the duplicate list entries the engine appends on every
+   * save of the same project.
    */
   clearAutoSavedProject = (callback) => {
-    window.Wick.AutoSave.delete(this.project.uuid, () => {
-      callback();
+    window.Wick.AutoSave.getAutosavesList(autosaveList => {
+      if (!autosaveList[0]) {
+        callback();
+        return;
+      }
+      window.Wick.AutoSave.delete(autosaveList[0].uuid, () => {
+        callback();
+      });
     });
   }
 
