@@ -313,10 +313,36 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
        (~long; no binstall on this box). Debug binary re-embeds `../build` on rebuild (touch `src-tauri/src/lib.rs`
        to force it). Launched under `GDK_BACKEND=x11` on the Wayland session for screenshotting.
        Ruffle's wasm loaded fine over the `tauri://` asset protocol — no MIME workaround needed.
-   - **Committed** (editor repo, no remote yet): SWF export path `a2752aa`, Tauri shell `18e5682`.
-   - **REMAINING**: (a) repo vendor — editor into `twip/editor/` (monorepo) OR a private mirror; not
-     started; at vendor time flip the `twip` path dep and re-verify. (b) UX (Justin, 2026-07-23): make
-     the prominent **export** button produce SWF; demote `.wick` export to a power-user affordance.
+   - **MONOREPO VENDOR DONE (2026-07-23)**: editor snapshot-copied to `twip/editor/` (rsync, no `.git`
+     history, no node_modules/build/target). Method = plain snapshot, NOT git-subtree (subtree imports
+     wick-editor's whole multi-year history into twip and bloats it). The standalone `~/Documents/wick-editor`
+     worktree stays as the upstream-tracking base (`upstream` = StickmanRed). Facts baked in:
+     * `twip = { path = "../.." }` in `editor/src-tauri/Cargo.toml` (the twip crate root IS the repo root).
+     * `twip/Cargo.toml` now has `[workspace] exclude = ["editor"]` so `cargo build` at the root stays the
+       compiler, not the app; the two cargo projects resolve independently.
+     * `npm ci` + `npm rebuild node-sass` in `twip/editor/` reproduces node_modules from the committed
+       lockfile (node-sass ABI-83 binding verified). Vendored Tauri app builds and launches from the new
+       location (verified 2026-07-23).
+     * **Lean cargo profile** (disk): `crate-type = ["rlib"]` (dropped the mobile-scaffold staticlib .a
+       ~700MB + cdylib .so ~180MB) and `[profile.dev] debug = 0` (no DWARF for the 310-crate tree).
+       Debug target went ~4.2G → <2G. Rust only rebuilds when `src-tauri` changes, so frontend edits are free.
+       (Removed the standalone `wick-editor/src-tauri/target`, 5.8G, when the disk hit 100%.)
+   - **Committed** (in the standalone editor repo, no remote): SWF export path `a2752aa`, Tauri shell `18e5682`.
+     Vendored copy committed into twip.
+   - **THE FROZEN CRA IS PROVISIONAL** (Justin, 2026-07-23: "never planned to freeze the editor, it's just
+     a quick test; we'll have to fork and modernize it"). The Node-14 / react-scripts-2 / webpack-4 / node-sass
+     stack is scaffolding to get a working test loop, not the destination. MODERNIZATION BACKLOG:
+     * **Migrate off CRA → Vite + current React**, then pnpm + turbo + biome + vitest, Node-current.
+       Template to copy: Justin's `~/Documents/tttc-light-js` (pnpm@10 / Node≥25 / turbo / biome / vitest / TS
+       workspaces). pnpm/Node-25 CANNOT run the frozen stack (pnpm 10 needs Node≥18; its strict node_modules
+       breaks webpack-4-era packages) — so the tooling swap RIDES WITH the Vite migration, not before it.
+     * **Redesign the UI to 2026 UX** (Tailwind + shadcn per house frontend defaults) — do it in the same
+       pass as the lib upgrades, not twice.
+     * **Export vs preview split**: **SWF** button = in-app Ruffle preview (current behavior); **export** =
+       save a `.swf` file to disk (file dialog → write bytes). The earlier "make export produce SWF" resolves
+       to this — export writes a file, SWF previews.
+10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
+11. Ruffle golden-PNG oracle (lavapipe-blessed).
 10. Frame actions (stop/play/gotoAndPlay DoAction) + PRESS click handlers.
 11. Ruffle golden-PNG oracle (lavapipe-blessed).
 

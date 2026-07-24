@@ -1,0 +1,4 @@
+# Tauri build output
+/target
+# Auto-generated Tauri schemas/plugins
+/gen/schemas

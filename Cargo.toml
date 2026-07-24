@@ -16,6 +16,11 @@ serde_json = "1"
 anyhow = "1"
 i_overlay = "7.0.2"
 
+# editor/ is the vendored wick-editor fork (its own Tauri cargo project that depends on
+# this crate by path). Exclude it so `cargo build` here stays the compiler, not the app.
+[workspace]
+exclude = ["editor"]
+
 [lib]
 name = "twip"
 path = "src/lib.rs"
