@@ -4,15 +4,31 @@ name: golden
 # building ruffle's exporter is ~20-40 min, far too heavy to gate every push. Run it
 # on demand from the Actions tab.
 #
-# STATUS: first run was 2026-07-24 (`30118810306`) and it FAILED — the repo's own
-# .cargo/config.toml leaked `-fuse-ld=mold` into the vendored ruffle build and the runner
-# has no mold. Fixed in scripts/oracle-setup.sh (`RUSTFLAGS=`); see HANDOFF item 11. So the
-# goldens are still validated only on a developer box's lavapipe. CAVEAT for the first
-# GREEN run: a different mesa/lavapipe version in CI can shift AA pixels, so it may need a
-# re-bless (TWIP_BLESS=1) committed from a CI artifact. Bless and check must always share
-# one backend — that's the oracle's correctness premise.
+# The goldens are pixel-compared, so the RENDERING BACKEND IS PART OF THE CONTRACT:
+# whatever blessed a golden must be what checks it. lavapipe is the deterministic
+# software rasterizer that makes that reproducible across machines, but only at a
+# fixed mesa version — AA fringes move between mesa releases, and ubuntu-latest is
+# two Ubuntu releases behind this project's dev box. Hence the container: the job runs
+# on the Ubuntu pinned below, not the runner's.
+#
+# Verified 2026-07-24 before the first container run: `docker run ubuntu:26.04` installs
+# mesa-vulkan-drivers 26.0.3-1ubuntu1, the same version the dev box has, and re-rendering
+# all 7 fixtures there reproduced tests/goldens/ with ZERO differing channels — not
+# within tolerance, bit-identical. That is why the goldens are committed once and serve
+# both places.
+#
+# The mesa version is NOT pinned in apt, deliberately: an SRU that moves AA pixels will
+# fail the comparison loudly with an outlier count, and the `System dependencies` step
+# prints the installed version directly above it in the same log. Fix is a re-bless
+# (dispatch with bless=true, download the artifact, commit tests/goldens/) — not a
+# tolerance bump, which would blind the oracle to the regressions it exists to catch.
 on:
   workflow_dispatch:
+    inputs:
+      bless:
+        description: "Re-bless the goldens and upload them as an artifact (do not check)"
+        type: boolean
+        default: false
 
 concurrency:
   group: golden-${{ github.ref }}
@@ -20,30 +36,76 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Overrides .cargo/config.toml wholesale, which is the point: that file's
+  # [target.x86_64-unknown-linux-gnu] block matches GitHub runners too and adds
+  # `-fuse-ld=mold`, which no runner has. Same value ci.yml uses.
+  RUSTFLAGS: -D warnings
   # Force wgpu onto software Vulkan (lavapipe), never a CI GPU.
   VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
   VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.json
+  RUFFLE_REV: 645449a5c602044471f045546a0a31af0df9cd69
 
 jobs:
   golden:
     runs-on: ubuntu-latest
+    container: ubuntu:26.04
     steps:
+      # The container is bare, so everything the runner image would have provided has
+      # to be installed: git (checkout), curl+ca-certificates (rustup), build-essential
+      # (cc, the linker). The rest is ruffle's own LINUX_DEPENDENCIES from its
+      # test_rust.yml, plus mesa-vulkan-drivers for lavapipe.
+      - name: System dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git curl ca-certificates build-essential pkg-config \
+            mesa-vulkan-drivers libasound2-dev libudev-dev libfontconfig-dev
+          dpkg-query -W -f='lavapipe from mesa-vulkan-drivers ${Version}\n' mesa-vulkan-drivers
+          # The workspace is bind-mounted from the host, so its uid does not match the
+          # container's root and git refuses to operate on it. oracle-setup.sh opens with
+          # `git rev-parse --show-toplevel`.
+          git config --global --add safe.directory '*'
+
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # Cache keyed on the pinned ruffle rev so the ~30-min exporter build is reused
-      # until the rev bumps. oracle/ is gitignored; cache it explicitly.
       - uses: Swatinem/rust-cache@v2
+
+      # Only the 19MB binary is cached, not oracle/ruffle/target (multi-GB, and the
+      # harness never reads it). A hit skips both the full ruffle clone and the build.
+      # Keyed on the rev AND the container, since a binary built against a different
+      # libc will not run here.
+      - name: Cache ruffle exporter
+        id: exporter
+        uses: actions/cache@v4
         with:
-          key: ruffle-645449a
+          path: oracle/ruffle/target/release/exporter
+          key: ruffle-exporter-${{ env.RUFFLE_REV }}-ubuntu2604
 
-      # Software Vulkan (lavapipe). Ruffle's own test_rust.yml uses this package.
-      - name: Install lavapipe
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Build ruffle exporter (rev 645449a)
+      - name: Build ruffle exporter
+        if: steps.exporter.outputs.cache-hit != 'true'
         run: bash scripts/oracle-setup.sh
 
       - name: Golden oracle
+        if: ${{ !inputs.bless }}
         run: cargo test --features golden -- --nocapture
+
+      - name: Bless goldens
+        if: ${{ inputs.bless }}
+        env:
+          TWIP_BLESS: "1"
+        run: cargo test --features golden -- --nocapture
+
+      # On a mismatch the renders are the only way to tell an AA fringe from a real
+      # rendering regression without a second round-trip. On a bless run this IS the
+      # deliverable — download it and commit tests/goldens/.
+      - name: Upload renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-renders
+          path: |
+            target/golden/*.png
+            tests/goldens/*.png
+          if-no-files-found: warn
