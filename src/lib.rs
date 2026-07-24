@@ -1161,6 +1161,10 @@ mod tests {
     /// Phase 1e: a motion tween on a clip. Two tween keys (x=0 at playhead 1, x=100 at
     /// playhead 5) over a 5-frame span → the sprite is placed once and Modified each frame
     /// with a linearly interpolated x: 0, 25, 50, 75, 100 pixels.
+    // The oracle table below holds tween.js output verbatim; some values happen to be
+    // math constants (out-sine at t=0.5 is 1/sqrt(2)). They must stay as the literal the
+    // engine produced, not be swapped for a std constant, so silence approx_constant.
+    #[allow(clippy::approx_constant)]
     #[test]
     fn easing_matches_tween_js() {
         // Oracle values sampled from the Wick engine's own tween.js (`TWEEN.Easing`)
