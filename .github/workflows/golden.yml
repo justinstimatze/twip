@@ -1,0 +1,47 @@
+name: golden
+
+# Ruffle golden-PNG oracle (test layer 2). SEPARATE from ci.yml and manual-only:
+# building ruffle's exporter is ~20-40 min, far too heavy to gate every push. Run it
+# on demand from the Actions tab.
+#
+# SCAFFOLD: twip has no GitHub remote yet, so this has never executed. It activates
+# when the repo is pushed. CAVEAT: goldens are currently blessed on a developer box's
+# lavapipe; a different mesa/lavapipe version in CI can shift AA pixels, so the first
+# CI run may need a re-bless (TWIP_BLESS=1) committed from a CI artifact. Bless and
+# check must always share one backend — that's the oracle's correctness premise.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: golden-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Force wgpu onto software Vulkan (lavapipe), never a CI GPU.
+  VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
+  VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.json
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cache keyed on the pinned ruffle rev so the ~30-min exporter build is reused
+      # until the rev bumps. oracle/ is gitignored; cache it explicitly.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ruffle-645449a
+
+      # Software Vulkan (lavapipe). Ruffle's own test_rust.yml uses this package.
+      - name: Install lavapipe
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Build ruffle exporter (rev 645449a)
+        run: bash scripts/oracle-setup.sh
+
+      - name: Golden oracle
+        run: cargo test --features golden -- --nocapture

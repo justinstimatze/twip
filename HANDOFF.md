@@ -392,7 +392,36 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
       `clip_click_emits_press_action` (synthetic — PRESS + Stop on the Place), and real
       `compiles_clip_click_wick` (fixtures/clip-click.wick = nested-clip + `mousepressed:stop();` on
       the placed clip). 27 lib tests green. Ruffle click-test not yet eyeballed (structural is the workhorse).
-11. Ruffle golden-PNG oracle (lavapipe-blessed).
+11. **DONE 2026-07-23 — Ruffle golden-PNG oracle (lavapipe-blessed).** Test layer 2
+    (HANDOFF oracle design): render a twip-compiled SWF through ruffle's own `exporter`
+    under lavapipe and diff against a committed golden PNG, catching *rendering*
+    regressions the structural oracle can't (planarized fills, winding, layer order).
+    * **Out-of-tree exporter**: `scripts/oracle-setup.sh` clones ruffle @ the pinned
+      rev 645449a into gitignored `oracle/ruffle` and `cargo build --release -p exporter`
+      (binary = `Ruffle Exporter 0.4.1`). GOTCHA: ruffle @ this rev uses `if let` guards +
+      `cfg_select`, not stable until rustc ~1.94 — this box's system rustc is 1.93.1
+      (source-tarball, no rustup), which fails with E0658. Fix: installed rustup
+      user-space (`--no-modify-path`, scoped) → stable 1.97.1, built the exporter with
+      `CARGO=~/.cargo/bin/cargo`; the system default toolchain (1.93.1, /usr/bin) is
+      untouched. The script honors a `CARGO` override for exactly this.
+    * **lavapipe was already on the box** (`libvulkan_lvp.so` + `/usr/share/vulkan/
+      icd.d/lvp_icd.json`) — no apt/sudo. Selected via `VK_ICD_FILENAMES`/`VK_DRIVER_FILES`
+      + `--graphics vulkan --power low`. Deterministic software backend; goldens blessed
+      and checked on the SAME lavapipe (never the box GPU).
+    * **Harness** = `tests/golden.rs`, gated behind cargo feature `golden` (optional
+      `image` dep) so the ~30-min ruffle build NEVER gates a normal `cargo test` /
+      pre-commit / fast CI. `cargo test --features golden` checks; `TWIP_BLESS=1 …`
+      (re)writes goldens. Comparison ported from ruffle's `tests/framework`
+      image_comparison: per-channel `abs_diff > tolerance` → outlier, fail when
+      `outliers > max_outliers` (tolerance 2, max_outliers 0). Shared bless/check path.
+    * **6 static goldens** blessed (`tests/goldens/*.png`): test1, frame-by-frame,
+      multi-layer, brush-donut, frame-stop, nested-clip. Tweens/opacity excluded from
+      strict pixel comparison by design. Self-consistency re-run = **0 outliers, max
+      diff 0** (bit-exact same-backend). Eyeballed: test1 (ellipse + outlined square),
+      brush-donut (blue shape WITH its center hole — planarize survives to raster).
+    * **CI scaffold** `.github/workflows/golden.yml` (manual `workflow_dispatch`; installs
+      mesa-vulkan-drivers, builds exporter, runs the feature). SCAFFOLD — no remote yet
+      (known-gap #5); a different CI lavapipe/mesa may need a one-time re-bless.
 
 ## Plan
 

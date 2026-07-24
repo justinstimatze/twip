@@ -15,11 +15,22 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 serde_json = "1"
 anyhow = "1"
 i_overlay = "7.0.2"
+# Only pulled in under the `golden` feature — the golden-PNG oracle (tests/golden.rs)
+# uses it to decode ruffle's exported PNGs. Never compiled by a plain build/test.
+image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
+
+[features]
+# Enables the Ruffle golden-PNG oracle test (tests/golden.rs). Off by default so the
+# heavy ruffle exporter never gates a normal `cargo test` / pre-commit / fast CI run:
+#   cargo test --features golden          # check against blessed goldens
+#   TWIP_BLESS=1 cargo test --features golden   # (re)write goldens
+golden = ["dep:image"]
 
 # editor/ is the vendored wick-editor fork (its own Tauri cargo project that depends on
-# this crate by path). Exclude it so `cargo build` here stays the compiler, not the app.
+# this crate by path); oracle/ is the gitignored ruffle clone the golden oracle builds.
+# Exclude both so `cargo build` here stays the compiler, not the app or the oracle.
 [workspace]
-exclude = ["editor"]
+exclude = ["editor", "oracle"]
 
 [lib]
 name = "twip"

@@ -4,6 +4,13 @@ reference/wick-editor/
 # Rust
 /target
 
+# ruffle clone the golden-PNG oracle builds (exporter binary) — fetched, not source.
+# Rebuild via scripts/oracle-setup.sh.
+/oracle/
+
+# plancheck hook debug dump — transient tool artifact
+.plancheck-debug.json
+
 # build artifacts (regenerate via cargo run)
 /hello_square.swf
 /test1.swf

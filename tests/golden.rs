@@ -1,0 +1,194 @@
+//! Ruffle golden-PNG oracle. Renders each fixture's twip-compiled SWF through
+//! ruffle's `exporter` under lavapipe (deterministic software Vulkan) and compares
+//! the result to a committed golden PNG. This is test layer 2 from HANDOFF's oracle
+//! design — it catches *rendering* regressions the structural oracle can't see
+//! (planarized fills, winding, layer order) without the AA-noise blindness of a
+//! cross-renderer diff.
+//!
+//! Gated behind the `golden` feature so the ~30-min ruffle build never gates a
+//! normal `cargo test` / pre-commit / fast CI run:
+//!
+//!   bash scripts/oracle-setup.sh               # once: build the exporter (~30 min)
+//!   TWIP_BLESS=1 cargo test --features golden   # (re)write tests/goldens/*.png
+//!   cargo test --features golden                # check against the goldens
+//!
+//! Goldens MUST be blessed on the same backend that checks them (lavapipe here,
+//! never the box's real GPU) — bless and check share one code path below so the
+//! exporter invocation and backend are identical for both.
+#![cfg(feature = "golden")]
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// Per-channel absolute-difference threshold above which a channel counts as an
+/// outlier, and the maximum outlier count tolerated. Ported from ruffle's
+/// `tests/framework` image_comparison (defaults there are 0/0). bless and check run
+/// the same lavapipe on the same box, so drift is near-zero; TOLERANCE=2 absorbs
+/// incidental rounding without masking a real rendering change.
+const TOLERANCE: u8 = 2;
+const MAX_OUTLIERS: usize = 0;
+
+/// lavapipe ICD — forces wgpu onto the software rasterizer, not the box's GPU.
+const LVP_ICD: &str = "/usr/share/vulkan/icd.d/lvp_icd.json";
+
+struct Case {
+    /// golden basename (tests/goldens/<name>.png)
+    name: &'static str,
+    /// fixture path relative to the crate root
+    fixture: &'static str,
+    /// frames to advance before capturing (frame n → skipframes n-1)
+    skipframes: u32,
+}
+
+/// The six visually-deterministic fixtures. Tweens (motion-tween) and opacity
+/// compositing are excluded from strict pixel comparison by design — the structural
+/// oracle pins tweens far tighter, and paper.js-vs-SWF opacity diverges (HANDOFF).
+const CASES: &[Case] = &[
+    Case { name: "test1", fixture: "fixtures/test1.wick", skipframes: 0 },
+    Case { name: "frame-by-frame", fixture: "fixtures/frame-by-frame.wick", skipframes: 0 },
+    Case { name: "multi-layer", fixture: "fixtures/multi-layer.wick", skipframes: 0 },
+    Case { name: "brush-donut", fixture: "fixtures/brush-donut.wick", skipframes: 0 },
+    Case { name: "frame-stop", fixture: "fixtures/frame-stop.wick", skipframes: 0 },
+    Case { name: "nested-clip", fixture: "fixtures/nested-clip.wick", skipframes: 0 },
+];
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The ruffle exporter binary: `$TWIP_EXPORTER`, else the oracle-setup.sh default.
+fn exporter_bin() -> PathBuf {
+    match std::env::var_os("TWIP_EXPORTER") {
+        Some(p) => PathBuf::from(p),
+        None => repo_root().join("oracle/ruffle/target/release/exporter"),
+    }
+}
+
+/// Compile a fixture and render one frame to `png_out` via the exporter under
+/// lavapipe. Returns Err with actionable text on any failure.
+fn render(case: &Case, out_dir: &Path) -> Result<PathBuf, String> {
+    let root = repo_root();
+    let bin = exporter_bin();
+    if !bin.exists() {
+        return Err(format!(
+            "exporter not found at {} — build it once with `bash scripts/oracle-setup.sh` \
+             (or set TWIP_EXPORTER)",
+            bin.display()
+        ));
+    }
+
+    let wick = root.join(case.fixture);
+    let bytes = std::fs::read(&wick).map_err(|e| format!("read {}: {e}", wick.display()))?;
+    let swf = twip::compile_wick(&bytes).map_err(|e| format!("compile {}: {e}", case.fixture))?;
+
+    let swf_path = out_dir.join(format!("{}.swf", case.name));
+    let png_path = out_dir.join(format!("{}.actual.png", case.name));
+    std::fs::write(&swf_path, &swf).map_err(|e| format!("write swf: {e}"))?;
+
+    let status = Command::new(&bin)
+        .env("VK_ICD_FILENAMES", LVP_ICD)
+        .env("VK_DRIVER_FILES", LVP_ICD)
+        .arg(&swf_path)
+        .arg(&png_path)
+        .args(["--frames", "1"])
+        .args(["--skipframes", &case.skipframes.to_string()])
+        .args(["--graphics", "vulkan"])
+        .args(["--power", "low"])
+        .arg("--silent")
+        .status()
+        .map_err(|e| format!("spawn exporter: {e}"))?;
+    if !status.success() {
+        return Err(format!("exporter exited {status} for {}", case.name));
+    }
+    if !png_path.exists() {
+        return Err(format!("exporter produced no PNG at {}", png_path.display()));
+    }
+    Ok(png_path)
+}
+
+/// Count per-channel outliers between two RGBA images. `Err` if dimensions differ.
+fn compare(golden: &Path, actual: &Path) -> Result<(usize, u8), String> {
+    let g = image::open(golden)
+        .map_err(|e| format!("open golden {}: {e}", golden.display()))?
+        .to_rgba8();
+    let a = image::open(actual)
+        .map_err(|e| format!("open render {}: {e}", actual.display()))?
+        .to_rgba8();
+    if g.dimensions() != a.dimensions() {
+        return Err(format!(
+            "size mismatch: golden {:?} vs render {:?}",
+            g.dimensions(),
+            a.dimensions()
+        ));
+    }
+    let mut outliers = 0usize;
+    let mut max_diff = 0u8;
+    for (gp, ap) in g.pixels().zip(a.pixels()) {
+        for c in 0..4 {
+            let d = gp[c].abs_diff(ap[c]);
+            max_diff = max_diff.max(d);
+            if d > TOLERANCE {
+                outliers += 1;
+            }
+        }
+    }
+    Ok((outliers, max_diff))
+}
+
+#[test]
+// `outliers <= MAX_OUTLIERS` reads as "always true" to clippy while MAX_OUTLIERS is 0,
+// but <= is the intended threshold semantics — it stays correct if the const is bumped.
+#[allow(clippy::absurd_extreme_comparisons)]
+fn goldens() {
+    let bless = std::env::var_os("TWIP_BLESS").is_some();
+    let out_dir = repo_root().join("target/golden");
+    std::fs::create_dir_all(&out_dir).expect("create target/golden");
+    let goldens_dir = repo_root().join("tests/goldens");
+    if bless {
+        std::fs::create_dir_all(&goldens_dir).expect("create tests/goldens");
+    }
+
+    let mut failures = Vec::new();
+    for case in CASES {
+        let actual = match render(case, &out_dir) {
+            Ok(p) => p,
+            Err(e) => {
+                failures.push(format!("{}: {e}", case.name));
+                continue;
+            }
+        };
+        let golden = goldens_dir.join(format!("{}.png", case.name));
+
+        if bless {
+            if let Err(e) = std::fs::copy(&actual, &golden) {
+                failures.push(format!("{}: bless copy failed: {e}", case.name));
+            } else {
+                eprintln!("blessed {}", golden.display());
+            }
+            continue;
+        }
+
+        if !golden.exists() {
+            failures.push(format!(
+                "{}: no golden at {} — run TWIP_BLESS=1 cargo test --features golden",
+                case.name,
+                golden.display()
+            ));
+            continue;
+        }
+        match compare(&golden, &actual) {
+            Ok((outliers, max_diff)) if outliers <= MAX_OUTLIERS => {
+                eprintln!("{} ok ({outliers} outliers, max diff {max_diff})", case.name);
+            }
+            Ok((outliers, max_diff)) => failures.push(format!(
+                "{}: {outliers} outliers > {MAX_OUTLIERS} allowed (max diff {max_diff}); \
+                 see {}",
+                case.name,
+                actual.display()
+            )),
+            Err(e) => failures.push(format!("{}: {e}", case.name)),
+        }
+    }
+
+    assert!(failures.is_empty(), "golden oracle failures:\n  {}", failures.join("\n  "));
+}
