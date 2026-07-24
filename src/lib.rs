@@ -107,18 +107,27 @@ pub struct Transform {
     pub scale_x: f64,
     pub scale_y: f64,
     pub rotation_deg: f64,
+    /// Signed skew in degrees: the extra angle the y-axis is rotated by, on top of
+    /// `rotation_deg`. Zero for every transform the upstream editor writes.
+    pub skew_deg: f64,
     pub opacity: f64,
 }
 
 impl Transform {
     /// The SWF matrix for this transform (scale, then rotation, then translation).
+    ///
+    /// Skew rotates the y basis vector by `rotation + skew` while x stays at `rotation`
+    /// — the fork's own `Transformation.toMatrix()` (engine/src/Transformation.js:102),
+    /// which is what its renderer feeds paper.js. At `skew_deg == 0` the two axes share
+    /// an angle and this collapses to a plain scale+rotate.
     pub fn matrix(&self) -> Matrix {
-        let r = self.rotation_deg.to_radians();
+        let rx = self.rotation_deg.to_radians();
+        let ry = (self.rotation_deg + self.skew_deg).to_radians();
         Matrix {
-            a: Fixed16::from_f64(self.scale_x * r.cos()),
-            b: Fixed16::from_f64(self.scale_x * r.sin()),
-            c: Fixed16::from_f64(-self.scale_y * r.sin()),
-            d: Fixed16::from_f64(self.scale_y * r.cos()),
+            a: Fixed16::from_f64(self.scale_x * rx.cos()),
+            b: Fixed16::from_f64(self.scale_x * rx.sin()),
+            c: Fixed16::from_f64(-self.scale_y * ry.sin()),
+            d: Fixed16::from_f64(self.scale_y * ry.cos()),
             tx: Twips::from_pixels(self.x),
             ty: Twips::from_pixels(self.y),
         }
@@ -149,6 +158,7 @@ pub fn lerp_transform(a: &Transform, b: &Transform, t: f64) -> Transform {
         scale_x: l(a.scale_x, b.scale_x),
         scale_y: l(a.scale_y, b.scale_y),
         rotation_deg: l(a.rotation_deg, b.rotation_deg),
+        skew_deg: l(a.skew_deg, b.skew_deg),
         opacity: l(a.opacity, b.opacity),
     }
 }
@@ -196,6 +206,7 @@ pub fn tween_demo_swf() -> Vec<u8> {
         scale_x: 1.0,
         scale_y: 1.0,
         rotation_deg: 0.0,
+        skew_deg: 0.0,
         opacity: 1.0,
     };
     let end = Transform {
@@ -204,6 +215,7 @@ pub fn tween_demo_swf() -> Vec<u8> {
         scale_x: 2.5,
         scale_y: 2.5,
         rotation_deg: 360.0,
+        skew_deg: 0.0,
         opacity: 0.15,
     };
 
@@ -1632,6 +1644,7 @@ mod tests {
                 scale_x: 1.0,
                 scale_y: 1.0,
                 rotation_deg: 0.0,
+                skew_deg: 0.0,
                 opacity: 1.0,
             },
             layers: vec![Layer {
@@ -1873,6 +1886,7 @@ mod tests {
                 scale_x: 1.0,
                 scale_y: 1.0,
                 rotation_deg: 0.0,
+                skew_deg: 0.0,
                 opacity: 1.0,
             },
             layers: vec![Layer {
@@ -1894,6 +1908,7 @@ mod tests {
                 scale_x: 1.0,
                 scale_y: 1.0,
                 rotation_deg: 0.0,
+                skew_deg: 0.0,
                 opacity: 1.0,
             },
             full_rotations: 0,
@@ -1962,6 +1977,7 @@ mod tests {
             scale_x: 1.0,
             scale_y: 1.0,
             rotation_deg: 0.0,
+            skew_deg: 0.0,
             opacity: 1.0,
         };
         let clip = Clip {
@@ -2032,6 +2048,7 @@ mod tests {
             scale_x: 1.0,
             scale_y: 1.0,
             rotation_deg: 0.0,
+            skew_deg: 0.0,
             opacity: 1.0,
         };
         let b = Transform {
@@ -2040,6 +2057,7 @@ mod tests {
             scale_x: 3.0,
             scale_y: 3.0,
             rotation_deg: 180.0,
+            skew_deg: 0.0,
             opacity: 0.0,
         };
         let m = lerp_transform(&a, &b, 0.5);
@@ -2069,6 +2087,7 @@ mod tests {
             scale_x: 1.0,
             scale_y: 1.0,
             rotation_deg: 0.0,
+            skew_deg: 0.0,
             opacity: 1.0,
         };
         let end = Transform {
@@ -2097,6 +2116,7 @@ mod tests {
             scale_x: 1.0,
             scale_y: 1.0,
             rotation_deg: 0.0,
+            skew_deg: 0.0,
             opacity: 1.0,
         };
         let end = Transform {
@@ -2115,6 +2135,150 @@ mod tests {
         let m = lerp_transform(&start, &end, 0.5).matrix();
         assert!(m.a.to_f64().abs() < 1e-9, "90deg: matrix.a ~ 0");
         assert!((m.b.to_f64() - 1.0).abs() < 1e-9, "90deg: matrix.b ~ 1");
+    }
+
+    /// Skew rotates the y basis vector by `rotation + skew` while x stays at `rotation`.
+    /// Expected values are the fork's own `Transformation.toMatrix()` output, dumped by
+    /// `node scripts/oracle-tween.js` (section 5) — not re-derived here.
+    // The table holds that JS output verbatim; cos(45°) happens to be FRAC_1_SQRT_2, but it
+    // must stay the literal the oracle printed rather than a std constant, so silence
+    // approx_constant (same reasoning as easing_matches_tween_js).
+    #[allow(clippy::approx_constant)]
+    #[test]
+    fn skew_matches_fork_to_matrix() {
+        let base = Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation_deg: 0.0,
+            skew_deg: 0.0,
+            opacity: 1.0,
+        };
+        // (label, transform, a, b, c, d)
+        let cases = [
+            ("skew=0 is the identity", base, 1.0, 0.0, 0.0, 1.0),
+            (
+                "skew=30",
+                Transform { skew_deg: 30.0, ..base },
+                1.0,
+                0.0,
+                -0.5,
+                0.866_025,
+            ),
+            (
+                "skew=-30 mirrors c, leaves d",
+                Transform { skew_deg: -30.0, ..base },
+                1.0,
+                0.0,
+                0.5,
+                0.866_025,
+            ),
+            (
+                "scaleY scales the skewed axis",
+                Transform { skew_deg: 30.0, scale_y: 2.0, ..base },
+                1.0,
+                0.0,
+                -1.0,
+                1.732_051,
+            ),
+            (
+                "rotation and skew compose",
+                Transform { rotation_deg: 45.0, skew_deg: 30.0, ..base },
+                0.707_107,
+                0.707_107,
+                -0.965_926,
+                0.258_819,
+            ),
+        ];
+        for (label, tr, a, b, c, d) in cases {
+            let m = tr.matrix();
+            // Fixed16 is 1/65536, so ~1.6e-5 is the representable floor.
+            for (got, want, name) in [
+                (m.a.to_f64(), a, "a"),
+                (m.b.to_f64(), b, "b"),
+                (m.c.to_f64(), c, "c"),
+                (m.d.to_f64(), d, "d"),
+            ] {
+                assert!(
+                    (got - want).abs() < 2e-5,
+                    "{label}: matrix.{name} = {got}, fork toMatrix gives {want}"
+                );
+            }
+        }
+        // The x basis is untouched by skew — that is what makes it a skew and not a rotation.
+        let skewed = Transform { skew_deg: 30.0, ..base }.matrix();
+        assert_eq!(skewed.a, base.matrix().a, "skew leaves matrix.a alone");
+        assert_eq!(skewed.b, base.matrix().b, "skew leaves matrix.b alone");
+    }
+
+    /// Skew lerps per-property like every other channel (the fork's `tweenMethod:'skew'`
+    /// branch lists it alongside x/y/scale/rotation/opacity — Tween.js:87).
+    #[test]
+    fn skew_tween_lerps_per_property() {
+        let start = Transform {
+            x: 0.0,
+            y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation_deg: 0.0,
+            skew_deg: 0.0,
+            opacity: 1.0,
+        };
+        let end = Transform { skew_deg: 30.0, ..start };
+        for t in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let mid = lerp_transform(&start, &end, t);
+            assert!((mid.skew_deg - 30.0 * t).abs() < 1e-9, "skew lerps linearly at t={t}");
+        }
+        // Midpoint against the fork's toMatrix at skew=15 (oracle-tween.js section 5).
+        let m = lerp_transform(&start, &end, 0.5).matrix();
+        assert!((m.c.to_f64() - -0.258_819).abs() < 2e-5, "midpoint matrix.c");
+        assert!((m.d.to_f64() - 0.965_926).abs() < 2e-5, "midpoint matrix.d");
+    }
+
+    /// End-to-end skew through the parser: `fixtures/skew-tween.wick` is
+    /// `motion-tween.wick`'s real engine-exported object graph with both tween keys
+    /// rewritten to isolate skew — x 90 -> 460, y 200, scale 1, rotation 0, opacity 1,
+    /// skew 0 -> 30 over the same 24-frame span. (Hand-derived like brush-donut.wick;
+    /// the upstream editor that exported motion-tween.wick omits `skew` entirely, which
+    /// is exactly why the parser defaults it to 0.)
+    #[test]
+    fn compiles_skew_tween_wick() {
+        let bytes = include_bytes!("../fixtures/skew-tween.wick");
+        let swf = compile_wick(bytes).expect("compile skew-tween.wick");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let places: Vec<&PlaceObject> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(po) => Some(po.as_ref()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(places.len(), 24, "one placement per frame of the span");
+
+        // Frame 1: skew 0 -> an unskewed matrix.
+        let first = places[0].matrix.unwrap();
+        assert!(first.c.to_f64().abs() < 2e-5, "frame 1 skew 0 -> c = 0");
+        assert!((first.d.to_f64() - 1.0).abs() < 2e-5, "frame 1 d = scaleY");
+
+        // Frame 24: skew 30 -> the fork's toMatrix values.
+        let last = places[places.len() - 1].matrix.unwrap();
+        assert!((last.c.to_f64() - -0.5).abs() < 2e-5, "frame 24 skew 30 -> c");
+        assert!((last.d.to_f64() - 0.866_025).abs() < 2e-5, "frame 24 skew 30 -> d");
+        assert!((last.a.to_f64() - 1.0).abs() < 2e-5, "skew never touches a");
+        assert!(last.b.to_f64().abs() < 2e-5, "skew never touches b");
+
+        // And it gets there monotonically — c decreases every frame, no snap.
+        let cs: Vec<f64> = places
+            .iter()
+            .map(|p| p.matrix.unwrap().c.to_f64())
+            .collect();
+        for w in cs.windows(2) {
+            assert!(w[1] < w[0], "c decreases monotonically: {w:?}");
+        }
     }
 
     /// Phase 1c: the baked tween places a matrix + CXFORM on every frame.
@@ -2368,6 +2532,7 @@ mod tests {
                 scale_x: 1.0,
                 scale_y: 1.0,
                 rotation_deg: 0.0,
+                skew_deg: 0.0,
                 opacity: 1.0,
             },
             layers: vec![Layer {

@@ -62,3 +62,34 @@ console.log("  the fork's scaleX stays >=0 and instead SNAPS rotation 0->180 at 
 
 console.log("\n=== 4. DEAD skew.x===0 GUARD: skew is a Number, so skew.x is undefined ===");
 console.log("  (0).x =", (0).x, " -> (skew.x === 0) is", ((0).x === 0), "-> guard never fires, always takes else.");
+
+// ---- toMatrix: the RENDER matrix, verbatim from engine/src/Transformation.js:102 ----
+// View.Clip.js:176 does `group.matrix.set(transformation.toMatrix())`, so this — not the
+// paper round-trip above — defines what skew MEANS on screen. twip's Transform::matrix()
+// reproduces it; the numbers below are the expected values pasted into the Rust tests.
+function toMatrix({ x, y, scaleX, scaleY, rotation, skew }) {
+  const rotationX = rotation * Math.PI / 180,
+        rotationY = (skew + rotation) * Math.PI / 180;
+  const a = scaleX * Math.cos(rotationX),
+        b = scaleX * Math.sin(rotationX),
+        d = scaleY * Math.cos(rotationY),
+        c = -scaleY * Math.sin(rotationY);
+  return [a, b, c, d, x, y];
+}
+
+console.log("\n=== 5. SKEW -> RENDER MATRIX (Transformation.toMatrix, what the fork draws) ===");
+const skewCases = [
+  ["identity, skew=0", { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skew: 0 }],
+  ["skew=30", { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skew: 30 }],
+  ["skew=-30 (mirror of the above)", { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skew: -30 }],
+  ["skew=30 scaleY=2", { x: 0, y: 0, scaleX: 1, scaleY: 2, rotation: 0, skew: 30 }],
+  ["rot=45 skew=30", { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 45, skew: 30 }],
+  ["skew tween midpoint 0->30", { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, skew: 15 }],
+];
+for (const [label, s] of skewCases) {
+  const [a, b, c, d] = toMatrix(s).map((v) => Math.round(v * 1e6) / 1e6);
+  console.log(`  ${label.padEnd(32)} a=${a}  b=${b}  c=${c}  d=${d}`);
+}
+console.log("  determinant is scaleX*scaleY*cos(skew): area SHRINKS as skew grows, and");
+console.log("  skew=+-90 collapses it to zero. Signed skew round-trips through fromMatrix");
+console.log("  (skew = rotationY - rotationX) with no decompose, unlike the paper path above.");

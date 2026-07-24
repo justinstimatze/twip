@@ -133,9 +133,28 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
   The intentional divergence is pinned by `negative_scale_flip_tween_stays_signed_and_finite`
   and `rotation_tween_through_90_degrees_stays_finite` so a future "match the fork" change can't
   silently reintroduce the bug.
-  KNOWN GAP: twip's `Transform` has no skew field, so twip currently DROPS skew (the fork lerps
-  it). Skew is rare and dropping it removes the decompose fragility; adding signed skew is a
-  separate decision if a real fixture needs it.
+  SKEW — GAP CLOSED 2026-07-24. `Transform` carries a signed `skew_deg`, parsed from the
+  clip/tween `transformation.skew` (absent in everything the upstream editor writes, so it
+  defaults to 0; the fork serializes it via `Transformation.values`). `Transform::matrix()`
+  reproduces the fork's own `Transformation.toMatrix()` (engine/src/Transformation.js:102),
+  which is what its renderer feeds paper.js (`View.Clip.js:176`
+  `group.matrix.set(transformation.toMatrix())`): the x basis stays at `rotation`, the y basis
+  rotates to `rotation + skew`, i.e. `a = sx·cos r`, `b = sx·sin r`, `c = −sy·sin(r+k)`,
+  `d = sy·cos(r+k)`. At skew=0 that collapses to the old scale+rotate — all 6 pre-existing
+  goldens re-render bit-identical (0 outliers). Signed skew round-trips through `fromMatrix`
+  (`skew = rotationY − rotationX`) with no paper.js decompose, so it adds none of the
+  round-trip fragility above. Skew lerps per-property like every other channel (the fork's
+  `tweenMethod:'skew'` branch lists it alongside x/y/scale/rotation/opacity, Tween.js:87);
+  `fullRotations` still applies to rotation only. Expected matrix values come from the fork's
+  JS (`node scripts/oracle-tween.js` section 5), not re-derived. Pinned by
+  `skew_matches_fork_to_matrix`, `skew_tween_lerps_per_property`, `compiles_skew_tween_wick`,
+  and a 7th golden — `fixtures/skew-tween.wick` frame 24 renders a parallelogram, the one
+  failure mode (a transposed or sign-flipped skew term) that still parses as a valid matrix.
+  The vendored editor authors skew for real: `Inspector.jsx:518` renderClipSkew (id
+  `inspector-clip-skew`) plus a "Skew Rotate" toggle (`:705`) that flips `tweenMethod`
+  between 'skew' and 'normal'. twip always takes the 'skew' path, so that toggle is a
+  user-visible control twip DELIBERATELY ignores — flipping it changes the editor preview
+  but not the export, and the export is the one that isn't NaN at scaleX=0.
   Opacity ⇒ PlaceObject color_transform (CXFORM alpha multiply) per baked frame, or fades
   export opaque. 27 easing functions in Tween.js must match numerically — generate expected
   values by CALLING THE FORK'S OWN JS (small Node script dumping JSON), don't re-derive.
@@ -429,11 +448,14 @@ or tweened `.wick`. The queue follows the risk, not the phase numbers.
       (re)writes goldens. Comparison ported from ruffle's `tests/framework`
       image_comparison: per-channel `abs_diff > tolerance` → outlier, fail when
       `outliers > max_outliers` (tolerance 2, max_outliers 0). Shared bless/check path.
-    * **6 static goldens** blessed (`tests/goldens/*.png`): test1, frame-by-frame,
-      multi-layer, brush-donut, frame-stop, nested-clip. Tweens/opacity excluded from
+    * **Goldens** blessed (`tests/goldens/*.png`): test1, frame-by-frame, multi-layer,
+      brush-donut, frame-stop, nested-clip — all static frame 0 — plus skew-tween frame 24
+      (added 2026-07-24 with the skew field; a wrong skew term parses fine and only shows
+      up as shape). Opacity compositing and motion-tween's x/y/scale are excluded from
       strict pixel comparison by design. Self-consistency re-run = **0 outliers, max
       diff 0** (bit-exact same-backend). Eyeballed: test1 (ellipse + outlined square),
-      brush-donut (blue shape WITH its center hole — planarize survives to raster).
+      brush-donut (blue shape WITH its center hole — planarize survives to raster),
+      skew-tween (blue square sheared into a parallelogram, horizontals held).
     * **CI scaffold** `.github/workflows/golden.yml` (manual `workflow_dispatch`; installs
       mesa-vulkan-drivers, builds exporter, runs the feature). SCAFFOLD — no remote yet
       (known-gap #5); a different CI lavapipe/mesa may need a one-time re-bless.

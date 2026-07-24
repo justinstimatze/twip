@@ -297,7 +297,9 @@ fn parse_tween(tween: &Value) -> Tween {
     }
 }
 
-/// A Clip's `transformation` is an inline `{x, y, scaleX, scaleY, rotation, opacity}`.
+/// A Clip's `transformation` is an inline `{x, y, scaleX, scaleY, rotation, skew, opacity}`.
+/// `skew` is absent from anything the upstream wickeditor.com engine writes; the fork
+/// serializes it (`Transformation.values`), so read it and default to 0.
 fn parse_transform(clip: &Value) -> crate::Transform {
     let t = clip.get("transformation");
     let g = |key: &str, default: f64| {
@@ -311,6 +313,7 @@ fn parse_transform(clip: &Value) -> crate::Transform {
         scale_x: g("scaleX", 1.0),
         scale_y: g("scaleY", 1.0),
         rotation_deg: g("rotation", 0.0),
+        skew_deg: g("skew", 0.0),
         opacity: g("opacity", 1.0),
     }
 }

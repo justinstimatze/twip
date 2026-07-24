@@ -40,9 +40,11 @@ struct Case {
     skipframes: u32,
 }
 
-/// The six visually-deterministic fixtures. Tweens (motion-tween) and opacity
-/// compositing are excluded from strict pixel comparison by design — the structural
-/// oracle pins tweens far tighter, and paper.js-vs-SWF opacity diverges (HANDOFF).
+/// The visually-deterministic fixtures. Opacity compositing is excluded from strict
+/// pixel comparison by design (paper.js-vs-SWF diverges — HANDOFF), as is the x/y/scale
+/// motion of motion-tween, which the structural oracle pins far tighter than pixels can.
+/// `skew-tween` frame 24 is the exception: a matrix that transposes or sign-flips its
+/// skew term still parses as a valid matrix, so shape is the only thing that catches it.
 const CASES: &[Case] = &[
     Case { name: "test1", fixture: "fixtures/test1.wick", skipframes: 0 },
     Case { name: "frame-by-frame", fixture: "fixtures/frame-by-frame.wick", skipframes: 0 },
@@ -50,6 +52,7 @@ const CASES: &[Case] = &[
     Case { name: "brush-donut", fixture: "fixtures/brush-donut.wick", skipframes: 0 },
     Case { name: "frame-stop", fixture: "fixtures/frame-stop.wick", skipframes: 0 },
     Case { name: "nested-clip", fixture: "fixtures/nested-clip.wick", skipframes: 0 },
+    Case { name: "skew-tween", fixture: "fixtures/skew-tween.wick", skipframes: 23 },
 ];
 
 fn repo_root() -> PathBuf {
