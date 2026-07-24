@@ -391,7 +391,11 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
             line_style: line_idx,
             new_styles: None,
         })));
-        let last = if ring_closes { ring.len() } else { ring.len() - 1 };
+        let last = if ring_closes {
+            ring.len()
+        } else {
+            ring.len() - 1
+        };
         for i in 0..last {
             let (cx, cy) = ring[i];
             let (nx, ny) = ring[(i + 1) % ring.len()]; // wraps to the start only when closing
@@ -913,10 +917,7 @@ fn compile_timeline(
                         nested_handlers.len()
                     );
                 }
-                let num_frames = body
-                    .iter()
-                    .filter(|t| matches!(t, Tag::ShowFrame))
-                    .count() as u16;
+                let num_frames = body.iter().filter(|t| matches!(t, Tag::ShowFrame)).count() as u16;
                 let id = *next_id;
                 *next_id += 1;
                 defs.push(Tag::DefineSprite(swf::Sprite {
@@ -1237,10 +1238,22 @@ mod tests {
         use swf::LineCapStyle;
         for tag in &parsed.tags {
             if let Tag::DefineShape(shape) = tag {
-                assert_eq!(shape.styles.fill_styles.len(), 1, "each shape keeps its fill");
-                assert_eq!(shape.styles.line_styles.len(), 1, "each shape gains a stroke");
+                assert_eq!(
+                    shape.styles.fill_styles.len(),
+                    1,
+                    "each shape keeps its fill"
+                );
+                assert_eq!(
+                    shape.styles.line_styles.len(),
+                    1,
+                    "each shape gains a stroke"
+                );
                 let ls = &shape.styles.line_styles[0];
-                assert_eq!(ls.width(), Twips::from_pixels(1.0), "default strokeWidth 1px");
+                assert_eq!(
+                    ls.width(),
+                    Twips::from_pixels(1.0),
+                    "default strokeWidth 1px"
+                );
                 assert_eq!(
                     *ls.fill_style(),
                     FillStyle::Color(Color::from_rgb(0x000000, 255)),
@@ -1348,7 +1361,10 @@ mod tests {
             .iter()
             .position(|t| matches!(t, Tag::ShowFrame))
             .unwrap();
-        assert!(do_idx < first_sf, "stop() runs on frame 1, before its ShowFrame");
+        assert!(
+            do_idx < first_sf,
+            "stop() runs on frame 1, before its ShowFrame"
+        );
     }
 
     /// Phase 1 depth mapping: a real two-layer `.wick`. Wick layer index 0 is frontmost,
@@ -1525,11 +1541,17 @@ mod tests {
         assert_eq!(shape.styles.line_styles.len(), 1, "one line style");
         let ls = &shape.styles.line_styles[0];
         assert_eq!(ls.width(), Twips::from_pixels(4.0));
-        assert_eq!(*ls.fill_style(), FillStyle::Color(Color::from_rgb(0xff0000, 255)));
+        assert_eq!(
+            *ls.fill_style(),
+            FillStyle::Color(Color::from_rgb(0xff0000, 255))
+        );
         assert_eq!(ls.start_cap(), LineCapStyle::Round);
         assert_eq!(ls.end_cap(), LineCapStyle::Round);
         assert_eq!(ls.join_style(), LineJoinStyle::Bevel);
-        assert!(!ls.allow_close(), "open path does not auto-close the stroke");
+        assert!(
+            !ls.allow_close(),
+            "open path does not auto-close the stroke"
+        );
 
         let sc = first_style_change(&shape);
         assert_eq!(sc.fill_style_1, None, "no fill index");
@@ -1561,7 +1583,11 @@ mod tests {
         assert_eq!(shape.styles.line_styles.len(), 1, "one line");
         let ls = &shape.styles.line_styles[0];
         assert_eq!(ls.width(), Twips::from_pixels(2.0));
-        assert_eq!(ls.start_cap(), LineCapStyle::None, "paper.js butt -> SWF no cap");
+        assert_eq!(
+            ls.start_cap(),
+            LineCapStyle::None,
+            "paper.js butt -> SWF no cap"
+        );
         assert_eq!(
             ls.join_style(),
             LineJoinStyle::Miter(Fixed8::from_f64(10.0))
@@ -1603,10 +1629,7 @@ mod tests {
             a0.signum() != a1.signum(),
             "outer and hole wind opposite ({a0} vs {a1})"
         );
-        assert!(
-            a0.abs() > a1.abs(),
-            "index 0 is the larger outer boundary"
-        );
+        assert!(a0.abs() > a1.abs(), "index 0 is the larger outer boundary");
         assert_eq!(a1.abs(), 2 * 40 * 40, "the 40x40 hole is preserved");
     }
 
@@ -1696,7 +1719,10 @@ mod tests {
             })
             .collect();
         assert_eq!(sprites.len(), 1, "one clip -> one DefineSprite");
-        assert_eq!(sprites[0].num_frames, 2, "the sprite's own 2-keyframe timeline");
+        assert_eq!(
+            sprites[0].num_frames, 2,
+            "the sprite's own 2-keyframe timeline"
+        );
         // The sprite body is the nested control stream: 2 shapes' worth of places + 2 ShowFrames.
         let inner_shows = sprites[0]
             .tags
@@ -1954,7 +1980,10 @@ mod tests {
             .iter()
             .map(|&x| Twips::from_pixels(x).get())
             .collect();
-        assert_eq!(txs, expect, "one Place + four Modify, linearly interpolated x");
+        assert_eq!(
+            txs, expect,
+            "one Place + four Modify, linearly interpolated x"
+        );
     }
 
     #[test]
@@ -2094,14 +2123,26 @@ mod tests {
             scale_x: -1.0,
             ..start
         };
-        for (t, want_sx) in [(0.0, 1.0), (0.25, 0.5), (0.5, 0.0), (0.75, -0.5), (1.0, -1.0)] {
+        for (t, want_sx) in [
+            (0.0, 1.0),
+            (0.25, 0.5),
+            (0.5, 0.0),
+            (0.75, -0.5),
+            (1.0, -1.0),
+        ] {
             let mid = lerp_transform(&start, &end, t);
-            assert!((mid.scale_x - want_sx).abs() < 1e-9, "scaleX lerps linearly at t={t}");
+            assert!(
+                (mid.scale_x - want_sx).abs() < 1e-9,
+                "scaleX lerps linearly at t={t}"
+            );
             // rotation=0, so matrix.a = scaleX*cos(0) = scaleX: the signed scale is kept,
             // not turned into a 180deg rotation the way the fork's decompose does.
             let a = mid.matrix().a.to_f64();
             assert!(a.is_finite(), "matrix.a finite at t={t}");
-            assert!((a - want_sx).abs() < 1e-9, "matrix.a keeps signed scaleX at t={t}");
+            assert!(
+                (a - want_sx).abs() < 1e-9,
+                "matrix.a keeps signed scaleX at t={t}"
+            );
         }
     }
 
@@ -2125,7 +2166,10 @@ mod tests {
         };
         for t in [0.0, 0.25, 0.5, 0.75, 1.0] {
             let mid = lerp_transform(&start, &end, t);
-            assert!((mid.rotation_deg - 180.0 * t).abs() < 1e-9, "rotation lerps linearly at t={t}");
+            assert!(
+                (mid.rotation_deg - 180.0 * t).abs() < 1e-9,
+                "rotation lerps linearly at t={t}"
+            );
             let m = mid.matrix();
             for v in [m.a.to_f64(), m.b.to_f64(), m.c.to_f64(), m.d.to_f64()] {
                 assert!(v.is_finite(), "matrix component finite at t={t}");
@@ -2160,7 +2204,10 @@ mod tests {
             ("skew=0 is the identity", base, 1.0, 0.0, 0.0, 1.0),
             (
                 "skew=30",
-                Transform { skew_deg: 30.0, ..base },
+                Transform {
+                    skew_deg: 30.0,
+                    ..base
+                },
                 1.0,
                 0.0,
                 -0.5,
@@ -2168,7 +2215,10 @@ mod tests {
             ),
             (
                 "skew=-30 mirrors c, leaves d",
-                Transform { skew_deg: -30.0, ..base },
+                Transform {
+                    skew_deg: -30.0,
+                    ..base
+                },
                 1.0,
                 0.0,
                 0.5,
@@ -2176,7 +2226,11 @@ mod tests {
             ),
             (
                 "scaleY scales the skewed axis",
-                Transform { skew_deg: 30.0, scale_y: 2.0, ..base },
+                Transform {
+                    skew_deg: 30.0,
+                    scale_y: 2.0,
+                    ..base
+                },
                 1.0,
                 0.0,
                 -1.0,
@@ -2184,7 +2238,11 @@ mod tests {
             ),
             (
                 "rotation and skew compose",
-                Transform { rotation_deg: 45.0, skew_deg: 30.0, ..base },
+                Transform {
+                    rotation_deg: 45.0,
+                    skew_deg: 30.0,
+                    ..base
+                },
                 0.707_107,
                 0.707_107,
                 -0.965_926,
@@ -2207,7 +2265,11 @@ mod tests {
             }
         }
         // The x basis is untouched by skew — that is what makes it a skew and not a rotation.
-        let skewed = Transform { skew_deg: 30.0, ..base }.matrix();
+        let skewed = Transform {
+            skew_deg: 30.0,
+            ..base
+        }
+        .matrix();
         assert_eq!(skewed.a, base.matrix().a, "skew leaves matrix.a alone");
         assert_eq!(skewed.b, base.matrix().b, "skew leaves matrix.b alone");
     }
@@ -2225,14 +2287,23 @@ mod tests {
             skew_deg: 0.0,
             opacity: 1.0,
         };
-        let end = Transform { skew_deg: 30.0, ..start };
+        let end = Transform {
+            skew_deg: 30.0,
+            ..start
+        };
         for t in [0.0, 0.25, 0.5, 0.75, 1.0] {
             let mid = lerp_transform(&start, &end, t);
-            assert!((mid.skew_deg - 30.0 * t).abs() < 1e-9, "skew lerps linearly at t={t}");
+            assert!(
+                (mid.skew_deg - 30.0 * t).abs() < 1e-9,
+                "skew lerps linearly at t={t}"
+            );
         }
         // Midpoint against the fork's toMatrix at skew=15 (oracle-tween.js section 5).
         let m = lerp_transform(&start, &end, 0.5).matrix();
-        assert!((m.c.to_f64() - -0.258_819).abs() < 2e-5, "midpoint matrix.c");
+        assert!(
+            (m.c.to_f64() - -0.258_819).abs() < 2e-5,
+            "midpoint matrix.c"
+        );
         assert!((m.d.to_f64() - 0.965_926).abs() < 2e-5, "midpoint matrix.d");
     }
 
@@ -2266,8 +2337,14 @@ mod tests {
 
         // Frame 24: skew 30 -> the fork's toMatrix values.
         let last = places[places.len() - 1].matrix.unwrap();
-        assert!((last.c.to_f64() - -0.5).abs() < 2e-5, "frame 24 skew 30 -> c");
-        assert!((last.d.to_f64() - 0.866_025).abs() < 2e-5, "frame 24 skew 30 -> d");
+        assert!(
+            (last.c.to_f64() - -0.5).abs() < 2e-5,
+            "frame 24 skew 30 -> c"
+        );
+        assert!(
+            (last.d.to_f64() - 0.866_025).abs() < 2e-5,
+            "frame 24 skew 30 -> d"
+        );
         assert!((last.a.to_f64() - 1.0).abs() < 2e-5, "skew never touches a");
         assert!(last.b.to_f64().abs() < 2e-5, "skew never touches b");
 
@@ -2402,7 +2479,8 @@ mod tests {
 
     #[test]
     fn gotoandstop_emits_bare_gotoframe() {
-        let swf = compile_document(&doc_with_frame_script("this.gotoAndStop(3);")).expect("compile");
+        let swf =
+            compile_document(&doc_with_frame_script("this.gotoAndStop(3);")).expect("compile");
         let buf = swf::decompress_swf(&swf[..]).expect("decompress");
         let parsed = swf::parse_swf(&buf).expect("parse");
         let bytes = parsed
@@ -2507,7 +2585,10 @@ mod tests {
         assert_eq!(mk("mousepressed"), vec![FrameCmd::GotoAndPlay(0)]);
         assert_eq!(mk("mouseclick"), vec![FrameCmd::GotoAndPlay(0)]);
         // A frame-event script is not a clip action.
-        assert!(mk("default").is_empty(), "default is a frame script, not a click");
+        assert!(
+            mk("default").is_empty(),
+            "default is a frame script, not a click"
+        );
     }
 
     #[test]
@@ -2566,17 +2647,25 @@ mod tests {
         let parsed = swf::parse_swf(&buf).expect("parse");
 
         let (events, actions) = first_clip_action(&parsed);
-        assert!(events.contains(ClipEventFlag::PRESS), "handler fires on PRESS");
+        assert!(
+            events.contains(ClipEventFlag::PRESS),
+            "handler fires on PRESS"
+        );
         assert_eq!(actions, vec![Action::Stop], "mousepressed stop() -> Stop");
 
         // The clip action rides on the sprite's initial Place, not a Modify.
-        let placed_sprite = parsed.tags.iter().any(|t| matches!(
-            t,
-            Tag::PlaceObject(po)
-                if po.clip_actions.is_some()
-                    && matches!(po.action, PlaceObjectAction::Place(_))
-        ));
-        assert!(placed_sprite, "clip actions attach to the Place, not a Modify");
+        let placed_sprite = parsed.tags.iter().any(|t| {
+            matches!(
+                t,
+                Tag::PlaceObject(po)
+                    if po.clip_actions.is_some()
+                        && matches!(po.action, PlaceObjectAction::Place(_))
+            )
+        });
+        assert!(
+            placed_sprite,
+            "clip actions attach to the Place, not a Modify"
+        );
     }
 
     /// Item 10 milestone B end-to-end: a real `.wick` whose placed clip carries a

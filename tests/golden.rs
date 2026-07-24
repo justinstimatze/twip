@@ -46,13 +46,41 @@ struct Case {
 /// `skew-tween` frame 24 is the exception: a matrix that transposes or sign-flips its
 /// skew term still parses as a valid matrix, so shape is the only thing that catches it.
 const CASES: &[Case] = &[
-    Case { name: "test1", fixture: "fixtures/test1.wick", skipframes: 0 },
-    Case { name: "frame-by-frame", fixture: "fixtures/frame-by-frame.wick", skipframes: 0 },
-    Case { name: "multi-layer", fixture: "fixtures/multi-layer.wick", skipframes: 0 },
-    Case { name: "brush-donut", fixture: "fixtures/brush-donut.wick", skipframes: 0 },
-    Case { name: "frame-stop", fixture: "fixtures/frame-stop.wick", skipframes: 0 },
-    Case { name: "nested-clip", fixture: "fixtures/nested-clip.wick", skipframes: 0 },
-    Case { name: "skew-tween", fixture: "fixtures/skew-tween.wick", skipframes: 23 },
+    Case {
+        name: "test1",
+        fixture: "fixtures/test1.wick",
+        skipframes: 0,
+    },
+    Case {
+        name: "frame-by-frame",
+        fixture: "fixtures/frame-by-frame.wick",
+        skipframes: 0,
+    },
+    Case {
+        name: "multi-layer",
+        fixture: "fixtures/multi-layer.wick",
+        skipframes: 0,
+    },
+    Case {
+        name: "brush-donut",
+        fixture: "fixtures/brush-donut.wick",
+        skipframes: 0,
+    },
+    Case {
+        name: "frame-stop",
+        fixture: "fixtures/frame-stop.wick",
+        skipframes: 0,
+    },
+    Case {
+        name: "nested-clip",
+        fixture: "fixtures/nested-clip.wick",
+        skipframes: 0,
+    },
+    Case {
+        name: "skew-tween",
+        fixture: "fixtures/skew-tween.wick",
+        skipframes: 23,
+    },
 ];
 
 fn repo_root() -> PathBuf {
@@ -104,7 +132,10 @@ fn render(case: &Case, out_dir: &Path) -> Result<PathBuf, String> {
         return Err(format!("exporter exited {status} for {}", case.name));
     }
     if !png_path.exists() {
-        return Err(format!("exporter produced no PNG at {}", png_path.display()));
+        return Err(format!(
+            "exporter produced no PNG at {}",
+            png_path.display()
+        ));
     }
     Ok(png_path)
 }
@@ -181,7 +212,10 @@ fn goldens() {
         }
         match compare(&golden, &actual) {
             Ok((outliers, max_diff)) if outliers <= MAX_OUTLIERS => {
-                eprintln!("{} ok ({outliers} outliers, max diff {max_diff})", case.name);
+                eprintln!(
+                    "{} ok ({outliers} outliers, max diff {max_diff})",
+                    case.name
+                );
             }
             Ok((outliers, max_diff)) => failures.push(format!(
                 "{}: {outliers} outliers > {MAX_OUTLIERS} allowed (max diff {max_diff}); \
@@ -193,5 +227,9 @@ fn goldens() {
         }
     }
 
-    assert!(failures.is_empty(), "golden oracle failures:\n  {}", failures.join("\n  "));
+    assert!(
+        failures.is_empty(),
+        "golden oracle failures:\n  {}",
+        failures.join("\n  ")
+    );
 }
