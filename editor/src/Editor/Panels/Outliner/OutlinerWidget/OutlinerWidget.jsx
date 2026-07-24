@@ -2,9 +2,7 @@ import React, { Component } from 'react';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
 import '../_outliner.scss';
-
-var classNames = require('classnames');
-
+import classNames from 'classnames';
 class OutlinerLayerButtons extends Component {
   render() {
     return (

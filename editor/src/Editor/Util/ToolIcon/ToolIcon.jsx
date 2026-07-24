@@ -347,9 +347,7 @@ const icons = {
   "upload-dark": iconUploadDark,
   "reverse-gradient": iconReverseGradient
 }
-
-var classNames = require('classnames');
-
+import classNames from 'classnames';
 class ToolIcon extends Component {
   getSource() {
     if (this.props.name in icons) {

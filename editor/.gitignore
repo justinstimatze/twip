@@ -36,3 +36,6 @@ engine/docs/*
 # ffmpeg.js (22MB) — upstream's video-export runtime. twip doesn't do video;
 # kept on disk for the provisional editor but out of git history.
 /public/corelibs/video
+
+# Python bytecode from dev/twip_bridge.py
+__pycache__/

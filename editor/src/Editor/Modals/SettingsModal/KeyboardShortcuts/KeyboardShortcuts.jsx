@@ -23,9 +23,7 @@ import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 import HotKeyInterface from 'Editor/hotKeyMap.js';
 
 import './_keyboardshortcuts.scss';
-
-var classNames = require('classnames'); 
-
+import classNames from 'classnames';
 class KeyboardShortcuts extends Component {
   constructor () {
     super();

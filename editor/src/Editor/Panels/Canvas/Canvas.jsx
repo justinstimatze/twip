@@ -22,7 +22,6 @@ import { DropTarget } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 
 import './_canvas.scss';
-import styles from './_canvas.scss';
 
 class Canvas extends Component {
   constructor (props) {
@@ -47,7 +46,9 @@ class Canvas extends Component {
     if(this.currentAttachedProject === project) return;
     this.currentAttachedProject = project;
 
-    project.view.canvasBGColor = styles.editorCanvasBorder;
+    // $editor-canvas-border in Editor/_wickbrand.scss (was read via the scss :export
+    // block, which Vite only exposes for CSS modules — inlined during the CRA->Vite move).
+    project.view.canvasBGColor = '#6A6A6A';
     project.view.canvasContainer = this.canvasContainer.current;
     project.view.resize();
 

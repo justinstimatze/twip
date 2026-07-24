@@ -25,9 +25,7 @@ import EditorSettings from './EditorSettings/EditorSettings';
 import KeyboardShortcuts from './KeyboardShortcuts/KeyboardShortcuts';
 
 import './_settingsmodal.scss';
-
-var classNames = require("classnames");
-
+import classNames from 'classnames';
 class SettingsModal extends Component {
   renderProjectSettings = () => {
     return (

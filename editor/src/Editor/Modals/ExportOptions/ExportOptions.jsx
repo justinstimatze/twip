@@ -25,9 +25,7 @@ import ObjectInfo from '../Util/ObjectInfo/ObjectInfo';
 import TabbedInterface from 'Editor/Util/TabbedInterface/TabbedInterface';
 
 import './_exportoptions.scss';
-
-let classNames=require("classnames");
-
+import classNames from 'classnames';
 class ExportOptions extends Component {
   constructor (props) {
     super(props);

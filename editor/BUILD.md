@@ -1,29 +1,28 @@
 # Building the twip editor fork
 
-This is a fork of [StickmanRed/wick-editor](https://github.com/StickmanRed/wick-editor),
-a Create React App (react-scripts 2.0.5 / webpack 4). It builds **only on Node 14**. Do not
-attempt a modern-Node migration — upstream's own `upgrading-react` branch died in Feb 2021,
-and the +54 StickmanRed commits changed zero build config.
+Fork of [StickmanRed/wick-editor](https://github.com/StickmanRed/wick-editor). Originally a
+Create React App (react-scripts 2.0.5 / webpack 4, Node-14-only); **migrated to Vite 6 + pnpm**
+when it was vendored into the twip monorepo, so it builds on current Node. React stays at 16 —
+the ~40 vendored UI libraries predate React 18.
 
 ## Prerequisites
 
-- `nvm` (the repo pins Node via `.nvmrc` → 14)
-- Node 14 brings npm 6, which is required: npm 7+ rewrites the webpack-4 lockfile and breaks
-  the build.
+- **pnpm** — pinned as `pnpm@10.34.4` via `package.json` `packageManager` (`corepack enable`
+  fetches the right version).
+- **Node 20+** — `.nvmrc` → 22.
 
-## First build
+## Install & run
 
 ```
-nvm install 14        # once
-nvm use               # reads .nvmrc
-npm install --ignore-scripts   # --ignore-scripts skips the electron-builder postinstall
-npm run build         # CRA production build -> build/
+pnpm install          # honors .npmrc (see the hoist note below)
+pnpm dev              # Vite dev server on http://localhost:3000
+pnpm build            # production build -> build/
+pnpm preview          # serve the built build/ locally
 ```
 
-`node-sass` 4.14.1 downloads a prebuilt binding for the Node 14 ABI (module version 83);
-this is the specific reason Node 14 is pinned. `--ignore-scripts` is safe for browser-only
-work — the only postinstall is `electron-builder install-app-deps`, which is desktop-packaging
-only.
+`.npmrc` sets `shamefully-hoist=true`: this legacy app imports a few transitive deps directly
+(e.g. `brace` via `react-ace`), so it needs the flat `node_modules` layout it was written for.
+SCSS compiles via `sass` (dart-sass) — no native binding, no Node-ABI pin.
 
 ## The committed engine bundle
 
@@ -48,15 +47,24 @@ unzip ruffle-nightly-*-web-selfhosted.zip -d public/corelibs/ruffle
 The current dev build uses a stock nightly. The golden-PNG test oracle later pins a specific
 Ruffle revision; the preview player does not need to match it.
 
+## SWF export in dev (the twip bridge)
+
+The **SWF** button turns the editor's `.wick` document into a playable `.swf` via the `twip`
+compiler. The browser can't shell out, so the dev path POSTs the `.wick` to a throwaway local
+bridge that runs the CLI and hands back the `.swf`:
+
+```
+cargo build --release --bin twip     # once, from the twip crate root (the parent dir)
+python3 dev/twip_bridge.py           # serves on http://127.0.0.1:8752
+```
+
+The bridge locates the release binary itself — vendored layout `../target/release/twip` first,
+then a sibling `../twip/target/release/twip` — or set `TWIP_BIN` to override. The desktop target
+links the compiler as an in-process Rust call instead (`invoke('compile_swf', …)` under a Tauri 2
+shell); see the twip HANDOFF for the integration decisions.
+
 ## Serving a build
 
-CRA sets `homepage` so built assets use absolute `/wick-editor/` paths. Either serve the parent
-directory, or rebuild with `homepage: "."` for a relocatable bundle.
-
-## Where the twip compiler plugs in
-
-The Export button shells to / calls the `twip` compiler to turn the editor's `.wick` document
-into a playable `.swf`. This editor is being vendored into the twip repo (monorepo, editor under
-`twip/editor/`). The dev path posts the `.wick` to a throwaway local bridge (`dev/twip_bridge.py`)
-that runs the `twip` CLI; the desktop target is a Tauri 2 shell that links the compiler as an
-in-process Rust call. See the twip HANDOFF for the integration decisions.
+`pnpm build` emits `build/` with root-absolute asset paths (`/assets/…`); serve it from a domain
+or path root (the Tauri shell and `pnpm preview` both do). To serve under a sub-path, set `base`
+in `vite.config.mjs`.

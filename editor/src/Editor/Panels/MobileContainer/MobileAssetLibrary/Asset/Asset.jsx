@@ -23,9 +23,7 @@ import './_asset.scss';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
-
-var classNames = require('classnames');
-
+import classNames from 'classnames';
 const assetSource = {
   beginDrag(props, monitor, component) {
     // Return the data describing the dragged item

@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { isMobile } from 'react-device-detect';
-
-let classNames = require('classnames');
-
+import classNames from 'classnames';
 /**
  * Wick Button
  * 

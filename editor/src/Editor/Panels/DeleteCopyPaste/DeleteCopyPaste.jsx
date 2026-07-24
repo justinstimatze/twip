@@ -3,9 +3,7 @@ import React from 'react';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 import '../CanvasTransforms/_canvastransforms.scss';
 import './_deletecopypaste.scss';
-
-var classNames = require('classnames');
-
+import classNames from 'classnames';
 export default function DeleteCopyPaste (props) {
 
     return (

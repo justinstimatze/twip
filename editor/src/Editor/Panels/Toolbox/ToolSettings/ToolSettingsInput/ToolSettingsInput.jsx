@@ -24,9 +24,7 @@ import SettingsNumericSlider from './SettingsNumericSlider/SettingsNumericSlider
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
 import './_toolsettingsinput.scss';
-
-var classNames = require("classnames");
-
+import classNames from 'classnames';
 class ToolSettingsInput extends Component {
   renderNumericInput = () => {
     return (

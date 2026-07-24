@@ -22,9 +22,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import WickModal from 'Editor/Modals/WickModal/WickModal';
 
 import './_opensourcenotices.scss';
-
-var classNames = require("classnames");
-
+import classNames from 'classnames';
 class OpenSourceNotices extends Component {
     render () {
         return (

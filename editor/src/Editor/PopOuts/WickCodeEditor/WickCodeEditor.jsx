@@ -62,9 +62,7 @@ const editorThemes = [
     value: 'github',
     label: 'Github',
   }]
-
-let classNames = require('classnames');
-
+import classNames from 'classnames';
 export default function WickCodeEditor(props) {
 
   const [addScriptTab, setAddScriptTab] = useState('Mouse');

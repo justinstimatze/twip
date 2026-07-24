@@ -56,10 +56,8 @@ import WickCodeEditor from './PopOuts/WickCodeEditor/WickCodeEditor';
 
 import EditorWrapper from './EditorWrapper';
 
-const { version } = require('../../package.json');
-
-var classNames = require('classnames');
-
+import { version } from '../../package.json';
+import classNames from 'classnames';
 class Editor extends EditorCore {
   constructor () {
     super();

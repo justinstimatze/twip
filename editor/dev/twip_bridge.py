@@ -10,8 +10,9 @@ Tauri desktop shell makes the compile an in-process Rust call — do not grow it
     GET  /health    -> 200 "ok"
 
 Env:
-    TWIP_BIN   path to the release twip binary (default: ../twip/target/release/twip
-               relative to this repo, i.e. the sibling twip checkout)
+    TWIP_BIN   path to the release twip binary. If unset, the bridge searches (in order):
+               the vendored layout — editor/ inside the twip crate -> ../target/release/twip,
+               then the sibling layout — a separate twip checkout -> ../twip/target/release/twip.
     TWIP_PORT  listen port (default 8752)
 """
 import http.server
@@ -20,9 +21,29 @@ import subprocess
 import sys
 import tempfile
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_BIN = os.path.normpath(os.path.join(REPO, "..", "twip", "target", "release", "twip"))
-TWIP_BIN = os.environ.get("TWIP_BIN", DEFAULT_BIN)
+EDITOR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Release-binary locations, most-specific first:
+#   vendored: editor/ lives inside the twip crate    -> ../target/release/twip
+#   sibling:  a separate twip checkout beside editor  -> ../twip/target/release/twip
+_BIN_CANDIDATES = [
+    os.path.normpath(os.path.join(EDITOR_DIR, "..", "target", "release", "twip")),
+    os.path.normpath(os.path.join(EDITOR_DIR, "..", "twip", "target", "release", "twip")),
+]
+
+
+def _resolve_bin():
+    """(binary_path, paths_tried) — env override wins, else first existing candidate,
+    else the vendored path so the not-found error names the canonical location."""
+    env = os.environ.get("TWIP_BIN")
+    if env:
+        return env, [env]
+    for cand in _BIN_CANDIDATES:
+        if os.path.exists(cand):
+            return cand, _BIN_CANDIDATES
+    return _BIN_CANDIDATES[0], _BIN_CANDIDATES
+
+
+TWIP_BIN, _BIN_TRIED = _resolve_bin()
 PORT = int(os.environ.get("TWIP_PORT", "8752"))
 
 CORS = {
@@ -88,7 +109,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     if not os.path.exists(TWIP_BIN):
-        sys.exit(f"twip binary not found at {TWIP_BIN}; set TWIP_BIN or `cargo build --release --bin twip`")
+        tried = "\n  ".join(_BIN_TRIED)
+        sys.exit(
+            "twip release binary not found. Looked in:\n  " + tried + "\n"
+            "Build it with `cargo build --release --bin twip` from the twip crate root, "
+            "or set TWIP_BIN to its path."
+        )
     print(f"twip bridge on http://127.0.0.1:{PORT}  (binary: {TWIP_BIN})")
     http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 

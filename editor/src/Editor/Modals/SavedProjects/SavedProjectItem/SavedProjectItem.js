@@ -1,9 +1,7 @@
 import React from 'react';
 
 import './_savedprojectitem.scss';
-
-let classNames = require('classnames');
-
+import classNames from 'classnames';
 export default function SavedProjectItem(props) {
    return (
       <div onClick={props.onClick} className={classNames("saved-project-item", {selected: props.selected})}>
