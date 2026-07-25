@@ -383,6 +383,54 @@ engine bundle asking for `willReadFrequently` on a canvas it reads back a lot
 being staged *after* `pnpm build`, and vite copies `public/` into `build/` as it runs while
 `preview` serves `build/`. It passed locally only because `public/` already had Ruffle in it.
 
+## Phase 1 begun — the Inspector (2026-07-24)
+
+Everything before this was plumbing: the mobile fork pruned, twelve libraries swapped, the
+breakpoints moved, CI wired. The `@theme` block in `src/index.css` was complete and only the
+eight components in `src/ui` used it, while `src/Editor/Panels` was 4,839 lines of JSX
+against 69 stylesheets. The Inspector goes first, being the largest panel and the one that
+changes shape under the cursor. Nine `.scss` files, 464 lines, gone; `src/` is down to 58
+stylesheets and 5,591 lines.
+
+**Eight row types hand-wrote the same three class names**, which is how the widths drifted:
+`_inspectorrow.scss` carried `$row-identifier-width: 30%` plus three widths derived from it,
+and a row that wanted something else added a rule. `InspectorRow.jsx` owns that geometry now
+as `InspectorRow` / `InspectorLabel` / `InspectorField`, in the same percentages.
+
+Colours map onto tokens that already existed rather than new ones — `$editor-primary` is
+`bg-surface`, `$editor-primary-outline` is `border-surface-sunken`, `$editor-tertiary` is
+`bg-surface-hover`. Two literals stay literal (`#426180` on the active frame-picker button,
+`#05b8ff` on a script's colour bar) because neither belongs in the palette until the frame
+picker's design is settled.
+
+Four classes deleted here were already dead: `.input-divider`, `.select-inspector` and
+`.inspector-action-row` have no JSX referencing them, and **`docked-pane` matches no rule
+anywhere** — the rule is `.docked-panel` — while MenuBar, Outliner and AssetLibrary still
+carry it.
+
+**The font dropdown was the expensive find.** `_inspectorselector.scss` opened with 157
+`@import url('https://fonts.googleapis.com/…')` lines, which vite hoists into the shipped
+stylesheet, so the browser fetched all 157 before painting whether or not anyone opened the
+dropdown — measured at 157 of the 183 requests the editor made on load, 86% of them, to a
+third party. The other 296 lines were `.font-selector-<Name>` rules that the Radix swap had
+already orphaned. And the inline preview that replaced them never fired either: it tested
+`className === 'font-family'` where WickInput sends `"wick-input-select font-family"`, so the
+preview had been broken since the swap and the 157 requests were buying nothing. Now: 24
+requests on load, none to Google, and four chunked stylesheets injected when the dropdown
+opens. Options carry their own `style` and `className`, which also restores the tint on fonts
+already in the project that the swap had silently dropped.
+
+Generating `@font-face` against the 55MB of TTFs already in `public/fonts/` would drop Google
+entirely and work offline, which matters for Tauri. Measured and rejected for now: Radix
+renders all 152 options at once, and those TTFs are 55MB where Google's subsetted woff2 for
+the same faces is 2.22MB. Worth revisiting if the listbox ever virtualizes.
+
+`interact.mjs` gains an `inspector` step — the panel had no coverage at all. It draws a
+rectangle, selects it, checks the title follows the selection type and the rows render, then
+types a width and confirms the *engine* took it rather than just the input. It also retries a
+failed step once now, for the same reason `engine/tests/run.mjs` does: its assertions are
+3000ms waits and the slider step flaked here on a loaded box.
+
 ## Phase 1 — the chrome, on Tailwind + shadcn
 
 This is what most people would call "the redesign," and it is the part with no unknowns.

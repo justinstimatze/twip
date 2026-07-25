@@ -343,6 +343,24 @@ from reading the code plus a localforage dump in the browser:
    its early return never happened; the test was inverted against its own comment; and `this`
    in a plain function on `window.onbeforeunload` is `window`, whose `project` the sandbox
    deletes. Now armed only when `navigator.webdriver` is false and the build is not a dev one.
+   **PHASE 1 BEGUN 2026-07-24 — the Inspector (`013b515`, `7450c38`).** First panel off SCSS
+   and onto the `@theme` tokens, which until now only the eight components in `src/ui` used.
+   Nine stylesheets and 464 lines gone; `src/` is at 58 stylesheets / 5,591 lines, from 69 /
+   6,424. Eight row types hand-wrote the same three class names — `InspectorRow.jsx` owns that
+   geometry now (`InspectorRow` / `InspectorLabel` / `InspectorField`) in the same
+   percentages. Four classes deleted were already dead, and **`docked-pane` matches no rule
+   anywhere** (the rule is `.docked-panel`) — MenuBar, Outliner and AssetLibrary still carry
+   it. **The find: `_inspectorselector.scss` opened with 157 remote Google Font `@import`s**,
+   which vite hoists into the shipped stylesheet — 157 of the 183 requests the editor made on
+   load, to a third party, whether or not anyone opened the font dropdown. Now 24 requests and
+   none to Google; four chunked stylesheets load when the dropdown opens. The 296 other lines
+   were `.font-selector-*` rules the Radix swap had orphaned, and the inline preview that
+   replaced them never fired either (`className === 'font-family'` vs WickInput's
+   `"wick-input-select font-family"`), so the preview had been broken since that swap and the
+   157 requests bought nothing. Local `@font-face` against the 55MB of TTFs in `public/fonts/`
+   would drop Google entirely and work offline — measured and rejected, 55MB vs 2.22MB of
+   subsetted woff2, revisit if the listbox virtualizes. `interact.mjs` has an `inspector` step
+   now (12/12) and retries a failed step once, like the engine runner.
    Scoping record follows.
 
    **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
