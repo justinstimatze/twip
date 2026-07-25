@@ -18,14 +18,32 @@
  */
 
 import React, { Component } from 'react';
-import './_toolbox.scss';
 
 import WickInput from 'Editor/Util/WickInput/WickInput';
 import ToolboxBreak from './ToolboxBreak/ToolboxBreak';
-import ToolButton from './ToolButton/ToolButton';
+import ToolButton, { TOOL_BUTTON_SIZE } from './ToolButton/ToolButton';
 import ToolSettings from './ToolSettings/ToolSettings';
 import CanvasActions from './CanvasActions/CanvasActions';
-import classNames from 'classnames';
+import { cn } from '@/lib/utils';
+
+/* One square, one gutter — every direct child of a tool row is this size. */
+const TOOLBOX_ITEM = `mx-[3px] max-w-[30px] ${TOOL_BUTTON_SIZE}`;
+
+/* Buttons and colour wells sit in rows that fill the toolbox's height. */
+const TOOL_ROW = 'flex h-full flex-row items-center';
+
+/* .85 of a tool square, so a colour well reads as a swatch rather than a button. */
+const COLOR_WELL = 'flex size-[25.5px] min-w-[25.5px] cursor-pointer items-center overflow-hidden';
+
+/* The medium toolbox is two half-height rows with a rule between them. */
+const MEDIUM_ROW = 'flex h-1/2 w-full flex-row items-center border-b-[3px] border-surface-sunken last:border-b-0';
+
+/*
+ * The outline is on the bottom and left only: the toolbox meets the menu bar above it and
+ * the window edge on the right, and a border on either would double up.
+ */
+const TOOL_BOX = 'flex h-full w-full overflow-hidden border-b-4 border-l-4 border-surface-sunken bg-surface pr-1 pl-[2px]';
+
 class Toolbox extends Component {
   constructor(props) {
     super(props);
@@ -37,7 +55,7 @@ class Toolbox extends Component {
 
     this.toolButtonProps = {
       setActiveTool: this.props.setActiveTool,
-      className: "toolbox-item",
+      className: TOOLBOX_ITEM,
       getActiveToolName: this.props.getActiveToolName,
     }
 
@@ -56,7 +74,7 @@ class Toolbox extends Component {
         {...this.toolButtonProps}
         activeTool={this.props.activeToolName}
         action={action.action}
-        className='toolbox-item'
+        className={TOOLBOX_ITEM}
         name={action.icon}
         key={i}
         tooltip={action.tooltip} />
@@ -76,7 +94,7 @@ class Toolbox extends Component {
 
   renderToolButtons = () => {
     return (
-      <div className="tool-collection-container">
+      <div className={TOOL_ROW}>
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='cursor' tooltip="Cursor" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='brush' tooltip="Brush" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='pencil' tooltip="Pencil" />
@@ -95,8 +113,8 @@ class Toolbox extends Component {
 
   renderColorPickers = () => {
     return (
-      <div className="tool-collection-container">
-        <div className="color-container toolbox-item" id="fill-color-picker-container">
+      <div className={TOOL_ROW}>
+        <div className={cn(TOOLBOX_ITEM, COLOR_WELL)} id="fill-color-picker-container">
           <WickInput
             type="color"
             color={this.props.getToolSetting('fillColor').rgba}
@@ -111,7 +129,7 @@ class Toolbox extends Component {
             lastColorsUsed={this.props.lastColorsUsed}
             />
         </div>
-        <div className="color-container toolbox-item" id="stroke-color-picker-container">
+        <div className={cn(TOOLBOX_ITEM, COLOR_WELL)} id="stroke-color-picker-container">
           <WickInput
             type="color"
             color= {this.props.getToolSetting('strokeColor').rgba}
@@ -132,8 +150,8 @@ class Toolbox extends Component {
 
   renderCanvasActions = () => {
     return (
-      <div className="toolbox-actions-right-container">
-        <div className="toolbox-actions-right">
+      <div className="ml-auto flex h-full flex-row items-center">
+        <div className="flex flex-row items-center justify-center">
 
           <div id="more-canvas-actions-popover-button">
             {this.renderToolButtonFromAction(this.props.editorActions.showMoreCanvasActions)}
@@ -152,7 +170,7 @@ class Toolbox extends Component {
 
   renderLargeToolbox = () => {
     return (
-      <div className={classNames("tool-box", "tool-box-large")}>
+      <div className={cn(TOOL_BOX, 'flex-row items-center')}>
         {this.renderToolButtons()}
 
         <ToolboxBreak/>
@@ -183,14 +201,14 @@ class Toolbox extends Component {
 
   renderMediumToolbox = () => {
     return (
-      <div className={classNames("tool-box", "tool-box-medium")}>
-        <div className="medium-toolbox-row">
+      <div className={cn(TOOL_BOX, 'h-20 flex-col')}>
+        <div className={MEDIUM_ROW}>
           {this.renderToolButtons()}
           <ToolboxBreak/>
           {this.renderColorPickers()}
           <ToolboxBreak/>
         </div>
-        <div className="medium-toolbox-row">
+        <div className={MEDIUM_ROW}>
           <ToolSettings
             activeTool={this.props.activeToolName}
             getToolSetting={this.props.getToolSetting}
@@ -212,7 +230,8 @@ class Toolbox extends Component {
 
   render() {
     return (
-      <div className="tool-box-container" aria-label="Toolbox">
+      /* tool-box-container carries no style; dev/interact.mjs checks for the toolbox by it. */
+      <div className="tool-box-container h-full w-full overflow-hidden" aria-label="Toolbox">
         {this.props.renderSize === 'large' ? this.renderLargeToolbox() : this.renderMediumToolbox()}
       </div>
     )

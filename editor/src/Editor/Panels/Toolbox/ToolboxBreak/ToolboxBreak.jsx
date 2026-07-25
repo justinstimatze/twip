@@ -20,15 +20,13 @@
 
 import React, { Component } from 'react';
 
-import './_toolboxbreak.scss';
-
 /*
  * The `vertical` and `className` props are gone with the small toolbox — the only tree
  * that passed either.
  */
 class ToolboxBreak extends Component {
   render() {
-    return <div className="toolbox-break" />
+    return <div className="mx-2 h-[70%] w-[3px] min-w-[3px] bg-surface-sunken" />
   }
 }
 

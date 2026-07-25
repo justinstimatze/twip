@@ -21,8 +21,13 @@ import React, { Component } from 'react';
 
 import ToolSettingsInput from './ToolSettingsInput/ToolSettingsInput';
 import PopupMenu from 'Editor/Util/PopupMenu/PopupMenu';
+import { ACTIONS_ROW } from '../CanvasActions/CanvasActions';
 
-import './_toolsettings.scss';
+/* Every tool's settings sit in the same centred row; only the contents differ. */
+const SETTINGS_ROW = 'flex h-full items-center justify-center';
+
+/* The three mode pickers are the same popover with different buttons in it. */
+const MODE_WIDGET = 'm-px flex h-[35px] items-center';
 
 class ToolSettings extends Component {
   constructor(props) {
@@ -44,7 +49,7 @@ class ToolSettings extends Component {
 
   render () {
     return (
-      <div id='settings-panel-container'>
+      <div id='settings-panel-container' className='h-full flex items-center justify-center'>
         {this.renderSettings()}
       </div>
     );
@@ -63,7 +68,7 @@ class ToolSettings extends Component {
   // Selection contents and properties
   renderCursorSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderCursorTransformMode()}
       </div>
     );
@@ -71,7 +76,7 @@ class ToolSettings extends Component {
 
   renderBrushSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderBrushSize()}
         {this.renderBrushSmoothing()}
         {this.renderEnablePressure()}
@@ -83,7 +88,7 @@ class ToolSettings extends Component {
 
   renderPencilSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderStrokeWidth()}
       </div>
     );
@@ -91,7 +96,7 @@ class ToolSettings extends Component {
 
   renderEraserSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderEraserSize()}
       </div>
     );
@@ -99,7 +104,7 @@ class ToolSettings extends Component {
 
   renderRectangleSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderStrokeWidth()}
         {this.renderCornerRadius()}
       </div>
@@ -108,7 +113,7 @@ class ToolSettings extends Component {
 
   renderEllipseSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderStrokeWidth()}
       </div>
     );
@@ -116,7 +121,7 @@ class ToolSettings extends Component {
 
   renderLineSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderStrokeWidth()}
       </div>
     );
@@ -124,7 +129,7 @@ class ToolSettings extends Component {
 
   renderTextSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {/*this.renderFontSize()*/}
       </div>
     );
@@ -132,7 +137,7 @@ class ToolSettings extends Component {
 
   renderFillbucketSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderGapFillAmount()}
       </div>
     );
@@ -140,7 +145,7 @@ class ToolSettings extends Component {
 
   renderGradientToolSettings = () => {
     return (
-      <div className='settings-input-container'>
+      <div className={SETTINGS_ROW}>
         {this.renderGradientToolTransformMode()}
       </div>
     )
@@ -170,9 +175,9 @@ class ToolSettings extends Component {
             isOpen={this.props.showCursorTransformModes && !this.props.previewPlaying}
             toggle={this.props.toggleCursorTransformModes}
             target="cursor-transform-modes-popover-button"
-            className={"more-canvas-actions-popover"}>
-            <div className="cursor-transform-modes-widget">
-              <div className='actions-container'>
+            >
+            <div className={MODE_WIDGET}>
+              <div className={ACTIONS_ROW}>
                 <ToolSettingsInput
                   name='Freescale'
                   icon='cursortransformmodefreescale'
@@ -224,9 +229,9 @@ class ToolSettings extends Component {
             isOpen={this.props.showGradientToolModes && !this.props.previewPlaying}
             toggle={this.props.toggleGradientToolModes}
             target="gradient-tool-modes-popover-button"
-            className={"more-canvas-actions-popover"}>
-            <div className="gradient-tool-modes-widget">
-              <div className='actions-container'>
+            >
+            <div className={MODE_WIDGET}>
+              <div className={ACTIONS_ROW}>
                 <ToolSettingsInput
                   name='None'
                   icon='gradienttoolmodenone'
@@ -292,9 +297,9 @@ class ToolSettings extends Component {
             isOpen={this.props.showBrushModes && !this.props.previewPlaying}
             toggle={this.props.toggleBrushModes}
             target="brush-modes-popover-button"
-            className={"more-canvas-actions-popover"}>
-            <div className="brush-modes-widget">
-              <div className='actions-container'>
+            >
+            <div className={MODE_WIDGET}>
+              <div className={ACTIONS_ROW}>
                 <ToolSettingsInput
                   name='None'
                   icon='brushmodenone'

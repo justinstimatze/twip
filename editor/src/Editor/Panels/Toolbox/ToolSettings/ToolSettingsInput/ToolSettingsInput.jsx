@@ -23,8 +23,6 @@ import WickInput from 'Editor/Util/WickInput/WickInput';
 import SettingsNumericSlider from './SettingsNumericSlider/SettingsNumericSlider';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
-import './_toolsettingsinput.scss';
-import classNames from 'classnames';
 class ToolSettingsInput extends Component {
   renderNumericInput = () => {
     return (
@@ -39,7 +37,7 @@ class ToolSettingsInput extends Component {
 
   renderCheckboxInput = () => {
     return (
-      <div className="settings-checkbox-input">
+      <div className="flex size-[30px] items-center">
         <ActionButton
           icon={this.props.icon}
           isActive={() => this.props.value}
@@ -47,7 +45,7 @@ class ToolSettingsInput extends Component {
           id={"settings-input-id-" + this.props.name}
           tooltip={this.props.name}
           action={() => this.props.onChange(!this.props.value)}
-          iconClassName="toolbox-input-icon"
+          iconClassName="w-full"
           />
       </div>
     );
@@ -57,7 +55,6 @@ class ToolSettingsInput extends Component {
     return (
       <WickInput
         type="dropdown"
-        className="settings-dropdown-input"
         onChange={this.props.onChange}
         value={this.props.value}
         />
@@ -79,7 +76,7 @@ class ToolSettingsInput extends Component {
 
   render () {
     return (
-      <div className="setting-input-container">
+      <div className="mr-2 flex h-[90%] items-center justify-center">
         {this.renderInput()}
       </div>
     );

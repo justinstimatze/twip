@@ -21,8 +21,11 @@ import React, { Component } from 'react';
 import HotKeyInterface from 'Editor/hotKeyMap';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
-import './_toolbutton.scss';
 import classNames from 'classnames';
+
+/* $toolbox-max-button-size, the one dimension every toolbox square agrees on. */
+export const TOOL_BUTTON_SIZE = 'size-[30px]';
+
 class ToolButton extends Component {
   constructor (props) {
     super(props);
@@ -46,8 +49,11 @@ class ToolButton extends Component {
         secondaryAction={this.props.secondaryAction}
         tooltipPlace={this.props.tooltipPlace ? this.props.tooltipPlace : "bottom"}
         icon={this.props.name}
-        className="tool-button-select"
-        iconClassName={classNames("tool-button-icon", this.props.iconClassName)}
+        /* `!` because `.img-tool-icon` sets `height: 100%` from un-migrated SCSS, and an
+           unlayered rule outranks any Tailwind utility. The icon is a direct child of the
+           button, so there is no wrapper to put the height on instead; this comes off when
+           ToolIcon's stylesheet goes. */
+        iconClassName={classNames("h-4/5!", this.props.iconClassName)}
         dropdown={this.props.dropdown}
         />
     )
@@ -57,7 +63,9 @@ class ToolButton extends Component {
     return (
       <div
         className={this.props.className ? this.props.className : ''}>
-          <div className="tool-button-select-container">
+          {/* The canvas-action buttons come through with no wrapper className, so the
+              square lives here rather than on the parent. */}
+          <div className={TOOL_BUTTON_SIZE}>
             {this.renderSelectButton()}
           </div>
       </div>
