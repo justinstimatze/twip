@@ -189,122 +189,11 @@ $inspector-tab-background: #262626;
 $inspector-tab-background-selected: #303030;
 $inspector-tab-underline: #484747;
 
-// Set editor styles.
-a:link {
-  color: $editor-green-highlight;
-}
+/*
+ * Rules moved to _globals.scss — this file is imported by 40 stylesheets and sass inlines
+ * it at every one, so anything that emits CSS here ships 40 times. Variables only.
+ */
 
-a:hover {
-  color: $editor-green-highlight-dark;
-}
-
-a {
-  color: $editor-green-highlight;
-}
-
-a:hover {
-  color: $editor-green-highlight-dark;
-}
-
-// React Modal Smooth Transition In-Out
-.ReactModal__Overlay {
-  opacity: 0;
-  transition: opacity .5s ease-in-out;
-}
-
-.ReactModal__Overlay--after-open{
-  opacity: 1;
-}
-
-.ReactModal__Overlay--before-close{
-  opacity: 0;
-}
-
-// Modal body and overlay information.
-.modal-body {
-  border-radius: 4px;
-  background-color: $editor-modal-gray;
-  margin: 0;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  // overflow: hidden;
-  font-family: 'Nunito Sans';
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0,0,0,0.6);
-}
-
-.mobile-menu-overlay {
-  background-color: rgba(48, 48, 48, 0.95);
-}
-
-.wick-brand-arrow {
-  border: solid $wick-green;
-  border-width: 0 3px 3px 0;
-  border-radius: 2px; 
-  display: inline-block;
-  padding: 3px;
-  margin: 4px;
-}
-
-.arrow-right {
-  transform: rotate(-45deg);
-  -webkit-transform: rotate(-45deg);
-}
-
-.arrow-left {
-  transform: rotate(135deg);
-  -webkit-transform: rotate(135deg);
-}
-
-.arrow-up {
-  transform: rotate(-135deg);
-  -webkit-transform: rotate(-135deg);
-}
-
-.arrow-down {
-  transform: rotate(45deg);
-  -webkit-transform: rotate(45deg);
-}
-
-// define Bootstrap 4 button Mixins
-/*button-variant($background, $border, $hover-background: darken($background, 7.5%), $hover-border: darken($border, 10%), $active-background: darken($background, 10%), $active-border: darken($border, 12.5%))*/
-.btn-wick-warning {
-  background: $interface-warning-dark;
-  border: $interface-warning-dark;
-  color: #000;
-}
-.btn-wick-warning:hover {
-  background: darken($interface-warning-dark, 7.5%);
-  border: darken($interface-warning-dark, 7.5%);
-}
-.btn-wick-warning:active {
-  background: darken($interface-warning-dark, 12.5%);
-  border: darken($interface-warning-dark, 12.5%);
-}
-
-.btn-wick-accept {
-  background: $wick-green-dark;
-  border: $wick-green-dark;
-  color: #000;
-}
-.btn-wick-accept:hover {
-  background: darken($wick-green-dark, 7.5%);
-  border: darken($wick-green-dark, 7.5%);
-}
-.btn-wick-accept:active {
-  background: darken($wick-green-dark, 12.5%);
-  border: darken($wick-green-dark, 12.5%);
-}
 // define interface element properties
 $interface-roundness-primary: 2px;
 $interface-roundness-secondary: 4px;
@@ -313,25 +202,3 @@ $interface-input-roundness: 5px;
 $docked-title-height: 26px;
 $docked-margin: 6px;
 
-// Export some colors to be used in JS in some places (canvas, timeline)
-:export {
-  editorCanvasBorder: $editor-canvas-border;
-}
-
-button:focus, input:focus {
-  //We went with outlines to avoid sizing weirdness,
-  //borders may be good to fit around rounded elements, but 
-  //will require some finagling
-  //border: 2px solid $focus-orange !important;
-  //box-sizing: border-box;
-  outline: 2px solid $focus-orange;
-}
-
-.popover.mobile .arrow {
-  display: none;
-  height: 0;
-}
-.mobile.bs-popover-bottom {
-  margin-top: 2px;
-  margin-left: 2px;
-}

@@ -17,6 +17,19 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/*
+ * Layer order for the whole app, declared before Tailwind's import so this ordering is the
+ * one that counts. `legacy` is where vite.config.mjs puts the un-migrated stylesheets; see
+ * the comment on `legacyCssLayer` there.
+ *
+ * It sits between `base` and `components` for a reason each side of it. Above `base`,
+ * because that is Preflight — the reset that zeroes margins and strips button styling — and
+ * the old stylesheets were written expecting to beat it. Below `utilities`, because a
+ * utility written today should win over a rule the redesign is in the middle of deleting,
+ * which is not what happens when the old rules are unlayered.
+ */
+@layer theme, base, legacy, components, utilities;
+
 @import "tailwindcss";
 
 /*

@@ -1,0 +1,77 @@
+/*
+ * The global rules that used to sit at the bottom of _wickbrand.scss.
+ *
+ * _wickbrand.scss is imported by 40 stylesheets for its variables, and sass inlines the
+ * whole file at each one — so these rules were emitted 40 times over. Concatenated and
+ * unlayered that collapsed to a handful of copies; inside `@layer legacy` it does not, and
+ * the shipped stylesheet went from 76kB to 147kB. A variables file should not emit rules.
+ * This is imported once, from Editor.jsx.
+ *
+ * Twelve of the sixteen blocks that moved were dead and are not here:
+ *   .ReactModal__Overlay, --after-open, --before-close   react-modal, replaced by Radix
+ *   .btn-wick-warning / -accept and their :hover/:active  bootstrap buttons, reactstrap gone
+ *   .mobile-menu-overlay                                  the pruned Mobile* tree
+ *   .popover.mobile .arrow, .mobile.bs-popover-bottom     bootstrap popovers, same
+ * Also gone: `button:focus, input:focus { outline }`, which src/index.css already says it
+ * replaced with a single `:focus-visible` rule and then left in place — so the ring kept
+ * firing on every mouse click, which is the noise that change was meant to remove. And
+ * `:export { editorCanvasBorder }`, which no JS reads.
+ */
+
+@import 'Editor/_wickbrand.scss';
+
+a,
+a:link {
+  color: $editor-green-highlight;
+}
+
+a:hover {
+  color: $editor-green-highlight-dark;
+}
+
+.modal-body {
+  border-radius: 4px;
+  background-color: $editor-modal-gray;
+  margin: 0;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Nunito Sans';
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+// The chevron in the keyboard-shortcuts list; .arrow-* picks the direction.
+.wick-brand-arrow {
+  border: solid $wick-green;
+  border-width: 0 3px 3px 0;
+  border-radius: 2px;
+  display: inline-block;
+  padding: 3px;
+  margin: 4px;
+}
+
+.arrow-right {
+  transform: rotate(-45deg);
+}
+
+.arrow-left {
+  transform: rotate(135deg);
+}
+
+.arrow-up {
+  transform: rotate(-135deg);
+}
+
+.arrow-down {
+  transform: rotate(45deg);
+}

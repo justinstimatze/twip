@@ -20,6 +20,8 @@
 import React from 'react';
 
 import './_editor.scss';
+// The global rules that used to ride along inside _wickbrand.scss's 40 imports.
+import './_globals.scss';
 import './styles/default_theme.css';
 import './styles/default_styles.css';
 
