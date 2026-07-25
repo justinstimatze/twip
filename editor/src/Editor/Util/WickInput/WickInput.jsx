@@ -20,16 +20,13 @@
 import React, { Component } from 'react';
 import './_wickinput.scss';
 
-import Select from 'react-select';
-import 'react-dropdown/style.css';
+import { Select } from '@/ui/select';
+import { Tooltip } from '@/ui/tooltip';
 
 import ColorPicker from 'Editor/Util/ColorPicker/ColorPicker';
-import ReactTooltip from 'react-tooltip';
 import WickButton from './WickButton/WickButton';
 
-import { Input } from 'reactstrap';
 import WickTextInput from './WickTextInput/WickTextInput';
-import { pointerCannotHover } from '../pointer';
 import classNames from 'classnames';
 /**
  * Creates an input to be used in the Wick Editor
@@ -51,39 +48,25 @@ import classNames from 'classnames';
  */
 class WickInput extends Component {
   render() {
-    let tooltipID = this.props.tooltipID === undefined ? 'action-button-tooltip-nyi' : this.props.tooltipID;
+    if (!this.props.tooltip) return this.renderContent();
 
-    if (this.props.tooltip && !pointerCannotHover()) {
-      return (
-        <div
-          data-tip
-          data-for={tooltipID}
-          id={tooltipID}
-          className={classNames("wick-input-container", this.props.containerclassname)}>
-          {this.renderTooltip(tooltipID)}
+    /*
+     * `tooltipID` is accepted and ignored — react-tooltip needed an id to pair a floating
+     * <ReactTooltip> with its trigger, and Radix takes the trigger as a child instead. The
+     * prop stays in the signature so the 17 call sites don't all have to change at once.
+     *
+     * The old code also suppressed tooltips entirely when the pointer cannot hover. Radix
+     * opens on focus as well as hover and dismisses on Escape or on the next touch, so a
+     * touch user gets the label on focus rather than never — which is what the old branch
+     * cost them.
+     */
+    return (
+      <Tooltip content={this.props.tooltip} side={this.props.tooltipPlace ?? 'bottom'}>
+        <div className={classNames("wick-input-container", this.props.containerclassname)}>
           {this.renderContent()}
         </div>
-      );
-    } else {
-      return this.renderContent();
-    }
-  }
-
-  renderTooltip = (tooltipID) => {
-    // Detect if on mobile to disable tooltips.
-
-    return (
-      <ReactTooltip
-        disable={pointerCannotHover()}
-        id={tooltipID}
-        type='info'
-        place={this.props.tooltipPlace === undefined ? 'bottom' : this.props.tooltipPlace}
-        effect='solid'
-        aria-haspopup='true'
-        className="wick-tooltip">
-        <span>{this.props.tooltip}</span>
-      </ReactTooltip>
-    )
+      </Tooltip>
+    );
   }
 
   renderContent = () => {
@@ -203,45 +186,18 @@ class WickInput extends Component {
   }
 
   renderSelect = () => {
-    let value = this.props.options.find(obj => obj.value === this.props.value);
-
-    if (value === undefined) {
-      value = {
-        label: this.props.value,
-        value: this.props.value
-      }
-    }
-
+    /*
+     * `defaultValue` before, so the control was uncontrolled: it kept whatever the user
+     * last picked even when the selection changed underneath it and the prop moved on.
+     * `value` here makes it track the prop, which is what every call site already assumed.
+     */
     return (
       <Select
-        inputId={this.props.id}
-        onChange={this.props.onChange}
-        defaultValue={value}
+        id={this.props.id}
+        value={this.props.value}
         options={this.props.options}
+        onChange={this.props.onChange}
         className={classNames("wick-input-select", this.props.className)}
-        classNamePrefix={'wick-input-select'}
-        menuPortalTarget={document.body}
-        menuPosition={'fixed'}
-        styles={{
-        option: (provided, state) => {
-          let style = {
-            ...provided,
-            color: "black", 
-            fontSize: "16px",
-            height: "26px",
-            paddingTop: "0px",
-            whiteSpace: "nowrap",
-          };
-          if (this.props.className === "font-family") {
-            style.fontFamily = state.label;
-          }
-          return style;
-        }, 
-        control: (provided, state) => {
-          return {};
-        }
-        }}
-        isSearchable={false}
       />
     );
   }
@@ -265,10 +221,15 @@ class WickInput extends Component {
 
   renderRadio = () => {
     if(!this.props.name) throw new Error("WickInput radio buttons require a name.");
+    /*
+     * Was reactstrap's <Input type="radio">, which is a plain <input> plus a Bootstrap
+     * class. This was the only reactstrap use in the file, and dropping it here is most of
+     * what lets the bootstrap CSS import go.
+     */
     return (
-      <Input
-        type="radio"
+      <input
         {...this.props}
+        type="radio"
         className={classNames("wick-radio", this.props.className)}
       />
     );

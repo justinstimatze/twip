@@ -22,7 +22,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import WickInput from 'Editor/Util/WickInput/WickInput';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
-import ClipLoader from "react-spinners/ClipLoader";
+import { Spinner } from '@/ui/spinner';
 
 import './_audioplayer.scss';
 
@@ -103,10 +103,7 @@ export const AudioPlayer = ({src, loadSrc}) => {
             }
             <span className="playbutton">
                 {loading ? 
-                <ClipLoader
-                color={"#ffffff"}
-                loading={loading}
-                />
+                <Spinner size={20} className="text-white" label="Loading audio" />
                 :
                 <ActionButton 
                     action={togglePlaying}

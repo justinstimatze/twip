@@ -19,6 +19,7 @@
 
 import React, { useEffect } from 'react';
 import ErrorBoundary from './Util/ErrorBoundary';
+import { TooltipProvider } from '@/ui/tooltip';
 import { Slide } from 'react-toastify';
 import { ToastContainer } from 'react-toastify';
 import { GlobalHotKeys } from 'react-hotkeys';
@@ -45,6 +46,10 @@ export default function EditorWrapper(props) {
             fallback={ErrorPage}
             processError={(error, errorInfo) => { props.editor.autoSaveProject(() => { "Project Autosaved" }) }}
         >
+          {/* Radix tooltips need a Provider ancestor; one at the root shares the open/close
+              timing across the whole editor, so moving between adjacent buttons shows the
+              second tooltip immediately instead of re-waiting the delay. */}
+          <TooltipProvider delayDuration={200} skipDelayDuration={400}>
             <ToastContainer
                 transition={Slide}
                 position="top-right"
@@ -113,6 +118,7 @@ export default function EditorWrapper(props) {
                 />
                 {props.children}
             </div>
+          </TooltipProvider>
         </ErrorBoundary>
     )
 }
