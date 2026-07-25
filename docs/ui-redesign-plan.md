@@ -249,9 +249,46 @@ is a one-line change; what it needs is the *layout* below them, plus a re-tune o
 `Toolbox`'s three renderSize variants, which are written against the old numbers. That is
 real design work and is left for whoever picks up 1b.
 
-Still on the replacement list and untouched: reactstrap (3 files) with its bootstrap CSS,
-react-popover (`SettingsNumericSlider`), react-color (`ColorPicker`), react-toastify,
-react-hotkeys, react-ace.
+## Phase 1b status — every dependency swap but one (2026-07-24)
+
+Commits `9ba9c13`, `222fe7f`, `65eecf2`, `beeac81`, `c9b5202`. Twelve libraries out, six
+in. Production bundle 2,353 kB → 2,157 kB (gzip 663 → 638).
+
+| out | in | where |
+| --- | --- | --- |
+| reactstrap, react-popover | `@radix-ui/react-popover` | `PopupMenu`, `ColorPicker`, `SettingsNumericSlider` |
+| bootstrap | — | it was imported in nine files to style reactstrap's popover |
+| react-toastify | sonner | `Editor.toast` / `updateToast` keep their signatures |
+| react-color | react-colorful | `WickColorPicker`, `WickSwatch` |
+| react-ace (and brace) | CodeMirror 6 | `WickCodeEditor` |
+
+Three things the swaps turned up that were not on anyone's list:
+
+- **A tooltip and a popover on the same control fight each other.** Radix opens a tooltip
+  on any focus, including focus moved by script; a popover moves focus into itself when it
+  opens; and in the colour picker the first control inside has a tooltip. So opening the
+  picker popped a "Swatches" tooltip on top of it, and because a tooltip is a dismissable
+  layer and it mounted last, it swallowed the first Escape — the picker looked like it was
+  ignoring the key. The tooltip trigger now opens on focus only when the trigger matches
+  `:focus-visible`.
+- **The open-source notices modal named the wrong libraries.** 492 lines of hand-written
+  JSX, still listing react-aria-menubutton years after it left. Generated from the lockfile
+  now (`pnpm notices`, `pnpm notices:check`); the engine's vendored libraries stay by hand
+  in `notices-vendored.json`.
+- **The welcome modal is gone** with its three splash PNGs and two SVGs. It opened on every
+  load and had to be clicked away before any manual test.
+
+`dev/interact.mjs` is new and is what found the tooltip/popover fight: it opens each
+control and asserts the content appears and Escape closes it. `dev/smoke.mjs` only ever
+proved the page rendered, which says nothing about a popover that is not in the DOM until
+you click.
+
+**Still on the list: react-hotkeys.** It is the only one left and the only one that is not
+straightforwardly a swap. `hotKeyMap.js` is 717 lines whose sequence strings are also the
+strings displayed in the shortcuts settings and in every tooltip; the settings modal
+records new bindings through react-hotkeys' `recordKeyCombination`; and react-hotkeys
+ignores keystrokes typed into inputs, which tinykeys does not, so that filter has to be
+rebuilt. It works under React 19, so nothing is blocked on it.
 
 ## Phase 1 — the chrome, on Tailwind + shadcn
 

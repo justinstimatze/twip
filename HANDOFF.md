@@ -256,7 +256,7 @@ from reading the code plus a localforage dump in the browser:
      created — so every session may be writing an empty autosave, and Load would then be
      working correctly and restoring genuine emptiness. Settle it by dumping
      `objectsData.map(o => o.classname)` for the newest entry: no `Path` among them means empty.
-4. **PHASE 1a DONE 2026-07-24 (`febf3d3`, `23965a4`) — except the sub-768 layout.** The
+4. **PHASE 1a DONE 2026-07-24 (`febf3d3`, `23965a4`, `e6ec35d`) — except the sub-768 layout.** The
    editor runs on React 19, Tailwind v4 tokens, and shadcn/Radix primitives; `WickInput` is
    rewritten and four dependencies are gone (react-select, react-tooltip, react-dropdown,
    react-spinners), plus react-reflex and react-sizeme with the shell. **React 19 turned out
@@ -273,6 +273,33 @@ from reading the code plus a localforage dump in the browser:
    (`--sweep`, `--width N`, `--shot out.png`). The chrome has no unit tests, so this is the
    feedback loop — it caught every regression in this phase within seconds. Headless
    because `resize_window` is a no-op under Wayland.
+   **PHASE 1b — DEPENDENCY SWAPS DONE 2026-07-24 (`9ba9c13`, `222fe7f`, `65eecf2`,
+   `beeac81`, `c9b5202`), except react-hotkeys.** Twelve libraries out across 1a+1b, six in;
+   production bundle 2,353 kB → 2,157 kB (gzip 663 → 638). reactstrap and react-popover both
+   became `@radix-ui/react-popover` (`PopupMenu`, `ColorPicker`, `SettingsNumericSlider`),
+   which released `bootstrap` — imported in nine files purely to style reactstrap's popover.
+   react-toastify → sonner, react-color → react-colorful, react-ace (and brace) →
+   CodeMirror 6. **The welcome modal is deleted** with its three splash PNGs and two SVGs.
+   The **open-source notices modal is now generated from the lockfile** (`pnpm notices`,
+   `pnpm notices:check`); it was 492 lines of hand-written JSX still naming
+   react-aria-menubutton years after it left, and the swaps would have made nine more
+   entries wrong. Engine libraries stay hand-maintained in `notices-vendored.json` because
+   they live under `corelibs`, not `node_modules`.
+   The one real trap found: **a tooltip and a popover on the same control fight each other.**
+   Radix opens a tooltip on any focus including script-moved focus, a popover moves focus
+   into itself on open, and the first control inside the colour picker has a tooltip — so
+   opening the picker popped a tooltip over it, and being the last-mounted dismissable layer
+   it swallowed the first Escape. Tooltips now open on focus only when the trigger matches
+   `:focus-visible`. Details in `docs/ui-redesign-plan.md` under "Phase 1b status".
+   **react-hotkeys is the only swap left and is not a straight swap**: `hotKeyMap.js` is 717
+   lines whose sequence strings are also what the shortcuts settings and every tooltip
+   display, the settings modal records bindings through its `recordKeyCombination`, and it
+   ignores keystrokes typed into inputs where tinykeys does not. It works under React 19, so
+   nothing is blocked.
+   New tool: **`editor/dev/interact.mjs`** (`pnpm interact`) opens each control and asserts
+   the content appears and Escape closes it. `smoke.mjs` only proves the page rendered,
+   which says nothing about a popover that is not in the DOM until you click — interact.mjs
+   is what found the tooltip/popover fight.
    Scoping record follows.
 
    **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
