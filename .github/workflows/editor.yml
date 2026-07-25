@@ -53,6 +53,18 @@ jobs:
       - name: Notices match the lockfile
         run: pnpm notices:check
 
+      # index.html loads /corelibs/ruffle/ruffle.js from a script tag and the directory is
+      # gitignored, so without this the console check has a 404 in it. Before the build, not
+      # after: vite copies public/ into build/ as it runs, and `preview` serves build/.
+      - name: Cache the Ruffle runtime
+        uses: actions/cache@v4
+        with:
+          path: editor/public/corelibs/ruffle
+          key: ruffle-${{ hashFiles('editor/dev/fetch-ruffle.sh') }}
+
+      - name: Stage the Ruffle runtime
+        run: dev/fetch-ruffle.sh
+
       - name: Build
         run: pnpm build
 
@@ -68,17 +80,6 @@ jobs:
         run: pnpm test-engine
         env:
           PLAYWRIGHT_CHANNEL: ''
-
-      # index.html loads /corelibs/ruffle/ruffle.js from a script tag and the directory is
-      # gitignored, so without this the console check has a 404 in it.
-      - name: Cache the Ruffle runtime
-        uses: actions/cache@v4
-        with:
-          path: editor/public/corelibs/ruffle
-          key: ruffle-${{ hashFiles('editor/dev/fetch-ruffle.sh') }}
-
-      - name: Stage the Ruffle runtime
-        run: dev/fetch-ruffle.sh
 
       # `vite preview` serves the build/ that `pnpm build` just produced, so the browser
       # checks run against the bundle that ships rather than the dev server. Backgrounded:
