@@ -366,7 +366,22 @@ The leave-page confirm dialog is gone from dev and test runs, which is what made
 tractable: it fired on **every** reload because `project.numUndoStates` is undefined (the
 counter is on `project.history`), the guard was inverted against its own comment, and `this`
 inside a plain function on `window.onbeforeunload` is `window` — whose `project` the script
-sandbox deletes. It is armed only when `navigator.webdriver` is false outside a dev build.
+sandbox deletes. It is armed only when `navigator.webdriver` is false outside a dev build,
+and `localStorage['twip:leave-warning']` (`'on'`/`'off'`) overrides that either way.
+
+**Green on the runner in 1m52s — after three red runs, each of which was worth having.**
+Three `Wick.Project #generateAudioTrack` cases assert a 48000Hz `AudioContext`; a GitHub
+runner's is 44.1k, so they wanted 48000 and got 44100. The test hardcodes the rate and the
+engine returns what the context gives it, so they are listed as `intermittent` — and the
+retry pass is what identified them, since they survived two runs where a load-flake would
+not have. Then `smoke.mjs` failed at all six widths reporting `error:` and nothing else:
+messages the browser generates rather than a script (a 404, a CSP violation) arrive with no
+arg handles, so resolving the args produced an empty string. It falls back to `m.text()` plus
+`m.location()` now, which also finally named the long-standing local `warnings=1` — the
+engine bundle asking for `willReadFrequently` on a canvas it reads back a lot
+(`wickengine.js:14525`). With a legible message the third failure took one run: Ruffle was
+being staged *after* `pnpm build`, and vite copies `public/` into `build/` as it runs while
+`preview` serves `build/`. It passed locally only because `public/` already had Ruffle in it.
 
 ## Phase 1 — the chrome, on Tailwind + shadcn
 

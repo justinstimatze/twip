@@ -329,6 +329,15 @@ from reading the code plus a localforage dump in the browser:
    `index.html` loads `ruffle.js` from a script tag, so a fresh clone 404s —
    `dev/fetch-ruffle.sh` stages it, pinned to release **v0.4.1**, since Ruffle prunes old
    nightly assets and the nightly URL BUILD.md pointed at would eventually 404 too.
+   **Green on the runner in 1m52s** (`e36d580`), after three red runs each of which was worth
+   having: three `generateAudioTrack` cases assert a 48kHz `AudioContext` where a runner's is
+   44.1k (listed as `intermittent`; the retry pass is what distinguished them from load
+   flake); `smoke.mjs` reported `error:` and nothing else, because browser-generated messages
+   like a 404 arrive with no arg handles and resolving them gave an empty string (falls back
+   to `m.text()` + `m.location()` now, which also named the long-standing local warning — the
+   engine asking for `willReadFrequently`, `wickengine.js:14525`); and Ruffle was staged
+   *after* `pnpm build`, while vite copies `public/` into `build/` and `preview` serves
+   `build/`.
    Also fixed on the way (`949364d`): the leave-page warning fired on **every** reload. It
    read `project.numUndoStates`, which is undefined (the counter is on `project.history`), so
    its early return never happened; the test was inverted against its own comment; and `this`
