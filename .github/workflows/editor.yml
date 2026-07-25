@@ -1,0 +1,105 @@
+name: editor
+
+# The editor's checks all existed and ran nowhere: ci.yml is Rust-only, so `pnpm build`,
+# the engine's mocha suite, the notices generator and the two Playwright scripts were
+# whatever the last person happened to run locally.
+#
+# Path-filtered because the editor is a vendored fork inside a Rust repo — a commit that only
+# touches src/ or fixtures/ has no reason to spend five minutes on a browser.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'editor/**'
+      - '.github/workflows/editor.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'editor/**'
+      - '.github/workflows/editor.yml'
+
+concurrency:
+  group: editor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    working-directory: editor
+
+jobs:
+  editor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm before setup-node: setup-node's pnpm cache needs the binary to already exist.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: editor/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: editor/.nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            editor/pnpm-lock.yaml
+            editor/engine/pnpm-lock.yaml
+
+      # engine/ is a separate package with its own lockfile, not a workspace member.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir engine install --frozen-lockfile
+
+      # Cheapest first, so a stale notices file does not wait on a browser download.
+      - name: Notices match the lockfile
+        run: pnpm notices:check
+
+      - name: Build
+        run: pnpm build
+
+      # Both packages pin playwright 1.62.0 and share ~/.cache/ms-playwright, so one install
+      # serves the engine suite and the editor scripts. --with-deps pulls the system libs
+      # headless chromium needs on a bare runner.
+      - name: Install chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # PLAYWRIGHT_CHANNEL='' selects that chromium. Unset would mean the system Chrome,
+      # which is what every local run uses and what no runner should be trusted to have.
+      - name: Engine tests
+        run: pnpm test-engine
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+
+      # index.html loads /corelibs/ruffle/ruffle.js from a script tag and the directory is
+      # gitignored, so without this the console check has a 404 in it.
+      - name: Cache the Ruffle runtime
+        uses: actions/cache@v4
+        with:
+          path: editor/public/corelibs/ruffle
+          key: ruffle-${{ hashFiles('editor/dev/fetch-ruffle.sh') }}
+
+      - name: Stage the Ruffle runtime
+        run: dev/fetch-ruffle.sh
+
+      # `vite preview` serves the build/ that `pnpm build` just produced, so the browser
+      # checks run against the bundle that ships rather than the dev server. Backgrounded:
+      # the runner leaves it alone once the step's shell exits, and the job tears it down.
+      - name: Serve the build
+        run: |
+          pnpm preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:4173 > /dev/null && exit 0
+            sleep 1
+          done
+          echo "preview server never came up:" && cat /tmp/preview.log && exit 1
+
+      - name: Smoke (every breakpoint)
+        run: pnpm smoke --sweep
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
+      - name: Interact
+        run: pnpm interact
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173

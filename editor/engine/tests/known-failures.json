@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "Engine tests that fail in the committed dist/wickengine.js and always have. tests/run.mjs",
+    "exits non-zero only on a failure that is NOT listed here, so the other 540 cases can act",
+    "as a gate instead of the whole suite being permanently red. Match is on title alone, so a",
+    "listed test that starts failing a NEW way is still allowed through — the cost of keeping",
+    "the list stable while assertion messages drift. Run with --strict to ignore the list.",
+    "A listed test that passes is reported as STALE (not fatal) unless flaky is set."
+  ],
+  "allowedFailures": [
+    {
+      "title": "Wick.Clip #tick unload script should run if clip stops being visible",
+      "why": "unload never runs; also trips checkLeaks on tempHolder, so this title fails twice"
+    },
+    {
+      "title": "Wick.Clip #tick unload script should run if clip stops being visible (nested clip)",
+      "why": "same unload bug one level down"
+    },
+    {
+      "title": "Wick.Project #play should send error through callback if there is an error",
+      "why": "leaks _scriptOnErrorCallback into the global scope"
+    },
+    {
+      "title": "Wick.View.Project #render (svg) should create layers correctly for populated project",
+      "why": "SVG layer naming: gets wick_project_outer where wick_project_bg is expected"
+    },
+    {
+      "title": "Wick.View.Project #render (svg) should create layers correctly for focused clip",
+      "why": "same layer naming"
+    },
+    {
+      "title": "Wick.View.Project #render (svg) should focus background layer if there is no active frame",
+      "why": "off-by-one on the focused layer index"
+    },
+    {
+      "title": "Wick.AutoSave getSortedAutosavedProjects should return a sorted list of project info",
+      "flaky": true,
+      "why": "blows mocha's 2000ms default under load — 5 of 7 runs on a busy box, 0 of 2 on an idle one. Listed so a loaded CI runner does not go red; a failure here on a quiet machine is real."
+    }
+  ]
+}

@@ -6,12 +6,11 @@
  * Prints how many of each selector exist and a little about the first one. Not a test;
  * dev/smoke.mjs and dev/interact.mjs are the tests.
  */
-import { chromium } from 'playwright';
+import { launch, URL_ } from './browser.mjs';
 
-const URL_ = process.env.SMOKE_URL ?? 'http://localhost:3000';
 const selectors = process.argv.slice(2);
 
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(URL_, { waitUntil: 'networkidle', timeout: 60_000 });
 await page.waitForTimeout(2500);

@@ -13,9 +13,8 @@
  *   node dev/smoke.mjs --width 768        # one specific width
  *   node dev/smoke.mjs --shot out.png     # also write a screenshot
  */
-import { chromium } from 'playwright';
+import { launch, URL_ } from './browser.mjs';
 
-const URL_ = process.env.SMOKE_URL ?? 'http://localhost:3000';
 const WIDTHS = [1920, 1440, 1280, 1024, 768, 375];
 
 const args = process.argv.slice(2);
@@ -37,7 +36,7 @@ const IGNORE = [
 
 const widths = flag('sweep') ? WIDTHS : [Number(value('width') ?? 1440)];
 
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await launch();
 let failed = false;
 
 for (const width of widths) {

@@ -12,14 +12,13 @@
  *
  * A step fails loudly rather than throwing, so one broken control does not hide the rest.
  */
-import { chromium } from 'playwright';
+import { launch, URL_ } from './browser.mjs';
 
-const URL_ = process.env.SMOKE_URL ?? 'http://localhost:3000';
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
 const value = (n) => { const i = args.indexOf(`--${n}`); return i === -1 ? null : args[i + 1]; };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: !flag('headed') });
+const browser = await launch({ headless: !flag('headed') });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
 const errors = [];

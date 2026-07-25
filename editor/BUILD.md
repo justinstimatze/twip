@@ -37,15 +37,20 @@ consumes this file directly.
 SWF Preview modal. It is **gitignored** because it is a fetched third-party dependency, not
 source, and 28MB of wasm does not belong in history.
 
-To stage it, download a Ruffle **selfhosted** nightly and drop its contents here:
+To stage it:
 
 ```
-# https://github.com/ruffle-rs/ruffle/releases -> ruffle-nightly-*-web-selfhosted.zip
-unzip ruffle-nightly-*-web-selfhosted.zip -d public/corelibs/ruffle
+dev/fetch-ruffle.sh
 ```
 
-The current dev build uses a stock nightly. The golden-PNG test oracle later pins a specific
-Ruffle revision; the preview player does not need to match it.
+The script pins a tagged release (**v0.4.1**) rather than a nightly, and is idempotent — it
+reads the version out of the staged `package.json` and exits early if it already matches.
+Nightlies were the earlier instruction and are the wrong thing to depend on: Ruffle prunes old
+nightly assets, so the URL that works today 404s in a few months. CI runs the same script, so
+a local checkout and a CI run play the same player. `--force` restages regardless.
+
+The golden-PNG test oracle pins a specific Ruffle *revision* for rendering comparisons; the
+preview player does not need to match it.
 
 ## SWF export in dev (the twip bridge)
 
@@ -68,3 +73,27 @@ shell); see the twip HANDOFF for the integration decisions.
 `pnpm build` emits `build/` with root-absolute asset paths (`/assets/…`); serve it from a domain
 or path root (the Tauri shell and `pnpm preview` both do). To serve under a sub-path, set `base`
 in `vite.config.mjs`.
+
+## Checks
+
+```
+pnpm notices:check    # notices-npm.json still matches the lockfile
+pnpm test-engine      # the engine's 547-case mocha suite, headless
+pnpm build
+pnpm smoke --sweep    # load the page at every breakpoint, read the console
+pnpm interact         # click through the popovers, tooltips, code editor, view-only mode
+```
+
+`smoke` and `interact` need a server — `pnpm dev` (port 3000, the default) or `pnpm preview`
+with `SMOKE_URL` pointed at it. `.github/workflows/editor.yml` runs all five against a
+`pnpm preview` of the production build, path-filtered to commits that touch `editor/`.
+
+Every script drives the system Chrome so nobody pays a ~150MB browser download. CI has no
+system Chrome it can rely on, installs Playwright's chromium, and selects it with
+`PLAYWRIGHT_CHANNEL=''` — empty string, since unset means `chrome`.
+
+Seven engine cases fail in the committed `dist/wickengine.js` and always have.
+`engine/tests/known-failures.json` lists them so the other 540 can act as a gate; an unlisted
+failure is fatal. Several cases here time out under load rather than on their merits, so an
+unexpected failure re-runs the suite once and only what fails twice is fatal. `--strict`
+ignores the list entirely.
