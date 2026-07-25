@@ -39,10 +39,11 @@ const HEAD = path.join(ROOT, 'head');
  * above MAX_OUTLIERS. Same shape as the Rust golden-PNG oracle in tests/golden.rs.
  *
  * Both numbers are measured, not guessed. Running this against the build it was blessed
- * from, three times: two glyphs rasterize differently from one run to the next — the heart
- * on the support button at 50,24 and the line-tool icon at 234,10 — and they produce 8 and
- * 23 outliers at a maximum channel delta of 19. Never more, never anywhere else. So the
- * floor is 23 and 64 sits comfortably above it.
+ * from: a few glyphs rasterize differently from one run to the next — the heart on the
+ * support button, the line-tool icon — for 8 to 23 outliers at a maximum channel delta of
+ * 19. A later run turned up 16 outliers at delta 70 on a scene that had been clean twice
+ * either side of it, so treat 23 as the common floor rather than the ceiling; the point of
+ * 64 is to sit above the jitter, not to trace it exactly.
  *
  * For scale: the three regressions the Toolbox migration shipped past smoke, interact and
  * the engine suite measured 4,316, 4,450 and 12,852 outliers. A layout change is two orders

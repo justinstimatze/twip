@@ -10,18 +10,14 @@ export const ACTIONS_ROW = 'flex h-full flex-row items-center';
 class CanvasActions extends Component {
   renderActionButton(action) {
     return (
-      /* The square is on the wrapper, not on the button: `.action-button` sets
-         `width: 100%; height: 100%` from un-migrated SCSS, and unlayered rules outrank
-         Tailwind utilities whatever their specificity. */
-      <div className="size-[35px] p-0.5" key={action.icon}>
-        <ActionButton
-          color="tool"
-          id={"canvas-action-button-" + action.icon}
-          tooltip={action.tooltip}
-          action={action.action}
-          tooltipPlace={"bottom"}
-          icon={action.icon} />
-      </div>
+      <ActionButton
+        color="tool"
+        id={"canvas-action-button-" + action.icon}
+        tooltip={action.tooltip}
+        action={action.action}
+        tooltipPlace={"bottom"}
+        icon={action.icon}
+        className="size-[35px] p-0.5" />
       );
     }
 

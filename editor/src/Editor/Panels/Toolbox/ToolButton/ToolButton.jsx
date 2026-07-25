@@ -49,11 +49,7 @@ class ToolButton extends Component {
         secondaryAction={this.props.secondaryAction}
         tooltipPlace={this.props.tooltipPlace ? this.props.tooltipPlace : "bottom"}
         icon={this.props.name}
-        /* `!` because `.img-tool-icon` sets `height: 100%` from un-migrated SCSS, and an
-           unlayered rule outranks any Tailwind utility. The icon is a direct child of the
-           button, so there is no wrapper to put the height on instead; this comes off when
-           ToolIcon's stylesheet goes. */
-        iconClassName={classNames("h-4/5!", this.props.iconClassName)}
+        iconClassName={classNames("h-4/5", this.props.iconClassName)}
         dropdown={this.props.dropdown}
         />
     )

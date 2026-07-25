@@ -17,31 +17,21 @@ export default function SettingsNumericSlider (props) {
 
   return (
     <div className={SLIDER_ROW}>
-      {/* Same reason as the field below: `.img-tool-icon` sets `height: 100%` unlayered,
-          so the 24px square has to be the box the icon fills. */}
-      <div className="my-auto mr-2 size-6 p-0.5">
-        <ToolIcon name={props.icon} className="w-full"/>
-      </div>
+      <ToolIcon name={props.icon} className="my-auto mr-2 size-6 p-0.5"/>
 
       <Popover open={sliderOn} onOpenChange={setSliderOn}>
         <PopoverAnchor>
-          {/* The width is on this wrapper rather than on the field: `.wick-input` sets
-              `width: 100%` from un-migrated SCSS, which is unlayered and so outranks any
-              Tailwind utility no matter how specific. Sizing the box the input fills is
-              the version that survives until _wickinput.scss goes.
-              settings-numeric-input and settings-numeric-slider-container carry no style;
+          {/* settings-numeric-input and settings-numeric-slider-container carry no style;
               dev/interact.mjs drives the slider through both. */}
-          <div className="h-full w-10">
-            <WickInput
-              type="numeric"
-              className="settings-numeric-input text-center"
-              onChange={props.onChange}
-              onFocus={() => {setSliderOn(true)}}
-              onClick={() => {setSliderOn(true)}}
-              value={props.value}
-              {...props.inputRestrictions}
-            />
-          </div>
+          <WickInput
+            type="numeric"
+            className="settings-numeric-input flex w-10 flex-1 text-center"
+            onChange={props.onChange}
+            onFocus={() => {setSliderOn(true)}}
+            onClick={() => {setSliderOn(true)}}
+            value={props.value}
+            {...props.inputRestrictions}
+          />
         </PopoverAnchor>
         {/* The slider is the only thing in here, so opening must not steal focus from the
             number field — you type a value, the slider appears, and you keep typing.
