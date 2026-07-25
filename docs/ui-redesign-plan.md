@@ -241,13 +241,8 @@ Contrast was measured rather than assumed, and five values in `_wickbrand.scss` 
 `TWEEN_FILL_COLOR_1` 1.52:1. All corrected in the token layer, each by the smallest
 lightness move along its own hue that clears the bar.
 
-**Not done: the sub-768 layout.** `getRenderSize()` still splits at 1200/800 rather than
-the 1024/768 this document argues for, and there is no view-only mode. At 375px the editor
-renders without overflowing and without erroring, but "Layer" truncates to "Laye" and the
-canvas is effectively gone — usable-looking and not actually usable. Moving the thresholds
-is a one-line change; what it needs is the *layout* below them, plus a re-tune of
-`Toolbox`'s three renderSize variants, which are written against the old numbers. That is
-real design work and is left for whoever picks up 1b.
+**The sub-768 layout was left for 1b and landed in `87125bd` / `484294c`** — see the
+breakpoints section below.
 
 ## Phase 1b status — every dependency swap but one (2026-07-24)
 
@@ -289,6 +284,48 @@ strings displayed in the shortcuts settings and in every tooltip; the settings m
 records new bindings through react-hotkeys' `recordKeyCombination`; and react-hotkeys
 ignores keystrokes typed into inputs, which tinykeys does not, so that filter has to be
 rebuilt. It works under React 19, so nothing is blocked on it.
+
+## Breakpoints status — 1024/768, and a viewer below (2026-07-24)
+
+Commits `87125bd`, `484294c`. `getRenderSize()` splits at 1024 and 768 instead of 1200 and
+800, and below 768 `Editor.render` returns a different tree: `Panels/ViewOnly`, which is a
+project name, the stage, and one play button.
+
+768 is inclusive, so an iPad in portrait keeps the authoring layout. The survey's number
+and this document's argument both say tablet-with-a-stylus is a drawing target, and 768 CSS
+px is exactly an iPad in portrait — an exclusive comparison would have sent it to the
+viewer.
+
+The engine needed three things told to it, and one of them was a trap:
+
+- **`fitMode = 'fill'` is the wrong mechanism for a viewer**, despite reading like the right
+  one. It sets `paper.view.zoom = model.zoom * calculateFitZoom()`, so any `recenter()` —
+  `hidePreloader` does one two seconds after load, `prepareProjectForEditor` does one per
+  project — squares the scale and the stage collapses to a quarter size. `recenter()` on its
+  own already fits the stage to its container with 4% padding, which is all the viewer
+  wants.
+- **The `none` tool.** Without it a drag on the canvas still selects and moves objects, and
+  a viewer that edits is not a viewer. It goes back by name on the way out, because tools
+  belong to a project and the project can be swapped underneath.
+- **`guiElement.draw()` had to be guarded.** The viewer does not mount the Timeline, so the
+  GUI project still holds the detached container it builds in its own constructor; drawing
+  into it reads `offsetWidth` 0 and `gui/Project.js:181` turns that into a canvas width of
+  -2. The `onRef` prop on `<Timeline>` looks like the guard and is not one — Timeline never
+  calls it, so `this.timelineComponent` had always been null.
+
+Making below-768 a viewer made every `renderSize === "small"` branch in the authoring chrome
+unreachable, and `484294c` deletes them: the third Toolbox variant, the `isMobile` prop that
+only that variant ever set (it reached four class names through three components), 23 dead
+`renderSize` props on `ToolSettingsInput`, `DeleteCopyPaste`, the small code-editor window,
+and twelve CSS rules. 348 lines out, 43 in. One of them was a second
+`id="more-canvas-actions-popover-button"` that `ids-unique` could never see, because only
+one branch ever rendered.
+
+`dev/interact.mjs` gains a step that resizes the live page to 375 and back rather than
+opening a second page, because the interesting part is the transition. It caught that
+`window.project` is not a reliable handle: `Tickable.js:549` assigns it for the script
+sandbox and deletes it at line 571, so it is gone after anything plays.
+`window.editor.project` is the one that survives.
 
 ## Phase 1 — the chrome, on Tailwind + shadcn
 

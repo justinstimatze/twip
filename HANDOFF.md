@@ -256,18 +256,13 @@ from reading the code plus a localforage dump in the browser:
      created — so every session may be writing an empty autosave, and Load would then be
      working correctly and restoring genuine emptiness. Settle it by dumping
      `objectsData.map(o => o.classname)` for the newest entry: no `Path` among them means empty.
-4. **PHASE 1a DONE 2026-07-24 (`febf3d3`, `23965a4`, `e6ec35d`) — except the sub-768 layout.** The
+4. **PHASE 1a DONE 2026-07-24 (`febf3d3`, `23965a4`, `e6ec35d`).** The
    editor runs on React 19, Tailwind v4 tokens, and shadcn/Radix primitives; `WickInput` is
    rewritten and four dependencies are gone (react-select, react-tooltip, react-dropdown,
    react-spinners), plus react-reflex and react-sizeme with the shell. **React 19 turned out
    to be the gate** — react-reflex throws out of `<ReflexElement>` under it at both v3 and
    v5, so the shell rewrite was forced rather than chosen. Full status and the corrections
    to the plan's assumptions are in `docs/ui-redesign-plan.md` under "Phase 1a status".
-   What is NOT done: the sub-768 view-only layout. `getRenderSize()` still splits at
-   1200/800 rather than 1024/768, and at 375px the editor renders cleanly but is not usable
-   for authoring — "Layer" truncates to "Laye" and the canvas is gone. Moving the thresholds
-   is one line; the layout below them, and re-tuning `Toolbox`'s three renderSize variants
-   against the new numbers, is the actual work. Left for 1b.
    New tool: **`editor/dev/smoke.mjs`** loads the dev server in headless Chrome and reports
    console errors, whether anything rendered, and horizontal overflow at each breakpoint
    (`--sweep`, `--width N`, `--shot out.png`). The chrome has no unit tests, so this is the
@@ -300,6 +295,25 @@ from reading the code plus a localforage dump in the browser:
    the content appears and Escape closes it. `smoke.mjs` only proves the page rendered,
    which says nothing about a popover that is not in the DOM until you click — interact.mjs
    is what found the tooltip/popover fight.
+   **BREAKPOINTS DONE 2026-07-24 (`87125bd`, `484294c`).** `getRenderSize()` splits at 1024
+   and 768 instead of 1200 and 800, and below 768 `Editor.render` returns a different tree —
+   `Panels/ViewOnly`: project name, stage, one play button. The engine gets the `none` tool
+   there so a drag neither draws nor selects, and the keymap drops to the one key preview
+   playback already uses. 768 is inclusive so an iPad in portrait keeps the authoring layout.
+   The engine's `fitMode = 'fill'` reads like the right mechanism for a viewer and is a trap:
+   it multiplies the model zoom by the fit zoom, so any `recenter()` — `hidePreloader` does
+   one two seconds after load — squares the scale and the stage collapses to a quarter size.
+   `recenter()` alone already fits the stage to its container. `guiElement.draw()` also needed
+   a guard, since the viewer does not mount the Timeline and the GUI project then draws into
+   the detached container from its own constructor (`offsetWidth` 0 → canvas width -2). Note
+   `<Timeline onRef>` is not that guard: Timeline never calls it, so `this.timelineComponent`
+   had always been null.
+   That made every `renderSize === "small"` branch in the authoring chrome unreachable, and
+   `484294c` deletes them — the third Toolbox variant, the `isMobile` prop only it ever set,
+   23 dead `renderSize` props, `DeleteCopyPaste`, the small code-editor window, twelve CSS
+   rules. 348 lines out, 43 in. **`window.project` is not a reliable handle** — `Tickable.js:549`
+   assigns it for the script sandbox and deletes it at 571, so it is gone after anything
+   plays; use `window.editor.project`.
    Scoping record follows.
 
    **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
