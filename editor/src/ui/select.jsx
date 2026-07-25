@@ -23,13 +23,14 @@ import { cn } from '@/lib/utils';
  *   Called with the whole option object, not the bare value — matching what react-select
  *   passed, because all 17 WickInput call sites are written against that shape.
  */
-export function Select ({ options = [], value, onChange, id, className, itemClassName, placeholder, disabled }) {
+export function Select ({ options = [], value, onChange, onOpenChange, id, className, itemClassName, placeholder, disabled }) {
   const selected = options.find((o) => o.value === value);
 
   return (
     <SelectPrimitive.Root
       value={value === undefined || value === null ? undefined : String(value)}
       disabled={disabled}
+      onOpenChange={onOpenChange}
       onValueChange={(next) => {
         if (!onChange) return;
         onChange(options.find((o) => String(o.value) === next) ?? { label: next, value: next });
@@ -69,10 +70,16 @@ export function Select ({ options = [], value, onChange, id, className, itemClas
                   'text-base whitespace-nowrap text-black select-none',
                   'data-[highlighted]:bg-accent data-[highlighted]:outline-none',
                   itemClassName,
+                  // Per-option, for the font list's "already in this project" highlight.
+                  // react-select read option.className and the Radix swap stopped, which
+                  // dropped that affordance silently.
+                  option.className,
                 )}
-                // The font-family select previews each face in its own font. This was the
-                // one thing the old inline `styles.option` did that the stylesheet cannot.
-                style={className === 'font-family' ? { fontFamily: option.label } : undefined}
+                // Per-option style, which is how the font list previews each face in its own
+                // font. Was `className === 'font-family'` and never fired: WickInput sends
+                // "wick-input-select font-family", so the equality failed and the preview had
+                // been dead since the react-select swap.
+                style={option.style}
               >
                 <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
                 <SelectPrimitive.ItemIndicator className="absolute right-2">

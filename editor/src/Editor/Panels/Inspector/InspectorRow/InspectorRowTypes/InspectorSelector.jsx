@@ -42,6 +42,7 @@ class InspectorSelector extends Component {
                 type: "select",
                 value: this.props.value,
                 onChange: this.props.onChange,
+                onOpenChange: this.props.onOpenChange,
                 options: this.props.options,
                 className: this.props.className,
               }

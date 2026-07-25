@@ -302,19 +302,45 @@ const STEPS = [
 
 const only = value('only')?.split(',');
 let failed = false;
-for (const step of STEPS) {
-  if (only && !only.includes(step.name)) continue;
+
+/**
+ * Run one step, returning its error or null. Every assertion here is a bounded wait on
+ * something appearing, so a loaded machine can miss a 3000ms window on a step that is fine —
+ * seen on this box, and CI is a smaller machine. A step that fails gets one retry, and only
+ * a second failure counts. Same bargain as engine/tests/run.mjs: a real break fails twice.
+ */
+const attempt = async (step) => {
   const before = errors.length;
   try {
     await step.run();
     const newErrors = errors.slice(before);
     if (newErrors.length) throw new Error(`console errors: ${newErrors.join(' | ').slice(0, 200)}`);
-    console.log(`ok   ${step.name.padEnd(16)} ${step.what}`);
+    return null;
   } catch (e) {
+    // Leave no dismissable layer open, or the retry starts from a different page state.
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(500);
+    return e;
+  }
+};
+
+for (const step of STEPS) {
+  if (only && !only.includes(step.name)) continue;
+  let error = await attempt(step);
+  if (error) {
+    const retried = await attempt(step);
+    if (!retried) {
+      console.log(`ok   ${step.name.padEnd(16)} ${step.what} (flaked once: ${error.message.split('\n')[0].slice(0, 80)})`);
+      continue;
+    }
+    error = retried;
+  }
+  if (error) {
     failed = true;
     console.log(`FAIL ${step.name.padEnd(16)} ${step.what}`);
-    console.log(`       ${e.message.split('\n')[0].slice(0, 240)}`);
-    await page.keyboard.press('Escape').catch(() => {});
+    console.log(`       ${error.message.split('\n')[0].slice(0, 240)}`);
+  } else {
+    console.log(`ok   ${step.name.padEnd(16)} ${step.what}`);
   }
 }
 

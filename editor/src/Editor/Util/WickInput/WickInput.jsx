@@ -197,6 +197,7 @@ class WickInput extends Component {
         value={this.props.value}
         options={this.props.options}
         onChange={this.props.onChange}
+        onOpenChange={this.props.onOpenChange}
         className={classNames("wick-input-select", this.props.className)}
       />
     );

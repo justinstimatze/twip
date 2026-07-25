@@ -19,7 +19,8 @@
 
 import React, { Component } from 'react';
 import './_inspector.scss';
-import './_inspectorselector.scss';
+
+import { loadFontPreviews } from 'Editor/Util/fontPreview';
 
 import InspectorTitle from './InspectorTitle/InspectorTitle';
 
@@ -247,21 +248,18 @@ class Inspector extends Component {
    * Renders an inspector row allowing viewing and editing of the selected object's font.
    */
   renderFontFamily = () => {
-    let opts = this.props.fontInfoInterface.allFontNames;
-
-    let getFontClass = (font) => {
-      let fontClass = 'font-selector-' + font.split(" ").join("-");
-      let existingClass = this.props.fontInfoInterface.isExistingFont(font) ? ' existing-font' : '';
-      return fontClass + existingClass;
-    };
-
-    opts = opts.map(opt => {
-      return {
-        value: opt,
-        label: opt,
-        className: getFontClass(opt),
-      }
-    });
+    /*
+     * `.font-selector-<Name>` classes carried the per-option font-family before; the Radix
+     * swap moved that to an inline style (ui/select.jsx) and left 156 rules nobody read.
+     * The one thing worth keeping is the tint on fonts already in the project, which that
+     * swap dropped — #d3f8f4 then, --color-wick-sky-light now, same value.
+     */
+    let opts = this.props.fontInfoInterface.allFontNames.map(opt => ({
+      value: opt,
+      label: opt,
+      style: { fontFamily: `'${opt}', Arial` },
+      className: this.props.fontInfoInterface.isExistingFont(opt) ? 'bg-wick-sky-light' : undefined,
+    }));
 
     return (
       <InspectorSelector
@@ -271,6 +269,8 @@ class Inspector extends Component {
         type="select"
         isSearchable={true}
         options={opts}
+        // Nothing is fetched from Google until this opens. See Util/fontPreview.js.
+        onOpenChange={(open) => { if (open) loadFontPreviews(this.props.fontInfoInterface.allFontNames); }}
         onChange={(val) => {
           let font = val.value;
 
