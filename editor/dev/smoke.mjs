@@ -54,9 +54,19 @@ for (const width of widths) {
     const args = await Promise.all(m.args().map((a) => a.jsonValue().catch(() => null)));
     const [head, ...rest] = args;
     let i = 0;
-    const text = typeof head === 'string' && /%[sdioOfc]/.test(head)
+    let text = typeof head === 'string' && /%[sdioOfc]/.test(head)
       ? head.replace(/%[sdioOfc]/g, () => String(rest[i++])) + rest.slice(i).map((r) => ` ${r}`).join('')
       : args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    /*
+     * Messages the browser generates rather than a script — a 404, a CSP violation — arrive
+     * with no arg handles at all, so the resolve above produces an empty string and the
+     * report says a width failed without saying why. m.text() has the content in that case,
+     * and m.location() has the URL that caused it.
+     */
+    if (!text) {
+      const { url, lineNumber } = m.location() ?? {};
+      text = `${m.text()}${url ? ` (${url}${lineNumber ? `:${lineNumber}` : ''})` : ''}`.trim() || '<empty console message>';
+    }
     if (IGNORE.some((re) => re.test(text))) return;
     if (m.type() === 'error') errors.push(text);
     else if (m.type() === 'warning') warnings.push(text);
