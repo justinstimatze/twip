@@ -25,7 +25,6 @@ import ToolboxBreak from './ToolboxBreak/ToolboxBreak';
 import ToolButton from './ToolButton/ToolButton';
 import ToolSettings from './ToolSettings/ToolSettings';
 import CanvasActions from './CanvasActions/CanvasActions';
-import PopupMenu from 'Editor/Util/PopupMenu/PopupMenu';
 import classNames from 'classnames';
 class Toolbox extends Component {
   constructor(props) {
@@ -34,25 +33,16 @@ class Toolbox extends Component {
     this.state = {
       openSettings: null,
       moreCanvasActionsPopoverOpen: false,
-      dropdownSelector: null
     }
 
     this.toolButtonProps = {
       setActiveTool: this.props.setActiveTool,
-      className: classNames("toolbox-item", {mobile: this.props.renderSize === "small"}), 
+      className: "toolbox-item",
       getActiveToolName: this.props.getActiveToolName,
     }
 
     // List of callbacks to call on Scroll.
     this.scrollFns = [];
-
-    this.toolDropdowns = {
-      cursors: {active: 'cursor', options: ['cursor', 'pathcursor']},
-      brushes: {active: 'brush', options: ['brush', 'pencil']},
-      eraser: 'eraser',
-      shapes: {active: 'rectangle', options: ['rectangle', 'ellipse', 'line', 'text']},
-      tools: {active: 'fillbucket', options: ['fillbucket', 'eyedropper', 'gradienttool']}
-    }
   }
 
   renderAction = (action, i) => {
@@ -171,7 +161,7 @@ class Toolbox extends Component {
 
         <ToolboxBreak/>
 
-        <ToolSettings renderSize={this.props.renderSize}
+        <ToolSettings
           activeTool={this.props.activeToolName}
           getToolSetting={this.props.getToolSetting}
           setToolSetting={this.props.setToolSetting}
@@ -201,7 +191,7 @@ class Toolbox extends Component {
           <ToolboxBreak/>
         </div>
         <div className="medium-toolbox-row">
-          <ToolSettings renderSize={this.props.renderSize}
+          <ToolSettings
             activeTool={this.props.activeToolName}
             getToolSetting={this.props.getToolSetting}
             setToolSetting={this.props.setToolSetting}
@@ -220,121 +210,10 @@ class Toolbox extends Component {
     )
   }
 
-  renderSmallToolbox = () => {
-    return (
-      <div className={classNames("tool-box", "tool-box-medium")}>
-        <div className="medium-toolbox-row">
-          {this.renderToolButtonsMobile()}
-          <ToolboxBreak className={classNames("toolbox-break", "mobile")}/>
-            {this.renderCanvasActionsMobile()}
-        </div>
-        <div className="medium-toolbox-row">
-          {this.renderColorPickers()}
-          <ToolboxBreak className={classNames("toolbox-break", "mobile")}/>
-          <ToolSettings renderSize={this.props.renderSize}
-            isMobile={true}
-            activeTool={this.props.activeToolName}
-            getToolSetting={this.props.getToolSetting}
-            setToolSetting={this.props.setToolSetting}
-            getToolSettingRestrictions={this.props.getToolSettingRestrictions}
-            toggleBrushModes={this.props.toggleBrushModes}
-            toggleCursorTransformModes={this.props.toggleCursorTransformModes}
-            toggleGradientToolModes={this.props.toggleGradientToolModes}
-            showCanvasActions={this.props.showCanvasActions}
-            showBrushModes={this.props.showBrushModes}
-            showCursorTransformModes={this.props.showCursorTransformModes}
-            showGradientToolModes={this.props.showGradientToolModes}/>
-        </div>
-
-      </div>
-    )
-  }
-
-  renderToolButtonsMobile = () => {
-    let activeToolName = this.props.getActiveToolName();
-    for (let i = 0; i < Object.keys(this.toolDropdowns).length; i++) {
-      if (typeof this.toolDropdowns[Object.keys(this.toolDropdowns)[i]] === "object" && 
-          this.toolDropdowns[Object.keys(this.toolDropdowns)[i]].options.indexOf(activeToolName) !== -1) {
-        this.toolDropdowns[Object.keys(this.toolDropdowns)[i]].active = activeToolName;
-      }
-    }
-    return (
-      <div className="tool-collection-container">
-        {Object.keys(this.toolDropdowns).map((key) => {
-          let val = this.toolDropdowns[key];
-          if (typeof val === 'string') {
-            return (<ToolButton key={key} {...this.toolButtonProps} iconClassName="bump-up-no-dropdown" className={classNames("toolbox-item", "mobile")} name={val}/>);
-          }
-          else {
-            let id = "more-" + key + "-popover-button";
-            return (
-            <div key={key} id={id}>
-              <ToolButton {...this.toolButtonProps} 
-                className={classNames("toolbox-item", "mobile")} 
-                action={() => this.props.setActiveTool(val.active)} 
-                secondaryAction={() => this.toggleDropdownSelector(key)} 
-                name={val.active}
-                dropdown={true}/>
-              <PopupMenu
-                mobile={true}
-                isOpen={this.state.dropdownSelector === key}
-                toggle={() => this.toggleDropdownSelector(key)}
-                target={id}
-                className={"more-canvas-actions-popover"}
-              >
-                <div className="tool-selector-popout">
-                  {val.options.map((option) => {
-                    return (option !== val.active && <ToolButton    
-                      key={option}
-                      {...this.toolButtonProps}
-                      action={() => {
-                        val.active = option;
-                        this.props.setActiveTool(option);
-                        this.toggleDropdownSelector(key);
-                      }}
-                      className="tool-selector-item" name={option}/>);
-                  })}
-                </div>
-              </PopupMenu>
-            </div>
-            );
-          }
-        })}
-      </div>
-    )
-  }
-
-  toggleDropdownSelector = (val) => {
-    if (this.state.dropdownSelector === val) {
-      this.setState({dropdownSelector: null});
-    }
-    else {
-      this.setState({dropdownSelector: val})
-    }
-  }
-
-  renderCanvasActionsMobile = () => {
-    return (
-      <div className="toolbox-actions-right-container">
-        <div className="toolbox-actions-right">
-        {this.renderToolButtonFromAction(this.props.editorActions.undo)}
-        {this.renderToolButtonFromAction(this.props.editorActions.redo)}
-        <div id="more-canvas-actions-popover-button">
-          {this.renderToolButtonFromAction(this.props.editorActions.showMoreCanvasActions)}
-          <CanvasActions {...this.props} />
-        </div>
-      </div>
-    </div>
-    )
-  }
-
   render() {
-    this.toolButtonProps.className = classNames("toolbox-item", {mobile: this.props.renderSize === "small"});
     return (
       <div className="tool-box-container" aria-label="Toolbox">
-        {this.props.renderSize === 'large' ? this.renderLargeToolbox() : 
-        this.props.renderSize === 'medium' ? this.renderMediumToolbox() : 
-                                             this.renderSmallToolbox()}
+        {this.props.renderSize === 'large' ? this.renderLargeToolbox() : this.renderMediumToolbox()}
       </div>
     )
   }

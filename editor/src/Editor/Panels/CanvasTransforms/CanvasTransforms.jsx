@@ -60,57 +60,6 @@ class CanvasTransforms extends Component {
     );
   }
 
-  // TODO: Adjust this when the touch events are added.
-  // renderTransformations = () => {
-  //   if (this.props.renderSize === "small") {
-  //     return (
-  //       <div className='transforms-container'>
-  //         {this.renderTransformButton({
-  //           action:this.props.toggleOnionSkin,
-  //           name:'onionskinning',
-  //           tooltip:'Onion Skinning',
-  //           className:'canvas-transform-item onion-skin-button',
-  //           isActive:(() => {return this.props.onionSkinEnabled}),
-  //         })}
-  //         {this.renderTransformButton({
-  //           action: (this.props.recenterCanvas),
-  //           name: 'recenter',
-  //           tooltip: 'Recenter',
-  //           className:'canvas-transform-item'
-  //         })}
-  //       </div>
-  //     );
-  //   }
-  //   else {
-  //     return (
-  //       <div className='transforms-container'>
-  //         {this.renderTransformButton({
-  //           action:this.props.toggleOnionSkin,
-  //           name:'onionskinning',
-  //           tooltip:'Onion Skinning',
-  //           className:'canvas-transform-item onion-skin-button',
-  //           isActive:(() => {return this.props.onionSkinEnabled}),
-  //         })}
-  //         {this.renderTransformButton({
-  //           action: (() => this.props.setActiveTool('pan')),
-  //           name: 'pan',
-  //           tooltip: 'Pan',
-  //           className:'canvas-transform-item'
-  //         })}
-  //         {this.renderZoomIn()}
-  //         {this.renderZoomTool()}
-  //         {this.renderZoomOut()}
-  //         {this.renderTransformButton({
-  //           action: (this.props.recenterCanvas),
-  //           name: 'recenter',
-  //           tooltip: 'Recenter',
-  //           className:'canvas-transform-item'
-  //         })}
-  //       </div>
-  //     );
-  //   }
-  // }
-
   renderZoomTool = () => {
     return (
       <div id='zoom-tool-container'>
@@ -145,7 +94,7 @@ class CanvasTransforms extends Component {
 
   render () {
     return (
-      <div className={classNames("canvas-transforms-widget", this.props.renderSize === "small" && "mobile")}>
+      <div className="canvas-transforms-widget">
         {!this.props.previewPlaying && this.renderTransformations()}
         <div className="play-button-container">
           {/* Was a sibling <ReactTooltip id="play-button-object"> paired to the button by

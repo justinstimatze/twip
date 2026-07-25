@@ -160,39 +160,38 @@ class ToolSettings extends Component {
 
     return (
         <div id="cursor-transform-modes-popover-button">
-          <ToolSettingsInput renderSize={this.props.renderSize}
+          <ToolSettingsInput
             name='Transform Modes'
             icon={transformModeIcon}
             type='checkbox'
             value={this.props.showCursorTransformModes}
             onChange={this.props.toggleCursorTransformModes}/>
           <PopupMenu
-            mobile={this.props.isMobile}
             isOpen={this.props.showCursorTransformModes && !this.props.previewPlaying}
             toggle={this.props.toggleCursorTransformModes}
             target="cursor-transform-modes-popover-button"
             className={"more-canvas-actions-popover"}>
             <div className="cursor-transform-modes-widget">
               <div className='actions-container'>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Freescale'
                   icon='cursortransformmodefreescale'
                   type='checkbox'
                   value={this.props.getToolSetting('cursorTransformMode') === 'freescale'}
                   onChange={() => this.props.setToolSetting('cursorTransformMode', 'freescale')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Uniform'
                   icon='cursortransformmodeuniform'
                   type='checkbox'
                   value={this.props.getToolSetting('cursorTransformMode') === 'uniform'}
                   onChange={() => this.props.setToolSetting('cursorTransformMode', 'uniform')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Skew'
                   icon='cursortransformmodeskew'
                   type='checkbox'
                   value={this.props.getToolSetting('cursorTransformMode') === 'skew'}
                   onChange={() => this.props.setToolSetting('cursorTransformMode', 'skew')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Skew and Scale'
                   icon='cursortransformmodeskewscale'
                   type='checkbox'
@@ -215,27 +214,26 @@ class ToolSettings extends Component {
 
     return (
         <div id="gradient-tool-modes-popover-button">
-          <ToolSettingsInput renderSize={this.props.renderSize}
+          <ToolSettingsInput
             name='Transform Modes'
             icon={transformModeIcon}
             type='checkbox'
             value={this.props.showGradientToolModes}
             onChange={this.props.toggleGradientToolModes}/>
           <PopupMenu
-            mobile={this.props.isMobile}
             isOpen={this.props.showGradientToolModes && !this.props.previewPlaying}
             toggle={this.props.toggleGradientToolModes}
             target="gradient-tool-modes-popover-button"
             className={"more-canvas-actions-popover"}>
             <div className="gradient-tool-modes-widget">
               <div className='actions-container'>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='None'
                   icon='gradienttoolmodenone'
                   type='checkbox'
                   value={this.props.getToolSetting('gradientToolMode') === 'none'}
                   onChange={() => this.props.setToolSetting('gradientToolMode', 'none')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Uniform'
                   icon='gradienttoolmodeuniform'
                   type='checkbox'
@@ -250,7 +248,7 @@ class ToolSettings extends Component {
 
   renderEnablePressure = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
+      <ToolSettingsInput
         name='Enable Pressure'
         icon='brushpressure'
         type='checkbox'
@@ -261,7 +259,7 @@ class ToolSettings extends Component {
 
   renderEnableRelativeBrushSize = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
+      <ToolSettingsInput
         name='Relative Brush Size'
         icon='brushrelativesize'
         type='checkbox'
@@ -284,39 +282,38 @@ class ToolSettings extends Component {
 
     return (
         <div id="brush-modes-popover-button">
-          <ToolSettingsInput renderSize={this.props.renderSize}
+          <ToolSettingsInput
             name='Brush Modes'
             icon={brushModeIcon}
             type='checkbox'
             value={this.props.showBrushModes}
             onChange={this.props.toggleBrushModes}/>
           <PopupMenu
-            mobile={this.props.isMobile}
             isOpen={this.props.showBrushModes && !this.props.previewPlaying}
             toggle={this.props.toggleBrushModes}
             target="brush-modes-popover-button"
             className={"more-canvas-actions-popover"}>
             <div className="brush-modes-widget">
               <div className='actions-container'>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='None'
                   icon='brushmodenone'
                   type='checkbox'
                   value={this.props.getToolSetting('brushMode') === 'none'}
                   onChange={() => this.props.setToolSetting('brushMode', 'none')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Inside'
                   icon='brushmodeinside'
                   type='checkbox'
                   value={this.props.getToolSetting('brushMode') === 'inside'}
                   onChange={() => this.props.setToolSetting('brushMode', 'inside')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Outside'
                   icon='brushmodeoutside'
                   type='checkbox'
                   value={this.props.getToolSetting('brushMode') === 'outside'}
                   onChange={() => this.props.setToolSetting('brushMode', 'outside')}/>
-                <ToolSettingsInput renderSize={this.props.renderSize}
+                <ToolSettingsInput
                   name='Merge'
                   icon='brushmodemerge'
                   type='checkbox'
@@ -331,8 +328,7 @@ class ToolSettings extends Component {
 
   renderCornerRadius = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
-        isMobile={this.props.isMobile}
+      <ToolSettingsInput
         name='Corner Radius'
         icon='cornerradius'
         type='numeric'
@@ -344,8 +340,7 @@ class ToolSettings extends Component {
 
   renderBrushSmoothing = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
-        isMobile={this.props.isMobile}
+      <ToolSettingsInput
         name='Brush Smoothing'
         icon='brushsmoothness'
         type='numeric'
@@ -357,8 +352,7 @@ class ToolSettings extends Component {
 
   renderFontSize = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
-        isMobile={this.props.isMobile}
+      <ToolSettingsInput
         name='Font Size'
         icon='fontsize'
         type='numeric'
@@ -370,8 +364,7 @@ class ToolSettings extends Component {
 
   renderEraserSize = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
-        isMobile={this.props.isMobile}
+      <ToolSettingsInput
         name='Eraser Size'
         icon='eraser'
         type='numeric'
@@ -383,8 +376,7 @@ class ToolSettings extends Component {
 
   renderStrokeWidth = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
-        isMobile={this.props.isMobile}
+      <ToolSettingsInput
         name='Stroke Width'
         icon='strokewidth'
         type='numeric'
@@ -396,7 +388,7 @@ class ToolSettings extends Component {
 
   renderDropperMode = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
+      <ToolSettingsInput
         name='Pixel'
         icon='pixel'
         type='checkbox'
@@ -407,7 +399,7 @@ class ToolSettings extends Component {
 
   renderFontFamily = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
+      <ToolSettingsInput
         name='Font'
         icon='fontfamily'
         type='dropdown'
@@ -418,8 +410,7 @@ class ToolSettings extends Component {
 
   renderBrushSize = () => {
     return (
-      <ToolSettingsInput renderSize={this.props.renderSize}
-        isMobile={this.props.isMobile}
+      <ToolSettingsInput
         name='Brush Size'
         icon='brushsize'
         type='numeric'

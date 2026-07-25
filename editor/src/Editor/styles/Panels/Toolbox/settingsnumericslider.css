@@ -19,10 +19,6 @@
     margin-right: 8px;
 }
   
-.setting-input-container.mobile {
-    margin: 0;
-}
-
 .settings-numeric-slider {
     display: flex;
     height: 80%;
@@ -50,7 +46,3 @@
     text-align: center;
 }
 
-.settings-numeric-input.mobile {
-    width: 34px !important;
-    flex: none;
-}

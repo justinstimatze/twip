@@ -14,13 +14,13 @@ export default function SettingsNumericSlider (props) {
     <div className="settings-numeric-slider">
       <ToolIcon
         name={props.icon}
-        className={classNames("settings-numeric-slider-icon", {mobile: props.isMobile})}/>
+        className="settings-numeric-slider-icon"/>
 
       <Popover open={sliderOn} onOpenChange={setSliderOn}>
         <PopoverAnchor>
           <WickInput
             type="numeric"
-            className={classNames("settings-numeric-input", {"mobile": props.isMobile})}
+            className="settings-numeric-input"
             onChange={props.onChange}
             onFocus={() => {setSliderOn(true)}}
             onClick={() => {setSliderOn(true)}}

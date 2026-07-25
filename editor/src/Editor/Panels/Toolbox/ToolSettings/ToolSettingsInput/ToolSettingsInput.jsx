@@ -29,7 +29,6 @@ class ToolSettingsInput extends Component {
   renderNumericInput = () => {
     return (
       <SettingsNumericSlider
-        isMobile={this.props.isMobile}
         onChange={this.props.onChange}
         value={this.props.value}
         inputRestrictions={this.props.inputRestrictions}
@@ -80,7 +79,7 @@ class ToolSettingsInput extends Component {
 
   render () {
     return (
-      <div className={classNames("setting-input-container", {mobile: this.props.renderSize === "small"})}>
+      <div className="setting-input-container">
         {this.renderInput()}
       </div>
     );

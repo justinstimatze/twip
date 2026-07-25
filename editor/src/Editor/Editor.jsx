@@ -42,7 +42,6 @@ import Canvas from './Panels/Canvas/Canvas';
 import Inspector from './Panels/Inspector/Inspector';
 import MenuBar from './Panels/MenuBar/MenuBar';
 import Timeline from './Panels/Timeline/Timeline';
-import DeleteCopyPaste from './Panels/DeleteCopyPaste/DeleteCopyPaste';
 import CanvasTransforms from './Panels/CanvasTransforms/CanvasTransforms';
 import Toolbox from './Panels/Toolbox/Toolbox';
 import AssetLibrary from './Panels/AssetLibrary/AssetLibrary';
@@ -218,7 +217,6 @@ class Editor extends EditorCore {
     window.addEventListener("resize", this.onWindowResize);
 
     this.canvasComponent = null;
-    this.timelineComponent = null;
 
     this.lastUsedTool = 'cursor';
 
@@ -1073,7 +1071,7 @@ class Editor extends EditorCore {
               {/* Middle Panel */}
               <Panel minSize="40%">
                 {/*Toolbox*/}
-                <div className={classNames("toolbox-container", {'toolbox-container-medium': renderSize === 'medium'}, {'toolbox-container-small': renderSize === 'small'})}>
+                <div className={classNames("toolbox-container", {'toolbox-container-medium': renderSize === 'medium'})}>
                   <DockedPanel showOverlay={this.state.previewPlaying}>
                     <Toolbox
                       project={this.state.project}
@@ -1102,7 +1100,7 @@ class Editor extends EditorCore {
                     />
                   </DockedPanel>
                 </div>
-                <div className={classNames("editor-canvas-timeline-panel", {'editor-canvas-timeline-panel-medium': renderSize === 'medium'}, {'editor-canvas-timeline-panel-small': renderSize === 'small'})}>
+                <div className={classNames("editor-canvas-timeline-panel", {'editor-canvas-timeline-panel-medium': renderSize === 'medium'})}>
                   <PanelGroup orientation="vertical" onLayoutChanged={this.onResize}>
                     {/* Canvas and Popout Outliner */}
                     <Panel minSize={120}>
@@ -1137,15 +1135,8 @@ class Editor extends EditorCore {
                               setActiveTool={this.setActiveTool}
                               previewPlaying={this.state.previewPlaying}
                               togglePreviewPlaying={this.togglePreviewPlaying}
-                              renderSize={renderSize}
                               keyMap={this.getKeyMap()}
                             />
-                            {renderSize === "small" &&
-                            <DeleteCopyPaste
-                              previewPlaying={this.state.previewPlaying}
-                              selectionEmpty={this.project.selection.getSelectedObjects().length === 0}
-                              editorActions={this.actionMapInterface.editorActions}
-                            />}
                             {renderSize === "large" && 
                             <OutlinerExpandButton
                               expanded={this.state.outlinerPoppedOut}
@@ -1197,7 +1188,6 @@ class Editor extends EditorCore {
                           getOnionSkinOptions={this.getOnionSkinOptions}
                           setFocusObject={this.setFocusObject}
                           addTweenKeyframe={this.addTweenKeyframe}
-                          onRef={ref => this.timelineComponent = ref}
                           dragSoundOntoTimeline={this.dragSoundOntoTimeline}
                         />
                       </DockedPanel>
@@ -1315,7 +1305,6 @@ class Editor extends EditorCore {
               clearCodeEditorError={this.clearCodeEditorError}
               consoleLogs={this.state.consoleLogs}
               setConsoleLogs={this.setConsoleLogs}
-              renderSize={renderSize}
             />}
         </div>
       </EditorWrapper>

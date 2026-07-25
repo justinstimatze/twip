@@ -22,11 +22,13 @@ import React, { Component } from 'react';
 
 import './_toolboxbreak.scss';
 
+/*
+ * The `vertical` and `className` props are gone with the small toolbox — the only tree
+ * that passed either.
+ */
 class ToolboxBreak extends Component {
   render() {
-    return (
-      <div className={this.props.vertical ? "toolbox-break-vertical" : this.props.className ? this.props.className : "toolbox-break"}></div>
-    )
+    return <div className="toolbox-break" />
   }
 }
 

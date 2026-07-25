@@ -81,18 +81,6 @@ $toolbox-max-button-size: 30px;
   margin-left: $tool-button-margin;
   margin-right: $tool-button-margin;
 }
-.toolbox-item.mobile {
-  margin-right: 0;
-}
-
-.tool-selector-item {
-  margin-top: $tool-button-margin;
-  margin-bottom: $tool-button-margin;
-}
-.tool-selector-item:last-child {
-  margin-bottom: 0;
-}
-
 .toolbox-actions-center {
   float: left;
   display: flex;

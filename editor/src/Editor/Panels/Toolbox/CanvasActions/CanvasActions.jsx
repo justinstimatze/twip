@@ -4,7 +4,6 @@ import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 import ToolboxBreak from '../ToolboxBreak/ToolboxBreak';
 import PopupMenu from 'Editor/Util/PopupMenu/PopupMenu';
 import './_canvasactions.scss';
-import classNames from 'classnames';
 class CanvasActions extends Component {
   renderActionButton(action) {
     return (
@@ -21,15 +20,15 @@ class CanvasActions extends Component {
 
   renderActions = () => {
     return (
-      <div className={classNames('actions-container', this.props.renderSize === "small" && "vertical")}>
+      <div className="actions-container">
         {this.renderActionButton(this.props.editorActions.sendToBack)}
         {this.renderActionButton(this.props.editorActions.sendBackward)}
         {this.renderActionButton(this.props.editorActions.sendForward)}
         {this.renderActionButton(this.props.editorActions.sendToFront)}
-        <ToolboxBreak vertical={this.props.renderSize === "small"}/>
+        <ToolboxBreak/>
         {this.renderActionButton(this.props.editorActions.flipHorizontal)}
         {this.renderActionButton(this.props.editorActions.flipVertical)}
-        <ToolboxBreak vertical={this.props.renderSize === "small"}/>
+        <ToolboxBreak/>
         {this.renderActionButton(this.props.editorActions.booleanUnite)}
         {this.renderActionButton(this.props.editorActions.booleanSubtract)}
         {this.renderActionButton(this.props.editorActions.booleanIntersect)}
@@ -40,13 +39,12 @@ class CanvasActions extends Component {
   render () {
     return (
       <PopupMenu
-        mobile={this.props.renderSize === "small"}
         isOpen={this.props.showCanvasActions}
         toggle={this.props.toggleCanvasActions}
         target="more-canvas-actions-popover-button"
         className={"more-canvas-actions-popover"}
       >
-        <div className={classNames("canvas-actions-widget", this.props.renderSize === "small" && "vertical")}>
+        <div className="canvas-actions-widget">
           {!this.props.previewPlaying && this.renderActions()}
         </div>
       </PopupMenu>

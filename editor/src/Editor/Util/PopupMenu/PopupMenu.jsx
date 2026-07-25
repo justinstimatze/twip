@@ -34,7 +34,7 @@ function PopupMenu (props) {
       target={props.target}
       open={!!props.isOpen}
       onOpenChange={(open) => { if (!open) props.toggle(); }}
-      className={classNames('popup-menu-popover', props.mobile && 'mobile', props.className)}
+      className={classNames('popup-menu-popover', props.className)}
     >
       {props.children}
     </AnchoredPopover>

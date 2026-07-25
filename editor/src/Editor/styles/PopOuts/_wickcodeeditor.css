@@ -7,13 +7,6 @@
     border-radius: var(--border-radius-primary);
 }
 
-.we-code-editor-small {
-    --handle-height: 40px;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
 .wick-code-editor-body {
     display: flex;
     background-color: var(--wick-secondary);
@@ -22,11 +15,6 @@
     height: calc(100% - var(--handle-height));
     flex: 1;
     flex-direction: row;
-}
-
-.wick-code-editor-body-small {
-    flex: 1;
-    overflow-y: hidden;
 }
 
 .wick-code-editor-drag-handle {
@@ -43,10 +31,6 @@
     padding-left: var(--reference-width);
     border-top-right-radius: var(--border-radius-primary);
     border-top-left-radius: var(--border-radius-primary);
-}
-
-.wick-code-editor-drag-handle.small { 
-    padding-left: 0px;
 }
 
 .wick-code-editor-icon {
@@ -340,12 +324,6 @@
     flex-direction: row;
     margin-right: auto;
     white-space: nowrap;
-}
-
-.we-code-editor-title.small {
-    font-size: 20px;
-    font-weight: normal;
-    padding-left: 4px;
 }
 
 .we-code-editor-title-selected {
