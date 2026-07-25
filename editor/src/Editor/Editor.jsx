@@ -270,14 +270,21 @@ class Editor extends EditorCore {
       codeEditorWindowProperties: this.getDefaultCodeEditorProperties(),
     });
 
-    // Leave Page warning.
-    window.onbeforeunload = function(event) {
-      // Don't show the warning if nothing has been done to the project
-      if(this.project.numUndoStates > 1) {
-          return null;
-      }
-
-      var confirmationMessage = 'Warning: All unsaved changes will be lost!';
+    /*
+     * Leave-page warning. It fired on every reload, including reloads of a project nobody
+     * had touched, for three reasons: `project.numUndoStates` is undefined (the counter is
+     * on `project.history`), so the early return never happened; the test was inverted
+     * against its own comment, bailing out when there WERE unsaved edits; and `this` inside
+     * a plain function assigned to window.onbeforeunload is `window`, whose `project` the
+     * script sandbox deletes (engine Tickable.js:571), so it threw as often as not.
+     *
+     * Armed only for a real user. The dev server and the Playwright scripts reload dozens of
+     * times a run and the dialog is in the way of both.
+     */
+    const underTest = navigator.webdriver || import.meta.env.DEV;
+    window.onbeforeunload = underTest ? null : (event) => {
+      if (this.project.history.numUndoStates <= 1) return undefined;
+      const confirmationMessage = 'Warning: All unsaved changes will be lost!';
       (event || window.event).returnValue = confirmationMessage; //Gecko + IE
       return confirmationMessage; //Gecko + Webkit, Safari, Chrome etc.
     };
