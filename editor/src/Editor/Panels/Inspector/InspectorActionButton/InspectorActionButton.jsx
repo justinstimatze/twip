@@ -18,7 +18,6 @@
  */
 
 import React, { Component } from 'react';
-import './_inspectoractionbutton.scss';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
 class InspectorActionButton extends Component {
@@ -31,7 +30,7 @@ class InspectorActionButton extends Component {
     let actionColor = action.color ? action.color : "inspector";
 
     return(
-      <div className="inspector-button">
+      <div className="h-10 w-full">
         <ActionButton
           color={actionColor}
           icon={action.icon}

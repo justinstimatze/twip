@@ -4,8 +4,6 @@
 
 import React, { Component } from 'react';
 
-import './_inspectorframepicker.scss';
-
 import WickInput from 'Editor/Util/WickInput/WickInput';
 import InspectorFrameButton from './InspectorFrameButton/InspectorFrameButton';
 
@@ -56,7 +54,7 @@ class InspectorFramePicker extends Component {
             clipFrameImages.push([`data:image/svg+xml;base64,${encodedFrame}`, index]);
         });
 
-        return clipFrameImages.map(item => [(<img src={item[0]} alt="" />), item[1]]);
+        return clipFrameImages.map(item => [(<img className="max-h-full w-full" src={item[0]} alt="" />), item[1]]);
     }
 
     render() {
@@ -68,7 +66,7 @@ class InspectorFramePicker extends Component {
             return (<InspectorFrameButton label={item[1]} key={item[1]} onClick={() => this.onChange(item[1])} isActive={this.getActive() === item[1]}>{item[0]}</InspectorFrameButton>);
         });
         return (
-            <div className="inspector-item">
+            <div className="flex flex-col items-center border-b-2 border-surface-sunken px-panel-pad py-[5px]">
                 <WickInput type="button" className="wick-frame-picker-switch"
                 onClick={
                     () => this.setState(switchFramePicker)
@@ -76,9 +74,9 @@ class InspectorFramePicker extends Component {
                     Toggle Frame Picker
                 </WickInput>
                 {this.state.showFramePicker &&
-                <div className="wick-frame-picker-button-container">
+                <div className="relative h-full w-full">
                     {frameButtons}
-                    <div className="wick-frame-picker-disabled"
+                    <div className="absolute top-0 left-0 flex h-full w-full items-start justify-center bg-surface/50 py-[5px] text-center text-content"
                         style={{display: this.props.isSingleFrame ? "none" : ""}}>
                         Requires Animation set to "Single Frame"
                     </div>

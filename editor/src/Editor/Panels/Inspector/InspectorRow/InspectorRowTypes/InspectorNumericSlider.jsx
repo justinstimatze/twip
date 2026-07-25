@@ -21,20 +21,21 @@ import React, { Component } from 'react';
 
 import InspectorInput from 'Editor/Panels/Inspector/InspectorRow/InspectorInput/InspectorInput';
 
-import '../_inspectorrow.scss';
+import { InspectorRow, InspectorLabel, InspectorField } from '../InspectorRow';
+
 
 class InspectorNumericSlider extends Component {
   render() {
     let idLabel = this.props.tooltip.replace(/\s+/g, '-').toLowerCase();
     return(
-      <div className="inspector-row">
+      <InspectorRow>
         {/* Identifier */} 
-        <label htmlFor={idLabel + "-input"} className="inspector-row-identifier">
+        <InspectorLabel htmlFor={idLabel + "-input"}>
           {this.props.tooltip}
-        </label>
+        </InspectorLabel>
 
         {/* Input */}
-        <div className="inspector-small-input-container">
+        <InspectorField size="small">
           <InspectorInput
             inputProps={{id: idLabel + "-input"}} 
             input={
@@ -42,10 +43,10 @@ class InspectorNumericSlider extends Component {
               value: this.props.val,
               onChange: this.props.onChange}
             } />
-        </div>
+        </InspectorField>
 
         {/* Slider */}
-        <div className="inspector-medium-input-container">
+        <InspectorField size="medium">
           <InspectorInput
             inputProps={{...this.props.inputProps, id: idLabel+ "-input"}}
             input={
@@ -53,8 +54,8 @@ class InspectorNumericSlider extends Component {
                value: this.props.val,
                onChange: this.props.onChange}
             } />
-        </div>
-      </div>
+        </InspectorField>
+      </InspectorRow>
     );
   }
 }

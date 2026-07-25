@@ -19,14 +19,12 @@
 
 import React, { Component } from 'react';
 
-import '../_inspectorrow.scss';
-
 import WickInput from 'Editor/Util/WickInput/WickInput';
 
 class InspectorInput extends Component {
   render() {
     return (
-      <div  className="inspector-input-element">
+      <div className="inline-block h-full w-full">
         <WickInput {...this.props.inputProps} {...this.props.input}/>
       </div>
     );

@@ -19,7 +19,6 @@
 
 import React, { Component } from 'react';
 import ScriptWindowRow from './ScriptWindowRow/ScriptWindowRow'; 
-import './_inspectorscriptwindow.scss';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
 class InspectorScriptWindow extends Component {
@@ -36,13 +35,13 @@ class InspectorScriptWindow extends Component {
 
   render() {
     return(
-      <div className="inspector-script-window-container">
-         <div className="inspector-script-window-header">
+      <div className="h-full w-full rounded-[3px] bg-surface-hover pb-[5px]">
+         <div className="h-[25px] w-full rounded-t-[3px] bg-surface-raised text-center text-content">
           Scripts
          </div>
          <div className="inspector-script-window-body">
            {this.props.script.scripts.map(this.renderScriptRow)}
-           <div className="inspector-script-window-row-container">
+           <div className="mx-[5px] mt-[5px] flex h-[25px] flex-row justify-between rounded-[3px]">
              <ActionButton
               color="inspector"
               text="+ add script"

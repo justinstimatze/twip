@@ -18,7 +18,6 @@
  */
 
 import React, { Component } from 'react';
-import './_inspectorpreview.scss';
 
 import AudioPlayer from 'Editor/Util/AudioPlayer/AudioPlayer';
 
@@ -27,13 +26,13 @@ class InspectorPreview extends Component {
   render() {
     if (this.props.info.type === "image") {
       return (
-        <div className="inspector-image-preview-container">
-          <img alt='' className="inspector-image-preview" src={this.props.info.src} />
+        <div className="my-panel-pad flex h-[100px] w-full items-center justify-center">
+          <img alt='' className="h-[100px] w-auto" src={this.props.info.src} />
         </div>
       )
     } else if (this.props.info.type === 'sound') {
       return (
-        <div className="inspector-sound-preview-container">
+        <div className="m-[5px]">
           <AudioPlayer key={Math.random()} src={this.props.info.src}/>
         </div>
       );

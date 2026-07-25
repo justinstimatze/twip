@@ -19,7 +19,6 @@
 
 import React, { Component } from 'react';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
-import './_scriptwindowrow.scss';
 
 // https://flaviocopes.com/how-to-uppercase-first-letter-javascript/
 const capitalize = (s) => {
@@ -29,26 +28,34 @@ const capitalize = (s) => {
 
 
 class ScriptWindowRow extends Component {
+  /* Mouse/keyboard/lifecycle scripts each get their own bar colour, the same three the
+     code editor tabs use. Blue is the fallback for a script in no known group. */
+  static BAR = {
+    blue: 'bg-[#05b8ff]',
+    green: 'bg-wick-green-light',
+    yellow: 'bg-wick-yellow-light',
+  }
+
   getColorBar = () => {
     let scriptsByType = this.props.scriptInfoInterface.scriptsByType;
 
-    let color = 'blue-bar'; 
+    let color = 'blue';
 
     Object.keys(scriptsByType).forEach(type => {
         if (scriptsByType[type].indexOf(this.props.name) > -1) {
-            color = this.props.scriptInfoInterface.scriptTypeColors[type] + "-bar";
+            color = this.props.scriptInfoInterface.scriptTypeColors[type];
         }
     }); 
 
-    return color;
+    return ScriptWindowRow.BAR[color] ?? ScriptWindowRow.BAR.blue;
   }
 
   render() {
     let scriptName = capitalize(this.props.name);
     return(
-      <div className="inspector-script-window-row-container">
-        <div className="script-row-item inspector-script-window-row-name">
-          <div className={"inspector-script-window-row-color-bar " + this.getColorBar()}/>
+      <div className="mx-[5px] mt-[5px] flex h-[25px] flex-row justify-between rounded-[3px]">
+        <div className="flex h-full w-[calc(100%-29px)] overflow-hidden rounded-[3px] bg-surface text-content">
+          <div className={"mr-[5px] h-full w-[5px] " + this.getColorBar()}/>
           <ActionButton 
                 id={"inspector-script-window-row-edit" + this.props.name}
                 text={capitalize(this.props.name)}
@@ -59,7 +66,7 @@ class ScriptWindowRow extends Component {
                 className="action-button-script-name"
                 />
         </div>
-        <div className="script-row-item inspector-script-window-row-delete">
+        <div className="h-full w-[25px] rounded-[3px] bg-surface text-content">
             <ActionButton 
                 id={"inspector-script-window-row-delete" + this.props.name}
                 icon="delete-black"

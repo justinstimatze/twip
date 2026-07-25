@@ -22,21 +22,22 @@ import React, { Component } from 'react';
 //import InspectorRow from '../InspectorRow';
 import InspectorInput from '../InspectorInput/InspectorInput';
 
-import '../_inspectorrow.scss';
+import { InspectorRow, InspectorLabel, InspectorField } from '../InspectorRow';
+
 
 class InspectorDualNumericInput extends Component {
   render() {
     let idLabel1 = this.props.tooltip1.replace(/\s+/g, '-').toLowerCase();
     let idLabel2 = this.props.tooltip2.replace(/\s+/g, '-').toLowerCase();
     return(
-      <div className="inspector-row">
+      <InspectorRow>
         {/* Identifier1 */} 
-        <label htmlFor={idLabel1 + "-input"} className="inspector-row-identifier">
+        <InspectorLabel htmlFor={idLabel1 + "-input"}>
           {this.props.tooltip1}
-        </label>
+        </InspectorLabel>
 
         {/* Input1 */}
-        <div className="inspector-small-input-container">
+        <InspectorField size="small">
           <InspectorInput 
             inputProps={{id: idLabel1 + "-input"}}
             input={
@@ -44,15 +45,15 @@ class InspectorDualNumericInput extends Component {
               value: this.props.val1,
               onChange: this.props.onChange1}
             } />
-        </div>
+        </InspectorField>
 
         {/* Identifier2 */}
-        <label htmlFor={idLabel2 + "-input"} className="inspector-row-identifier">
+        <InspectorLabel htmlFor={idLabel2 + "-input"}>
           {this.props.tooltip2}
-        </label>
+        </InspectorLabel>
         
         {/* Input2 */}
-        <div className="inspector-small-input-container">
+        <InspectorField size="small">
           <InspectorInput 
             inputProps={{id: idLabel2 + "-input"}}
             input={
@@ -60,8 +61,8 @@ class InspectorDualNumericInput extends Component {
               value: this.props.val2,
               onChange: this.props.onChange2}
             } />
-        </div>
-      </div>
+        </InspectorField>
+      </InspectorRow>
     );
   }
 }

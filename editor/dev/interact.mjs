@@ -245,6 +245,53 @@ const STEPS = [
   },
   {
     /*
+     * The Inspector is the panel that changes shape with the selection, and until its SCSS
+     * came out nothing here touched it. Draws a rectangle, selects it, and checks the panel
+     * both reports and writes: the title follows the selection type, the rows render, and a
+     * numeric field round-trips through to the engine.
+     */
+    name: 'inspector',
+    what: 'Inspector follows the selection and writes back through a numeric field',
+    async run () {
+      await page.locator('#tool-button-rectangle').click();
+      await page.waitForTimeout(300);
+      await page.mouse.move(400, 300);
+      await page.mouse.down();
+      await page.mouse.move(560, 420, { steps: 12 });
+      await page.mouse.up();
+      await page.waitForTimeout(1000);
+      await page.locator('#tool-button-cursor').click();
+      await page.waitForTimeout(300);
+      await page.mouse.click(480, 360);
+      await page.waitForTimeout(800);
+
+      const type = await page.evaluate(() => window.editor.getSelectionType());
+      if (type !== 'path') throw new Error(`selected a ${type}, wanted a path`);
+
+      const panel = page.locator('[aria-label="Inspector Panel"]');
+      if (!(await panel.isVisible())) throw new Error('inspector not visible');
+      if (!(await panel.getByText('Path', { exact: true }).first().isVisible())) {
+        throw new Error('title does not name the selection type');
+      }
+      for (const id of ['#width-input', '#height-input', '#rotation-input', '#opacity-input']) {
+        if ((await page.locator(id).count()) === 0) throw new Error(`missing row: ${id}`);
+      }
+
+      // Type a width and confirm the engine took it, not just the input.
+      const width = page.locator('#width-input');
+      await width.fill('120');
+      await width.press('Enter');
+      await page.waitForTimeout(700);
+      const got = await page.evaluate(() => window.editor.project.selection.width);
+      if (Math.round(got) !== 120) throw new Error(`engine width is ${got}, wanted 120`);
+
+      // Leave the project as it was found, so later steps start from an empty stage.
+      await page.evaluate(() => { window.editor.project.selection.clear(); window.editor.undoAction(); });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    /*
      * Resizes the live page rather than opening a second one at 375px, because the
      * interesting part is the transition: the editor and the viewer are different trees
      * over the same Wick.Project, and going back has to restore what going there changed.

@@ -18,7 +18,6 @@
  */
 
 import React, { Component } from 'react';
-import './_inspector.scss';
 
 import { loadFontPreviews } from 'Editor/Util/fontPreview';
 
@@ -36,6 +35,13 @@ import InspectorSoundPreview from './InspectorPreview/InspectorPreviewTypes/Insp
 import InspectorScriptWindow from './InspectorScriptWindow/InspectorScriptWindow';
 import InspectorCheckbox from './InspectorRow/InspectorRowTypes/InspectorCheckbox';
 import InspectorFramePicker from './InspectorFramePicker/InspectorFramePicker';
+
+/*
+ * One property group: a labelled block of rows with a hairline under it. Was
+ * `.inspector-item` in _inspector.scss, repeated at 17 call sites; the 2px rule is
+ * $editor-outline-padding * .5, which is where the odd half-splitter width comes from.
+ */
+const ITEM = 'flex flex-col items-center border-b-2 border-surface-sunken px-panel-pad py-[5px]';
 
 class Inspector extends Component {
   constructor (props) {
@@ -208,7 +214,7 @@ class Inspector extends Component {
    */
   renderSelectionColor = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorColorNumericInput
           tooltip1="Fill"
           tooltip2="Opacity"
@@ -360,7 +366,7 @@ class Inspector extends Component {
    */
   renderName = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorTextInput
           tooltip="Name"
           val={this.getSelectionAttribute('name')}
@@ -376,7 +382,7 @@ class Inspector extends Component {
    */
   renderIdentifier = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorTextInput
           tooltip="Name"
           val={this.getSelectionAttribute('identifier')}
@@ -392,7 +398,7 @@ class Inspector extends Component {
    */
   renderFilename = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorTextInput
           tooltip="File"
           val={this.getSelectionAttribute('filename')}
@@ -427,7 +433,7 @@ class Inspector extends Component {
    */
   renderFrameLength = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorNumericInput
           tooltip="Length"
           val={this.getSelectionAttribute('frameLength')}
@@ -545,7 +551,7 @@ class Inspector extends Component {
    */
   renderSelectionTransformProperties = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         {this.renderPosition()}
         {this.renderOrigin()}
         {this.renderSize()}
@@ -561,7 +567,7 @@ class Inspector extends Component {
    */
   renderSingleClipTransformProperties = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         {this.renderPosition()}
         {this.renderOrigin()}
         {this.renderSize()}
@@ -632,7 +638,7 @@ class Inspector extends Component {
 
   renderSoundContent = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         {this.renderSelectionSoundAsset()}
         {this.getSelectionAttribute('sound') && this.renderSelectionSoundVolume()}
         {this.getSelectionAttribute('sound') && this.renderSelectionSoundStart()}
@@ -642,7 +648,7 @@ class Inspector extends Component {
 
   renderAnimationType = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorSelector
           tooltip="Animation"
           type="select"
@@ -673,7 +679,7 @@ class Inspector extends Component {
       optionLabels.push({label: option, value: option});
     })
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorSelector
           tooltip="Easing Type"
           type="select"
@@ -687,7 +693,7 @@ class Inspector extends Component {
 
   renderTweenFullRotations = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorNumericInput
           tooltip="Full Rotations"
           val={this.getSelectionAttribute('fullRotations')}
@@ -699,7 +705,7 @@ class Inspector extends Component {
   
    renderTweenMethod = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorCheckbox
           tooltip="Skew Rotate" 
           checked={this.getSelectionAttribute('tweenMethod') === 'skew'}
@@ -713,7 +719,7 @@ class Inspector extends Component {
 
   renderGradientEndpointProperties = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorSelector
           tooltip="Type"
           type="select"
@@ -748,7 +754,7 @@ class Inspector extends Component {
 
   renderGradientStopProperties = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorColorNumericInput
           tooltip1="Color"
           tooltip2="Opacity"
@@ -895,7 +901,7 @@ class Inspector extends Component {
 
   renderFontContent = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         {this.renderFontFamily()}
         {this.renderFontStyle()}
         {this.renderFontWeight()}
@@ -1063,7 +1069,7 @@ class Inspector extends Component {
    */
   renderActionButton = (action, i) => {
     return (
-      <div key={i} className="inspector-item">
+      <div key={i} className={ITEM}>
         <InspectorActionButton
           action={action} />
       </div>
@@ -1098,7 +1104,7 @@ class Inspector extends Component {
    */
   renderScripts = () => {
     return (
-      <div className="inspector-item">
+      <div className={ITEM}>
         <InspectorScriptWindow
           script={this.props.script}
           deleteScript={this.props.deleteScript}
@@ -1117,7 +1123,7 @@ class Inspector extends Component {
     if (!(selectionType in this.inspectorTitles)) selectionType = "";
 
     return (
-      <div className="inspector-title-container">
+      <div className="relative shadow-[0_2px_4px_black]">
         <InspectorTitle
           type={selectionType}
           title={this.inspectorTitles[selectionType]} />
@@ -1130,9 +1136,9 @@ class Inspector extends Component {
     if (activeTool.name === 'gradienttool') {
       let selectionType = activeTool.selectionType;
       return(
-        <div className="docked-pane inspector" aria-label="Inspector Panel">
+        <div className="h-full w-full overflow-hidden border-r-4 border-surface-sunken bg-surface font-ui" aria-label="Inspector Panel">
           {this.renderTitle(selectionType)}
-          <div className="inspector-body">
+          <div className="h-[calc(100%-36px)] w-full overflow-hidden hover:overflow-y-auto">
             {this.renderDisplay(selectionType)}
             {this.renderActions(selectionType)}
           </div>
@@ -1142,9 +1148,9 @@ class Inspector extends Component {
     else {
       let selectionType = this.props.getSelectionType();
       return(
-        <div className="docked-pane inspector" aria-label="Inspector Panel">
+        <div className="h-full w-full overflow-hidden border-r-4 border-surface-sunken bg-surface font-ui" aria-label="Inspector Panel">
           {this.renderTitle(selectionType)}
-          <div className="inspector-body">
+          <div className="h-[calc(100%-36px)] w-full overflow-hidden hover:overflow-y-auto">
             {this.renderDisplay(selectionType)}
             {this.renderActions(selectionType)}
             {this.props.selectionIsScriptable() && this.renderScripts()}

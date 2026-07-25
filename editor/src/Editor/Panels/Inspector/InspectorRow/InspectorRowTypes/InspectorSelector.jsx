@@ -21,20 +21,21 @@ import React, { Component } from 'react';
 
 import InspectorInput from 'Editor/Panels/Inspector/InspectorRow/InspectorInput/InspectorInput';
 
-import '../_inspectorrow.scss';
+import { InspectorRow, InspectorLabel, InspectorField } from '../InspectorRow';
+
 
 class InspectorSelector extends Component {
   render() {
     let idLabel = this.props.tooltip.replace(/\s+/g, '-').toLowerCase();
     return(
-      <div className="inspector-row">
+      <InspectorRow>
         {/* Identifier */} 
-        <label htmlFor={idLabel + "-input"} className="inspector-row-identifier">
+        <InspectorLabel htmlFor={idLabel + "-input"}>
           {this.props.tooltip}
-        </label>
+        </InspectorLabel>
 
         {/* Input */}
-        <div className="inspector-large-input-container">
+        <InspectorField>
           <InspectorInput 
             inputProps={{id: idLabel+ "-input"}}
             input={
@@ -47,8 +48,8 @@ class InspectorSelector extends Component {
                 className: this.props.className,
               }
             } />
-        </div>
-      </div>
+        </InspectorField>
+      </InspectorRow>
     );
   }
 }
