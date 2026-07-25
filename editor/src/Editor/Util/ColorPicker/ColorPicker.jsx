@@ -18,7 +18,7 @@
  */
 
 import React, { useState } from 'react';
-import { Popover } from 'reactstrap';
+import { Popover, PopoverTrigger, PopoverContent } from '@/ui/popover';
 import WickColorPicker  from 'Editor/Util/ColorPicker/WickColorPicker';
 
 import './_colorpicker.scss';
@@ -27,50 +27,36 @@ export default function ColorPicker (props) {
   const [open, setOpen] = useState(false);
 
   let color = props.color ? props.color : new window.Wick.Color("#FFFFFF")
-  let itemID = props.id;
-  let popoverID = itemID+'-popover';
 
-  function toggle () {
-    if (!open) {
-      setTimeout(selectPopover, 200);
-    }
-
-    setOpen(!open)
-  }
-
-  function selectPopover () {
-    let ele = document.getElementById(popoverID);
-    if (ele) {
-      ele.focus();
-    }
-  }
+  // Radix maps `placement` onto a side and an alignment; the old prop only ever carried
+  // a bare side ("bottom", "left"), so anything with a dash is dropped rather than
+  // silently positioning somewhere else.
+  const side = typeof props.placement === 'string' ? props.placement.split('-')[0] : 'bottom';
 
   return (
-      <button
-        className={"btn-color-picker"}
-        aria-label="color picker button"
-        id={itemID}
-        onClick={toggle}
-        style={props.stroke ? {borderColor: color} : {backgroundColor: color}}
-        >
-          <Popover
-            tabIndex={-1}
-            id={popoverID}
-            placement={props.placement}
-            isOpen={open}
-            toggle={toggle}
-            target={itemID}
-            boundariesElement={'viewport'}>
-            <WickColorPicker
-              toggle={toggle}
-              colorPickerType={props.colorPickerType}
-              changeColorPickerType={props.changeColorPickerType}
-              disableAlpha={props.disableAlpha}
-              color={color}
-              onChangeComplete={props.onChangeComplete}
-              lastColorsUsed={props.lastColorsUsed}
-            />
-          </Popover>
-      </button>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className={"btn-color-picker"}
+            aria-label="color picker button"
+            id={props.id}
+            style={props.stroke ? {borderColor: color} : {backgroundColor: color}}
+          />
+        </PopoverTrigger>
+        {/* Portalled, so the picker is no longer a descendant of the button that opens
+            it. Interactive content inside a <button> is invalid, and it is why the old
+            version needed a 200ms setTimeout to move focus by hand. */}
+        <PopoverContent side={side} className="color-picker-popover">
+          <WickColorPicker
+            toggle={() => setOpen(false)}
+            colorPickerType={props.colorPickerType}
+            changeColorPickerType={props.changeColorPickerType}
+            disableAlpha={props.disableAlpha}
+            color={color}
+            onChangeComplete={props.onChangeComplete}
+            lastColorsUsed={props.lastColorsUsed}
+          />
+        </PopoverContent>
+      </Popover>
   )
 }

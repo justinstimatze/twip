@@ -33,3 +33,11 @@
   display: flex;
   flex-direction: row;
 }
+
+// WickColorPicker draws its own chrome, so the popover around it is only a box: the
+// background and border-radius bootstrap's `.popover` used to contribute, and no padding.
+.color-picker-popover {
+  background-color: $editor-primary;
+  border-radius: 4px;
+  overflow: hidden;
+}

@@ -167,6 +167,34 @@ body {
 }
 
 /*
+ * Barber-pole fill for the export progress bar, carried over from the bootstrap
+ * stylesheet that reactstrap needed. Same 45° / 1rem geometry, so the export modal looks
+ * as it did.
+ */
+.progress-stripes {
+  background-image: linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.15) 25%, transparent 25%,
+    transparent 50%, rgb(255 255 255 / 0.15) 50%,
+    rgb(255 255 255 / 0.15) 75%, transparent 75%, transparent
+  );
+  background-size: 1rem 1rem;
+}
+
+.progress-stripes-animated {
+  animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+  from { background-position: 1rem 0; }
+  to { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-stripes-animated { animation: none; }
+}
+
+/*
  * One focus style for the whole app, replacing the `button:focus, input:focus` rule that
  * lived in _wickbrand.scss. `:focus-visible` rather than `:focus` so a mouse click on a
  * button no longer leaves a ring behind — that rule fired on every click and is why the

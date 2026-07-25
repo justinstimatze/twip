@@ -21,7 +21,6 @@ import React, { Component } from 'react';
 
 import MakeInteractive from '../MakeInteractive/MakeInteractive';
 import AutosaveWarning from '../AutosaveWarning/AutosaveWarning';
-import WelcomeMessage from '../WelcomeMessage/WelcomeMessage';
 import MakeAnimated from '../MakeAnimated/MakeAnimated';
 import ExportOptions from '../ExportOptions/ExportOptions';
 import GeneralWarning from '../GeneralWarning/GeneralWarning';
@@ -59,13 +58,6 @@ class ModalHandler extends Component {
             open={this.props.activeModalName === 'AutosaveWarning'}
             loadAutosavedProject={this.props.loadAutosavedProject}
             clearAutoSavedProject={this.props.clearAutoSavedProject}
-        />
-        <WelcomeMessage
-          isMobile={isMobile}
-          openModal={this.props.openModal}
-          toggle={this.props.closeActiveModal}
-          open={this.props.activeModalName === 'WelcomeMessage'}
-          editorVersion={this.props.editorVersion}
         />
         <ExportOptions
           isMobile={isMobile}

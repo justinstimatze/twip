@@ -19,7 +19,6 @@
 
 import React, { PureComponent } from 'react';
 import './_dockedpanel.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 class DockedPanel extends PureComponent {
   render() {

@@ -47,10 +47,11 @@ class EditorCore extends Component {
         this.project.toolSettings.setSetting('fillColor', new window.Wick.Color(color));
       };
 
-      // We must manually close the brush modes popup here, because otherwise the page
-      // will crash because the popup can no longer find the brush modes toggle button
-      // on the page.
-      // See: https://github.com/reactstrap/reactstrap/issues/894
+      // Close the tool popups on a tool change. This started as a crash workaround —
+      // reactstrap's popover looked its anchor up by id and threw when the anchor left
+      // the page (reactstrap#894). Radix takes a null anchor without complaint, so the
+      // crash is gone, but closing is still the right behaviour: a brush-modes popup
+      // hanging over the page after you switch to the eyedropper is just stale.
       this.toggleBrushModes(false);
       this.toggleCursorTransformModes(false);
       this.toggleGradientToolModes(false);

@@ -18,7 +18,6 @@
  */
 
 import React, { Component } from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
 import WickModal from 'Editor/Modals/WickModal/WickModal';
 import TabbedInterface from 'Editor/Util/TabbedInterface/TabbedInterface';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';

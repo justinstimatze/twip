@@ -19,7 +19,6 @@
 
 import React, { Component } from 'react';
 import './_inspectortitle.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 class InspectorTitle extends Component {
 

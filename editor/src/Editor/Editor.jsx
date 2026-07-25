@@ -23,7 +23,6 @@ import './_editor.scss';
 import './styles/default_theme.css';
 import './styles/default_styles.css';
 
-import 'bootstrap/dist/css/bootstrap.min.css';
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { DndProvider } from 'react-dnd'
 import { PanelGroup, Panel, PanelSeparator } from '@/ui/resizable'
@@ -71,7 +70,7 @@ class Editor extends EditorCore {
     this.state = {
       project: null,
       previewPlaying: false,
-      activeModalName: window.localStorage.skipWelcomeMessage ? null : "WelcomeMessage",
+      activeModalName: null,
       activeModalQueue: [],
       codeEditorOpen: false,
       scriptToEdit: "default",

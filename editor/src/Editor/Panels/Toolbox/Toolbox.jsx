@@ -19,7 +19,6 @@
 
 import React, { Component } from 'react';
 import './_toolbox.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 import WickInput from 'Editor/Util/WickInput/WickInput';
 import ToolboxBreak from './ToolboxBreak/ToolboxBreak';

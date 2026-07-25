@@ -19,7 +19,6 @@
 
 import React, { Component } from 'react';
 import './_inspectorpreview.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 import AudioPlayer from 'Editor/Util/AudioPlayer/AudioPlayer';
 

@@ -86,6 +86,11 @@ export default function ActionButton (props) {
   return (
       <WickInput
         buttonProps={props.buttonProps}
+        // ToolButton has always passed id={"tool-button-" + name} and ActionButton has
+        // always dropped it, so none of those ids reached the DOM. It only ever fed
+        // react-tooltip's data-for pairing, which is gone; forwarding it now gives every
+        // tool button a stable handle for dev/interact.mjs to drive.
+        id={props.id}
         tooltip={getTooltip()}
         tooltipID={tooltipID}
         tooltipPlace={props.tooltipPlace}

@@ -19,7 +19,7 @@
 
 import React, { Component } from 'react';
 import WickModal from 'Editor/Modals/WickModal/WickModal';
-import { Progress } from 'reactstrap';
+import { Progress } from '@/ui/progress';
 
 import './_exportmedia.scss';
 
@@ -47,8 +47,9 @@ class ExportMedia extends Component {
           <Progress
             striped
             animated={!this.renderDone}
-            color={this.renderDone ? 'success' : 'warning'}
+            done={this.renderDone}
             value={this.props.renderProgress}
+            label={`Exporting ${this.props.renderType}`}
           />
           <div id="media-export-modal-status-message">{this.props.renderStatusMessage}</div>
         </div>

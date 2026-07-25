@@ -19,7 +19,6 @@
 
 import React, { Component } from 'react';
 import './_outlinertitle.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 class OutlinerTitle extends Component {
 

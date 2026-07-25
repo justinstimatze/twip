@@ -19,10 +19,15 @@
 
 @import 'Editor/_wickbrand.scss';
 
+// The padding and border-radius used to come from bootstrap's `.popover`, which
+// reactstrap needed and never shipped itself. Radix positions the box and nothing more,
+// so the box is described here.
 .popup-menu-popover {
   background-color: $editor-primary;
   border: 2px solid $editor-primary-outline;
   max-width: 375px;
+  border-radius: 4px;
+  padding: 4px;
 }
 
 .actions-container {

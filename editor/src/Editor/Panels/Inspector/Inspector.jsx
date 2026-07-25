@@ -20,7 +20,6 @@
 import React, { Component } from 'react';
 import './_inspector.scss';
 import './_inspectorselector.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 import InspectorTitle from './InspectorTitle/InspectorTitle';
 

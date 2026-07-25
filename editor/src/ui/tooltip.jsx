@@ -25,7 +25,25 @@ export function Tooltip ({ content, side = 'bottom', delay = 200, children, clas
   if (!content) return children;
   return (
     <TooltipPrimitive.Root delayDuration={delay}>
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Trigger
+        asChild
+        /*
+         * Radix opens a tooltip on any focus, including focus moved by script. A popover
+         * moves focus to the first control inside itself when it opens, and in the color
+         * picker that control has a tooltip — so clicking the swatch popped a "Swatches"
+         * tooltip on top of the picker, and because a tooltip is a dismissable layer and
+         * it mounted last, it swallowed the first Escape. The picker looked like it was
+         * ignoring the key.
+         *
+         * Radix's onFocus is composed with checkForDefaultPrevented, so preventing the
+         * default here suppresses the open. `:focus-visible` is the line: it is true when
+         * the user tabbed here and false when a pointer put focus here, which is exactly
+         * the difference between wanting the label and not.
+         */
+        onFocus={(event) => {
+          if (!event.target.matches?.(':focus-visible')) event.preventDefault();
+        }}
+      >{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           side={side}

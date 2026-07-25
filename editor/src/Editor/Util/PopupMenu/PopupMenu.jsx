@@ -17,25 +17,28 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { Component } from 'react';
-import { Popover } from 'reactstrap';
+import React from 'react';
+import { AnchoredPopover } from '@/ui/popover';
 import './_popupmenu.scss'
 import classNames from 'classnames';
-class PopupMenu extends Component {
-  render() {
-    return (
-      <Popover
-        placement="bottom"
-        isOpen={this.props.isOpen}
-        toggle={this.props.toggle}
-        target={this.props.target}
-        boundariesElement={'viewport'}
-        className={classNames("popup-menu-popover", this.props.mobile && "mobile")}
-      >
-        {this.props.children}
-      </Popover>
-    )
-  }
+
+/**
+ * The three call sites all pass `isOpen`/`toggle` from editor state, so open state stays
+ * where it is and Radix is told about it rather than owning it. `onOpenChange` fires for
+ * outside clicks and Escape; both should call `toggle`, and neither should call it a
+ * second time on the way open.
+ */
+function PopupMenu (props) {
+  return (
+    <AnchoredPopover
+      target={props.target}
+      open={!!props.isOpen}
+      onOpenChange={(open) => { if (!open) props.toggle(); }}
+      className={classNames('popup-menu-popover', props.mobile && 'mobile', props.className)}
+    >
+      {props.children}
+    </AnchoredPopover>
+  )
 }
 
 export default PopupMenu

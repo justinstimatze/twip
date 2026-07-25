@@ -23,7 +23,6 @@ import { useDrop } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 
 import './_timeline.scss';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
 import iconLock from 'resources/timeline-icons/locked.png';
 import iconUnlock from 'resources/timeline-icons/unlocked.png';
