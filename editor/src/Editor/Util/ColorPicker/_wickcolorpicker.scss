@@ -38,14 +38,35 @@
     display: flex;
  }
 
- .wick-color-picker-saturation {
+// react-colorful injects its own stylesheet into <head> at mount, so these overrides win
+// on specificity rather than on order — `.wick-color-picker .react-colorful` is 0,2,0
+// against its 0,1,0, which holds however the two sheets end up sorted.
+.wick-color-picker .react-colorful {
     width: 100%;
-    height: 115px;
-    position: relative;
+    height: 150px;
     margin-top: $color-picker-block-margin;
-    border-radius: 2px;
-    overflow: hidden;
- }
+}
+
+.wick-color-picker .react-colorful__saturation {
+    border-radius: 2px 2px 0 0;
+    border-bottom-width: 8px;
+}
+
+.wick-color-picker .react-colorful__hue,
+.wick-color-picker .react-colorful__alpha {
+    height: 14px;
+}
+
+.wick-color-picker .react-colorful__last-control {
+    border-radius: 0 0 2px 2px;
+}
+
+// Its default pointer is 28px, which is wider than the 14px bars it has to sit on here.
+.wick-color-picker .react-colorful__pointer {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+}
 
 #btn-color-picker-close {
     margin-left: auto;
@@ -76,21 +97,51 @@
     margin-top: $color-picker-block-margin;
 }
 
-.wick-color-picker-control-bar {
-    width: calc(#{$color-picker-width} - 2 * #{$color-picker-padding} - 2 * #{$color-picker-bar-height} - 2 * #{$color-picker-block-margin});
-    height: 45%;
-    position: relative;
-    margin-bottom: 2.5%;
-    background-color: white;
+.wick-color-picker-fields {
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+    margin-right: $color-picker-block-margin;
+}
+
+// Explicit flex-basis of 0 on both, because `.wick-color-picker input` below sets
+// `width: 100% !important` — with an auto basis that resolves to the full row and
+// whichever field comes second eats it.
+.wick-color-picker-fields .wick-color-picker-hex {
+    flex: 2 1 0;
+    min-width: 0;
+}
+
+.wick-color-picker-fields .wick-color-picker-alpha {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+// The checkerboard the current colour sits on. Was react-color's <Checkboard>, a base64
+// PNG; two gradients draw the same 8px board and scale without blurring.
+@mixin checkerboard($size: 8px) {
+    background-color: #ffffff;
+    background-image:
+        linear-gradient(45deg, #cccccc 25%, transparent 25%, transparent 75%, #cccccc 75%),
+        linear-gradient(45deg, #cccccc 25%, transparent 25%, transparent 75%, #cccccc 75%);
+    background-size: $size $size;
+    background-position: 0 0, calc(#{$size} / 2) calc(#{$size} / 2);
 }
 
 .wick-color-picker-color-block-container {
     position: relative;
     width: $color-picker-bar-height;
     height: $color-picker-bar-height;
-    margin-left: $color-picker-block-margin;
-    background-color: white;
+    min-width: $color-picker-bar-height;
     border-radius: 2px;
+    overflow: hidden;
+    @include checkerboard;
+}
+
+.wick-color-picker-color-block {
+    width: 100%;
+    height: 100%;
 }
 
 .wick-color-picker-swatches-container {
@@ -108,18 +159,42 @@
     width: 16px;
     min-width: 16px;
     height: 16px;
+    padding: 0;
     border-radius: 4px;
-    overflow: hidden;
     border: 1px solid #222;
     margin: 0px 10px 10px 0px;
-    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==");
-    background-size: 15px 15px;
+    cursor: pointer;
+    overflow: hidden;
+    // #FFFFFF00 is one of the eight presets; without a board behind it, "transparent"
+    // renders as the panel colour and reads as an opaque grey swatch. The colour goes on
+    // an inner span so it sits over the board rather than the board over it.
+    @include checkerboard(6px);
+}
+
+.wick-color-picker-small-swatch > span {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 //Swatchbook styling
 .column-swatch {
     width: 30px;
     height: 20px;
+    padding: 0;
+    border: none;
+    cursor: pointer;
+}
+
+// --swatch-contrast is set inline per swatch: dark on a light colour, light on a dark one,
+// so the ring never disappears into the swatch it is marking.
+.column-swatch:hover,
+.column-swatch:focus-visible {
+    border: 2px solid var(--swatch-contrast, #cccccc);
+}
+
+.column-swatch[aria-pressed="true"] {
+    border: 3px solid var(--swatch-contrast, #cccccc);
 }
 
 .column-swatch:first-child {
@@ -145,12 +220,6 @@
 .wick-swatch-color-picker-body {
     display: flex;
     flex-direction: column;
-}
-
-// Fix the styling for the Sketch Inputs.
-.wick-color-picker .flexbox-fix {
-    margin-top: calc(#{$color-picker-block-margin} + 4px) !important;
-    padding-top: 0px !important;
 }
 
 .wick-color-picker input {

@@ -1,63 +1,37 @@
-import React, { Component } from 'react'
+import React from 'react'
 import tinycolor from 'tinycolor2';
-import { Swatch } from 'react-color/lib/components/common';
+import { toRgbaString } from 'Editor/Util/ColorPicker/WickColorPicker';
 
-class WickSwatch extends Component {
-    constructor (props) {
-        super(props);
-        this.state = {
-            hovered: false,
-            focused: false,
-        }
-    }
+/*
+ * One swatch in the swatchbook.
+ *
+ * Was react-color's <Swatch> inside a div that tracked hover and focus in state purely to
+ * draw a border. A button draws its own :hover and :focus-visible in CSS, so the state,
+ * the two handlers and the inline style object all go.
+ *
+ * The old version also had no accessible name — a screen reader heard eighty-odd
+ * unlabelled clickables. It has the colour now.
+ */
+function WickSwatch ({ color, selectedColor, onChangeComplete }) {
+  // Normalised first: selectedColor arrives as an rgba string from the Toolbox but as a
+  // Wick.Color object when a caller passes no colour at all, and tinycolor reads an
+  // unrecognised object as opaque black — which would mark the black swatch selected
+  // everywhere it happened.
+  const selected = tinycolor.equals(color, toRgbaString(selectedColor));
+  // A light swatch needs a dark ring and vice versa, or the selection marker vanishes
+  // into its own colour.
+  const contrast = tinycolor(color).isLight() ? '#333333' : '#CCCCCC';
 
-    setHovered = (hoverState) => {
-        this.setState({
-            hovered: hoverState,
-        });
-    }
-
-    render () {
-        let colorInfo = tinycolor(this.props.color);
-        let selectedColorInfo = tinycolor(this.props.selectedColor);
-        let contrastColor = '#CCCCCC'
-
-        let selected = this.props.color === ("#" + selectedColorInfo.toHex()); // TODO clean this check.
-
-        if (colorInfo.isLight()) {
-            contrastColor = "#333333"
-        }
-
-        let selectedStyle = {
-            border: '3px solid' + contrastColor
-        }
-
-        let style = {};
-        if (this.state.hovered || this.state.focused) {
-            style.border = "2px solid " + contrastColor;
-        }
-        if (selected) {
-            style = selectedStyle;
-        }
-
-        return (
-            <div 
-                onFocus={() => {
-                    this.setState({focused: true});
-                }}
-                onBlur={() => {
-                    this.setState({focused: false});
-                }}
-                onMouseEnter={() => this.setHovered(true)}
-                onMouseLeave={() => this.setHovered(false)}
-                className="column-swatch"
-                style={style}>
-                <Swatch
-                    color={this.props.color}
-                    onClick={(color) => {this.props.onChangeComplete(color)}}  />
-            </div>
-        );
-    }
+  return (
+    <button
+      type="button"
+      className="column-swatch"
+      aria-label={color}
+      aria-pressed={selected}
+      style={{ backgroundColor: color, '--swatch-contrast': contrast }}
+      onClick={() => onChangeComplete && onChangeComplete(color)}
+    />
+  );
 }
 
 export default WickSwatch

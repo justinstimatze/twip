@@ -68,9 +68,9 @@ importers:
       react-ace:
         specifier: ^6.3.2
         version: 6.6.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      react-color:
-        specifier: ^2.14.1
-        version: 2.19.3(react@19.2.8)
+      react-colorful:
+        specifier: ^5.8.0
+        version: 5.8.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-dnd:
         specifier: ^16.0.1
         version: 16.0.1(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.17))(@types/react@19.2.17)(react@19.2.8)
@@ -458,11 +458,6 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
-
-  '@icons/material@0.2.4':
-    resolution: {integrity: sha512-QPcGmICAPbGLGb6F/yNf/KzKqvFx8z5qx3D1yFqVAjoFmXK35EgyW+cJ57Te3CNsmzblwtzakLGFqHPqrfb4Tw==}
-    peerDependencies:
-      react: '*'
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -2174,9 +2169,6 @@ packages:
   localforage@1.10.0:
     resolution: {integrity: sha512-14/H1aX7hzBBmmh7sGPd+AOMkkIrHM3Z1PAyGgZigA1H1p5O5ANnMyWzvpAETtG68/dC4pC0ncy3+PPGzXZHPg==}
 
-  lodash-es@4.18.1:
-    resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
-
   lodash.get@4.4.2:
     resolution: {integrity: sha512-z+Uw/vLuy6gQe8cfaFWD7p0wVv8fJl3mbzXh33RS+0oW2wvUqiRXiQ69gLWSLpgB5/6sU+r6BlQR0MBILadqTQ==}
     deprecated: This package is deprecated. Use the optional chaining (?.) operator instead.
@@ -2227,9 +2219,6 @@ packages:
   matchdep@2.0.0:
     resolution: {integrity: sha512-LFgVbaHIHMqCRuCZyfCtUOq9/Lnzhi7Z0KFUE2fhD54+JN2jLh3hC02RLkqauJ3U4soU6H1J3tfj/Byk7GoEjA==}
     engines: {node: '>= 0.10.0'}
-
-  material-colors@1.2.6:
-    resolution: {integrity: sha512-6qE4B9deFBIa9YSpOc9O0Sgc43zTeVYbgDT5veRKSlB2+ZuHNoVVxA1L/ckMUayV9Ay9y7Z/SZCLcGteW9i7bg==}
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -2474,10 +2463,11 @@ packages:
       react: ^0.13.0 || ^0.14.0 || ^15.0.1 || ^16.0.0
       react-dom: ^0.13.0 || ^0.14.0 || ^15.0.1 || ^16.0.0
 
-  react-color@2.19.3:
-    resolution: {integrity: sha512-LEeGE/ZzNLIsFWa1TMe8y5VYqr7bibneWmvJwm1pCn/eNmrabWDh659JSPn9BuaMpEfU83WTOJfnCcjDZwNQTA==}
+  react-colorful@5.8.0:
+    resolution: {integrity: sha512-Wy9OzPfjSN9bF12OB8N7UQvlsZ0I+7wHxpN+bV5BjNQGxOj6IiwkRjevJK9yOBjJWGQvAaf1OXtn8rUeEatAng==}
     peerDependencies:
-      react: '*'
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   react-dnd-html5-backend@16.0.1:
     resolution: {integrity: sha512-Wu3dw5aDJmOGw8WjH1I1/yTH+vlXEL4vmjk5p+MHxP8HuHJS1lAGeIdG/hze1AvNeXWo/JgULV87LyQOr+r5jw==}
@@ -2584,11 +2574,6 @@ packages:
   react@19.2.8:
     resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
     engines: {node: '>=0.10.0'}
-
-  reactcss@1.2.3:
-    resolution: {integrity: sha512-KiwVUcFu1RErkI97ywr8nvx8dNOpT03rbnma0SSalTYjkrPYaEajR4a/MRt6DZ46K6arDRbWMNHF+xH7G7n/8A==}
-    peerDependencies:
-      react: '*'
 
   read-pkg-up@1.0.1:
     resolution: {integrity: sha512-WD9MTlNtI55IwYUS27iHh9tK3YoIVhxis8yKhLpTqWtml739uXc9NWTpxoHkfZf3+DkCCsXox94/VWZniuZm6A==}
@@ -3358,10 +3343,6 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
 
   '@floating-ui/utils@0.2.12': {}
-
-  '@icons/material@0.2.4(react@19.2.8)':
-    dependencies:
-      react: 19.2.8
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -5070,8 +5051,6 @@ snapshots:
     dependencies:
       lie: 3.1.1
 
-  lodash-es@4.18.1: {}
-
   lodash.get@4.4.2: {}
 
   lodash.isequal@4.5.0: {}
@@ -5120,8 +5099,6 @@ snapshots:
       stack-trace: 0.0.10
     transitivePeerDependencies:
       - supports-color
-
-  material-colors@1.2.6: {}
 
   math-intrinsics@1.1.0: {}
 
@@ -5391,16 +5368,10 @@ snapshots:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
-  react-color@2.19.3(react@19.2.8):
+  react-colorful@5.8.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
-      '@icons/material': 0.2.4(react@19.2.8)
-      lodash: 4.18.1
-      lodash-es: 4.18.1
-      material-colors: 1.2.6
-      prop-types: 15.8.1
       react: 19.2.8
-      reactcss: 1.2.3(react@19.2.8)
-      tinycolor2: 1.6.0
+      react-dom: 19.2.8(react@19.2.8)
 
   react-dnd-html5-backend@16.0.1:
     dependencies:
@@ -5502,11 +5473,6 @@ snapshots:
       '@types/react': 19.2.17
 
   react@19.2.8: {}
-
-  reactcss@1.2.3(react@19.2.8):
-    dependencies:
-      lodash: 4.18.1
-      react: 19.2.8
 
   read-pkg-up@1.0.1:
     dependencies:

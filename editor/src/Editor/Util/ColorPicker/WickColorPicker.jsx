@@ -1,15 +1,61 @@
 import React, { Component } from 'react'
+import tinycolor from 'tinycolor2';
+import { RgbaStringColorPicker, HexColorInput } from 'react-colorful';
 
 import  ActionButton  from 'Editor/Util/ActionButton/ActionButton';
-
-import './_wickcolorpicker.scss';
-import { CustomPicker } from 'react-color';
+import WickInput from 'Editor/Util/WickInput/WickInput';
 import WickSwatch from 'Editor/Util/ColorPicker/WickSwatch/WickSwatch'
 
-import { Saturation, Hue, Alpha, Checkboard, Swatch } from 'react-color/lib/components/common';
-import { SketchFields } from 'react-color/lib/components/sketch/SketchFields';
+import './_wickcolorpicker.scss';
 
+/**
+ * The editor passes colours around as `rgba(r, g, b, a)` strings — that is what
+ * Wick.Color.rgba produces and what every onChange here is expected to hand back — so the
+ * picker speaks that format end to end and never converts.
+ */
+export function toRgbaString (value, fallback = 'rgba(255, 255, 255, 1)') {
+  if (value === null || value === undefined) return fallback;
+  const parsed = tinycolor(typeof value === 'string' ? value : (value.rgba ?? String(value)));
+  return parsed.isValid() ? parsed.toRgbString() : fallback;
+}
+
+/*
+ * Replaces react-color 2 (2018), which supplied this file with a CustomPicker HOC and
+ * five internals imported from react-color/lib/components/common — Saturation, Hue, Alpha,
+ * Checkboard, Swatch — plus SketchFields out of the sketch picker. Reaching into a
+ * package's lib/ for unexported internals is what made the dependency unupgradable.
+ *
+ * react-colorful ships one component covering saturation, hue and alpha. What comes with
+ * it is keyboard control: each of the three areas is role="slider", tabbable, and moves on
+ * the arrow keys, with aria-valuenow on hue and alpha and aria-valuetext on the saturation
+ * square. react-color's versions were mouse-only, so the picker simply could not be
+ * operated without a pointer.
+ *
+ * The RGB spinners from SketchFields are gone. The hex field takes the same values in
+ * fewer inputs, and five text boxes never fit 200px anyway — alpha stays as its own field
+ * because entering it as the last two digits of an eight-digit hex is not a thing anyone
+ * would guess.
+ */
 class WickColorPicker extends Component {
+    get rgba () {
+        return toRgbaString(this.props.color);
+    }
+
+    /** @param {string} next an `rgba(...)` string */
+    emit = (next) => {
+        this.props.onChangeComplete && this.props.onChangeComplete(next);
+    }
+
+    setHex = (hex) => {
+        const alpha = tinycolor(this.rgba).getAlpha();
+        this.emit(tinycolor(hex).setAlpha(alpha).toRgbString());
+    }
+
+    setAlphaPercent = (percent) => {
+        const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+        this.emit(tinycolor(this.rgba).setAlpha(clamped / 100).toRgbString());
+    }
+
     renderSwatchColumn = (colorList, i) => {
         return (
             <div key={"swatch-color-column-" + i} className="wick-swatch-picker-column">
@@ -100,14 +146,14 @@ class WickColorPicker extends Component {
             <div className="wick-color-picker-swatches-container">
                 {colors.map((color, i) => {
                     return (
-                        <div
+                        <button
                             key={"color-swatch-" + color + "-" + i}
-                            className="wick-color-picker-small-swatch">
-                            <Swatch
-                                color={color}
-                                style={{default: {}, ":focus": {outline: "2px solid white"}}}
-                                onClick={(color) => {this.props.onChangeComplete(color)}}  />
-                        </div>
+                            type="button"
+                            className="wick-color-picker-small-swatch"
+                            aria-label={color}
+                            onClick={() => this.emit(toRgbaString(color))}>
+                            <span style={{ backgroundColor: color }} />
+                        </button>
                     );
                 })}
             </div>
@@ -115,24 +161,22 @@ class WickColorPicker extends Component {
     }
 
     renderSpectrum = () => {
-        let styles = {
-            activeColor: {
-                position:'absolute',
-                width: "100%",
-                height: "100%",
-                backgroundColor: this.props.color,
-            }
-        }
-        
+        const rgba = this.rgba;
+        const color = tinycolor(rgba);
+        const hex = color.toHexString();
+        const alphaPercent = Math.round(color.getAlpha() * 100);
+
         let colors = ['#D0021B', '#F8E71C', '#7ED321', '#4A90E2', '#000000', '#4A4A4A', '#FFFFFF', '#FFFFFF00']
         let lastUsedColorsDefaults = ["#000000","#000000","#000000","#000000","#000000","#000000","#000000","#000000"]
         let lastColors = this.props.lastColorsUsed || lastUsedColorsDefaults;
+
         return (
             <div className="wick-color-picker">
                 {this.renderHeader()}
-                <div className="wick-color-picker-saturation">
-                    <Saturation {...this.props}/>
-                </div>
+                <RgbaStringColorPicker
+                    className="wick-color-picker-spectrum"
+                    color={rgba}
+                    onChange={this.emit} />
                 <div className="wick-color-picker-control-body">
                     <div id="btn-color-picker-dropper">
                         <ActionButton
@@ -142,20 +186,27 @@ class WickColorPicker extends Component {
                             color="tool"
                             action={this.openEyedropper}/>
                     </div>
-                    <div id="wick-color-picker-bar-container">
-                        <div className="wick-color-picker-control-bar">
-                            <Hue {...this.props} height={11}/>
-                        </div>
-                        <div className="wick-color-picker-control-bar">
-                            <Alpha {...this.props} />
-                        </div>
+                    <div className="wick-color-picker-fields">
+                        <HexColorInput
+                            className="wick-color-picker-hex"
+                            aria-label="Hex colour"
+                            color={hex}
+                            onChange={this.setHex} />
+                        <WickInput
+                            type="numeric"
+                            className="wick-color-picker-alpha"
+                            aria-label="Alpha percent"
+                            min={0}
+                            max={100}
+                            value={alphaPercent}
+                            onChange={this.setAlphaPercent} />
                     </div>
+                    {/* The checkerboard is a CSS gradient rather than react-color's
+                        <Checkboard>, which rendered a base64 PNG. */}
                     <div className="wick-color-picker-color-block-container">
-                        <Checkboard />
-                        <div style={styles.activeColor} />
+                        <div className="wick-color-picker-color-block" style={{ backgroundColor: rgba }} />
                     </div>
                 </div>
-                <SketchFields {...this.props} aria-label="color options"/>
                 {this.renderSwatchContainer(colors)}
                 {this.renderSwatchContainer(lastColors)}
             </div>
@@ -172,8 +223,11 @@ class WickColorPicker extends Component {
 
     openEyedropper = () => {
         window.editor.setActiveTool('eyedropper');
-        window.editor._onEyedropperPickedColor = this.props.onChange;
+        // The picked colour arrives as a string, which is what emit() already takes. It
+        // used to be handed react-color's injected onChange, which expected the HOC's
+        // colour-object shape.
+        window.editor._onEyedropperPickedColor = (color) => this.emit(toRgbaString(color));
     }
 }
 
-export default CustomPicker(WickColorPicker);
+export default WickColorPicker;

@@ -123,6 +123,53 @@ const STEPS = [
     },
   },
   {
+    name: 'color-swatches',
+    what: 'Picking a swatch changes the tool colour (was react-color)',
+    async run () {
+      const before = await page.evaluate(() => window.editor.project.toolSettings.getSetting('fillColor').rgba);
+      await realClick('#tool-box-fill-color');
+      await page.waitForSelector('.column-swatch', { timeout: 3000 });
+      // Anything but the current colour, so a no-op cannot pass as a change.
+      const swatches = page.locator('.column-swatch');
+      const count = await swatches.count();
+      if (count < 10) throw new Error(`swatchbook rendered ${count} swatches`);
+      await swatches.nth(3).click();
+      await page.waitForTimeout(400);
+      const after = await page.evaluate(() => window.editor.project.toolSettings.getSetting('fillColor').rgba);
+      if (after === before) throw new Error(`fillColor unchanged (${before})`);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    name: 'color-spectrum',
+    what: 'Spectrum tab: hue/alpha sliders are reachable by keyboard',
+    async run () {
+      await realClick('#tool-box-fill-color');
+      await page.waitForSelector('.wick-color-picker', { timeout: 3000 });
+      await realClick('#color-picker-spectrum-button');
+      await page.waitForSelector('.react-colorful', { timeout: 3000 });
+
+      // react-color's saturation/hue/alpha were mouse-only. These are sliders.
+      const sliders = await page.evaluate(() =>
+        [...document.querySelectorAll('.react-colorful [role="slider"]')].map((el) => ({
+          label: el.getAttribute('aria-label'), tabindex: el.getAttribute('tabindex'),
+        })));
+      if (sliders.length !== 3) throw new Error(`expected 3 sliders, found ${sliders.length}`);
+      if (sliders.some((s) => s.tabindex !== '0')) throw new Error('a slider is not tabbable');
+
+      const before = await page.evaluate(() => window.editor.project.toolSettings.getSetting('fillColor').rgba);
+      await page.evaluate(() => document.querySelector('.react-colorful__hue [role="slider"]').focus());
+      for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(400);
+      const after = await page.evaluate(() => window.editor.project.toolSettings.getSetting('fillColor').rgba);
+      if (after === before) throw new Error(`arrow keys on the hue slider did nothing (${before})`);
+
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    },
+  },
+  {
     name: 'toast',
     what: 'Toasts appear, recolour on update, and dismiss (was react-toastify)',
     async run () {
