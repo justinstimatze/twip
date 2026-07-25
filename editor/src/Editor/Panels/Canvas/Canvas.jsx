@@ -48,7 +48,9 @@ class Canvas extends Component {
 
     // $editor-canvas-border in Editor/_wickbrand.scss (was read via the scss :export
     // block, which Vite only exposes for CSS modules — inlined during the CRA->Vite move).
-    project.view.canvasBGColor = '#6A6A6A';
+    // The viewer passes the page surface instead, so the stage reads as letterboxed rather
+    // than as a pasteboard with nothing pinned to it.
+    project.view.canvasBGColor = this.props.canvasBGColor ?? '#6A6A6A';
     project.view.canvasContainer = this.canvasContainer.current;
     project.view.resize();
 

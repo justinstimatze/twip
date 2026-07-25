@@ -245,6 +245,49 @@ const STEPS = [
     },
   },
   {
+    /*
+     * Resizes the live page rather than opening a second one at 375px, because the
+     * interesting part is the transition: the editor and the viewer are different trees
+     * over the same Wick.Project, and going back has to restore what going there changed.
+     */
+    name: 'view-only',
+    what: 'Below 768 the editor becomes a player, and coming back restores the editor',
+    async run () {
+      await page.setViewportSize({ width: 375, height: 740 });
+      await page.waitForTimeout(900); // onWindowResize is throttled at 300ms.
+
+      if (await page.locator('.tool-box-container').count()) throw new Error('toolbox still mounted');
+      if (await page.locator('#animation-timeline').count()) throw new Error('timeline still mounted');
+      if (!(await visible('#view-only-play'))) throw new Error('no play button');
+
+      // The engine must be holding a tool that cannot draw or select.
+      const tool = await page.evaluate(() => window.editor.project.activeTool.name);
+      if (tool !== 'none') throw new Error(`viewer left the ${tool} tool active`);
+
+      // The stage has to be fitted to the container, not left at whatever zoom the
+      // authoring layout had. 0.4 is well below the desktop zoom and above collapsed.
+      const zoom = await page.evaluate(() => window.editor.project.zoom);
+      if (!(zoom > 0.4 && zoom < 0.7)) throw new Error(`stage zoom is ${zoom}`);
+
+      await page.locator('#view-only-play').click();
+      await page.waitForTimeout(500);
+      if (!(await page.evaluate(() => window.editor.project.playing))) throw new Error('play did nothing');
+      if ((await page.locator('#view-only-play').getAttribute('aria-label')) !== 'Stop') {
+        throw new Error('button did not become a stop button');
+      }
+
+      await page.locator('#view-only-play').click();
+      await page.waitForTimeout(500);
+      if (await page.evaluate(() => window.editor.project.playing)) throw new Error('stop did nothing');
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(900);
+      if (!(await visible('.tool-box-container'))) throw new Error('toolbox did not come back');
+      const restored = await page.evaluate(() => window.editor.project.activeTool.name);
+      if (restored === 'none') throw new Error('authoring tool was not restored');
+    },
+  },
+  {
     name: 'ids-unique',
     what: 'no duplicate element ids (ActionButton now forwards id)',
     async run () {
@@ -258,10 +301,10 @@ const STEPS = [
   },
 ];
 
-const only = value('only');
+const only = value('only')?.split(',');
 let failed = false;
 for (const step of STEPS) {
-  if (only && step.name !== only) continue;
+  if (only && !only.includes(step.name)) continue;
   const before = errors.length;
   try {
     await step.run();

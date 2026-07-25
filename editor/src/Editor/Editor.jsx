@@ -50,10 +50,34 @@ import Outliner from './Panels/Outliner/Outliner';
 import OutlinerExpandButton from './Panels/OutlinerExpandButton/OutlinerExpandButton';
 import WickCodeEditor from './PopOuts/WickCodeEditor/WickCodeEditor';
 
+import ViewOnly from './Panels/ViewOnly/ViewOnly';
+
 import EditorWrapper from './EditorWrapper';
 
 import { version } from '../../package.json';
 import classNames from 'classnames';
+
+/*
+ * Breakpoints.
+ *
+ * 1024 is the hard minimum authoring width: below it the layout switches rather than
+ * shrinks, which is why "medium" exists at all. Below 768 the editor is a viewer — see
+ * Panels/ViewOnly.
+ *
+ * These were 1200 and 800, chosen when a separate mobile component tree existed to catch
+ * everything under 800. 768 is inclusive so an iPad in portrait (768 CSS px) still gets
+ * the authoring layout; a tablet with a stylus is a better drawing surface than a laptop
+ * trackpad, and sending it to the viewer would be the wrong call.
+ */
+const FULL_LAYOUT_WIDTH = 1024;
+const MIN_AUTHORING_WIDTH = 768;
+
+function computeRenderSize () {
+  if (window.innerWidth >= FULL_LAYOUT_WIDTH) return "large";
+  if (window.innerWidth >= MIN_AUTHORING_WIDTH) return "medium";
+  return "small";
+}
+
 class Editor extends EditorCore {
   constructor () {
     super();
@@ -104,6 +128,9 @@ class Editor extends EditorCore {
       },
       onionSkinningWasOn: false,
       localSavedFiles: [], // Files to display in savedProjects Modal.
+      // Held in state rather than read from window.innerWidth during render, so that
+      // componentDidUpdate can see the transition and tell the engine about it.
+      renderSize: computeRenderSize(),
     };
 
     // Catch all errors that happen in the editor.
@@ -262,6 +289,7 @@ class Editor extends EditorCore {
   componentDidMount = () => {
     console.log("Project Mounted");
     this.hidePreloader();
+    this.syncViewOnlyMode();
     this.onWindowResize();
     if(!this.tryToParseProjectURL()) {
       this.showAutosavedProjects();
@@ -271,6 +299,8 @@ class Editor extends EditorCore {
   }
 
   componentDidUpdate = (prevProps, prevState) => {
+    this.syncViewOnlyMode();
+
     if(this.state.previewPlaying && !prevState.previewPlaying) {
       this.project.view.canvas.focus();
       this.project.play({
@@ -287,7 +317,11 @@ class Editor extends EditorCore {
         },
         onAfterTick: () => {
           //this.project.view.render();
-          this.project.guiElement.draw();
+          // The viewer does not mount the Timeline, so guiElement still holds the detached
+          // container it makes in its own constructor. Drawing into it walks `offsetWidth`
+          // of an unattached div, and gui/Project.js:181 turns that 0 into a canvas width
+          // of -2.
+          if (!this.isViewOnly()) this.project.guiElement.draw();
         },
         onBeforeTick: () => {
 
@@ -381,6 +415,8 @@ class Editor extends EditorCore {
     // Ensure that all elements resize on window resize.
     this.onResize();
 
+    const renderSize = computeRenderSize();
+
     /*
      * Keep the floating code window inside the viewport, but keep everything else the user
      * chose. This used to assign getDefaultCodeEditorProperties() wholesale, which resets
@@ -392,6 +428,7 @@ class Editor extends EditorCore {
       const width = Math.min(props.width, window.innerWidth);
       const height = Math.min(props.height, window.innerHeight);
       return {
+        renderSize,
         codeEditorWindowProperties: {
           ...props,
           width,
@@ -841,7 +878,9 @@ class Editor extends EditorCore {
    * @returns {Object} Keymap listed as actionName : Object { 0 : sequence, 1 : sequence }
    */
   getKeyMap = (fullKeyMap) => {
-    if (this.state.previewPlaying && !fullKeyMap) {
+    // The viewer binds the same one key preview playback does — play/stop. Binding the
+    // rest would give a surface with no delete button a working delete shortcut.
+    if ((this.state.previewPlaying || this.isViewOnly()) && !fullKeyMap) {
       return this.hotKeyInterface.getEssentialKeyMap(this.state.customHotKeys)
     } else {
       return this.hotKeyInterface.getKeyMap(this.state.customHotKeys)
@@ -853,7 +892,13 @@ class Editor extends EditorCore {
    * @param fullKeyHandlers {Bool} If true, returns all key handlers for the editor. Otherwise, the appropriate keyhandlers returned.
    */
   getKeyHandlers = (fullKeyHandlers) => {
-    if (this.state.previewPlaying && !fullKeyHandlers) {
+    if (this.isViewOnly() && !fullKeyHandlers) {
+      // Same one key, but the viewer's meaning of play, so the key and the button agree.
+      return {
+        ...this.hotKeyInterface.getEssentialKeyHandlers(this.state.customHotKeys),
+        'preview-play-toggle': this.toggleViewOnlyPlayback,
+      };
+    } else if (this.state.previewPlaying && !fullKeyHandlers) {
       return this.hotKeyInterface.getEssentialKeyHandlers(this.state.customHotKeys)
     } else {
       return this.hotKeyInterface.getHandlers(this.state.customHotKeys)
@@ -865,13 +910,58 @@ class Editor extends EditorCore {
    * @returns {String} "large", "medium" or "small" depending on the width of the window.
    */
   getRenderSize = () => {
-    if (window.innerWidth > 1200) {
-      return "large";
-    } else if (window.innerWidth > 800) {
-      return "medium";
-    } else {
-      return "small";
+    return this.state.renderSize;
+  }
+
+  /**
+   * True when the window is too narrow to author in and the editor is showing the viewer.
+   */
+  isViewOnly = () => {
+    return this.state.renderSize === "small";
+  }
+
+  /**
+   * Tell the engine which surface is on screen.
+   *
+   * The viewer takes the `none` tool, so a drag on the canvas neither draws nor selects.
+   * The authoring tool goes back on the way out — by name, not by reference, because tools
+   * belong to a project and the project can be swapped underneath this.
+   *
+   * Deliberately not routed through `lastUsedTool`: that is the activate-last-tool hotkey's
+   * memory and has no business learning about window resizes.
+   *
+   * Re-runs when the project is replaced as well as when the breakpoint moves, since
+   * opening a file builds a fresh Wick.Project holding the cursor tool.
+   *
+   * Zoom is left to `recenter()`, which already fits the stage to its container with 4%
+   * padding and is what every load path calls. The engine also has a `fill` fitMode that
+   * refits on every render, but it multiplies the model zoom by the fit zoom, so a
+   * `recenter()` from anywhere — `hidePreloader`, `prepareProjectForEditor` — squares the
+   * scale and the stage collapses to a quarter size.
+   */
+  syncViewOnlyMode = () => {
+    if (!this.project) return;
+
+    const viewOnly = this.state.renderSize === "small";
+    const sameProject = this.project === this._viewModeProject;
+    if (sameProject && viewOnly === this._viewModeApplied) return;
+
+    const leavingViewOnly = sameProject && this._viewModeApplied && !viewOnly;
+    this._viewModeProject = this.project;
+    this._viewModeApplied = viewOnly;
+
+    if (viewOnly) {
+      if (this.project.activeTool.name !== 'none') {
+        this.toolBeforeViewOnly = this.project.activeTool.name;
+      }
+      this.project.activeTool = 'none';
+    } else if (leavingViewOnly) {
+      this.project.activeTool = this.toolBeforeViewOnly || 'cursor';
     }
+
+    this.project.view.resize();
+    this.project.recenter();
+    this.project.view.render();
   }
 
   setConsoleLogs = (logs) => {
@@ -880,12 +970,68 @@ class Editor extends EditorCore {
     })
   }
 
+  /**
+   * Play from the top, or stop. A viewer has no playhead to resume from, so "play" means
+   * "play the thing", not "continue from wherever the last session left the playhead".
+   */
+  toggleViewOnlyPlayback = () => {
+    if (this.state.previewPlaying) {
+      this.togglePreviewPlaying();
+    } else {
+      this.startPreviewPlayFromBeginning();
+    }
+  }
+
+  /**
+   * The sub-768 surface. Still inside EditorWrapper, so modals, toasts, the error boundary
+   * and the play/stop hotkey all work here — the viewer is a different tree, not a
+   * different app.
+   */
+  renderViewOnly = () => {
+    return (
+      <ViewOnly
+        projectName={this.project.name}
+        playing={this.state.previewPlaying}
+        onTogglePlay={this.toggleViewOnlyPlayback}
+        minAuthoringWidth={MIN_AUTHORING_WIDTH}
+      >
+        <ResizeSensor onResize={this.onCanvasResize}>
+          <Canvas
+            editor={this}
+            project={this.project}
+            projectDidChange={this.projectDidChange}
+            projectData={this.state.project}
+            paper={this.paper}
+            previewPlaying={this.state.previewPlaying}
+            createImageFromAsset={this.createImageFromAsset}
+            toast={this.toast}
+            onEyedropperPickedColor={this.onEyedropperPickedColor}
+            createAssets={this.createAssets}
+            importProjectAsWickFile={this.importProjectAsWickFile}
+            onRef={ref => this.canvasComponent = ref}
+            canvasBGColor="#303030"
+          />
+        </ResizeSensor>
+      </ViewOnly>
+    );
+  }
+
   render = () => {
     // Create some references to the project and editor to make debugging in the console easier:
     window.project = this.project;
     window.editor = this;
 
     let renderSize = this.getRenderSize();
+
+    if (renderSize === "small") {
+      return (
+        <DndProvider backend={HTML5Backend}>
+          <EditorWrapper editor={this}>
+            {this.renderViewOnly()}
+          </EditorWrapper>
+        </DndProvider>
+      );
+    }
 
     return (
       <DndProvider backend={HTML5Backend}>
