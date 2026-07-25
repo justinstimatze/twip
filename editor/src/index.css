@@ -17,7 +17,132 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-body, html {
+@import "tailwindcss";
+
+/*
+ * TOKENS
+ *
+ * Derived from _wickbrand.scss's 130 SCSS variables rather than invented, so the
+ * migration can proceed component by component with both layers agreeing on colour.
+ * _wickbrand.scss stays authoritative for un-migrated SCSS; this is authoritative for
+ * everything built from here on, and the two are expected to coexist until the last
+ * .scss file is gone.
+ *
+ * Five values differ from the SCSS deliberately — they failed WCAG and are corrected
+ * HERE, once, instead of per-component. Each is marked `contrast:` with the measured
+ * before -> after. The fix in every case is the smallest lightness move along the
+ * original hue that clears the threshold, so nothing shifts perceptibly in hue.
+ * Thresholds: 4.5:1 for text, 3:1 for non-text UI (WCAG 2.2 1.4.3 / 1.4.11).
+ */
+@theme {
+  /* ---- brand palette (raw, 1:1 with _wickbrand.scss) ---- */
+  --color-wick-green: #1ee29a;
+  --color-wick-green-light: #29f1a3;
+  --color-wick-green-dark: #01c094;
+  --color-wick-blue: #00adef;
+  --color-wick-blue-light: #00b9ff;
+  --color-wick-blue-dark: #00709c;
+  --color-wick-red: #f86868;
+  --color-wick-red-light: #ff8c8c;
+  --color-wick-red-dark: #e61e07;
+  --color-wick-yellow: #ffc835;
+  --color-wick-yellow-light: #ffe243;
+  --color-wick-yellow-dark: #e9aa02;
+  --color-wick-flame: #f66a37;
+  --color-wick-flame-light: #ff7848;
+  --color-wick-flame-dark: #e6460e;
+  --color-wick-magenta: #cb00e4;
+  --color-wick-sky: #b4ece6;
+  --color-wick-sky-light: #d3f8f4;
+  --color-wick-sky-dark: #8dded6;
+
+  /* ---- surfaces, darkest to lightest ---- */
+  --color-surface-sunken: #191919; /* $editor-primary-outline, splitters, scroll track */
+  --color-surface-base: #1e1e1e; /* $editor-modal-dark */
+  --color-surface: #303030; /* $editor-primary — the editor body */
+  --color-surface-raised: #3b3b3b; /* $editor-secondary — panel bodies */
+  --color-surface-overlay: #383434; /* $editor-modal-gray — modals, popovers */
+  --color-surface-input: #4f4f4f; /* $editor-text-input-background */
+  --color-surface-hover: #4a4a4a; /* $editor-tertiary */
+  --color-surface-panel: #464646; /* $interface-primary */
+  --color-surface-header: #535353; /* $interface-secondary — panel title bars */
+
+  /* ---- text ---- */
+  --color-content: #ffffff; /* $editor-primary-text */
+  --color-content-muted: #bdbdbd; /* $editor-secondary-text — 7.02:1 on surface */
+  /* contrast: $interface-secondary-text #ADADAD was 4.21:1 on surface-panel */
+  --color-content-subtle: #b3b3b3; /* 4.50:1 on surface-panel */
+  /* contrast: $wick-gray-text-light #b6b6b6 was 4.04:1 on surface-input */
+  --color-content-dim: #c0c0c0; /* 4.50:1 on surface-input */
+  /* contrast: $interface-tertiary-text #626262 was 1.94:1 on #919191 (search fields) */
+  --color-content-on-light: #2a2a2a; /* 4.55:1 on #919191 */
+
+  /* ---- intent ---- */
+  --color-accent: #1ee29a; /* selection, confirm, links — 7.79:1 on surface */
+  --color-accent-hover: #29f1a3;
+  --color-accent-active: #01c094;
+  --color-accent-content: #303030; /* text ON accent */
+  --color-danger: #e27663;
+  --color-danger-content: #ff7867; /* 4.76:1 on surface-overlay */
+  --color-warning: #e6460e;
+  --color-selected: #00adef; /* 5.37:1 on timeline-bg, clears the 3:1 non-text bar */
+
+  /*
+   * Focus ring. $focus-orange, kept because it is the one hue in the palette that is
+   * neither the accent green nor the danger red, so focus never reads as selection or
+   * as error. 5.11:1 on surface and 5.31:1 on the timeline — passes as a UI component
+   * against both surfaces it has to sit on.
+   */
+  --color-focus: #ff7867;
+
+  /* ---- timeline (canvas today, DOM in Phase 2 — same values either way) ---- */
+  --color-timeline-bg: #2a2e30;
+  --color-timeline-breadcrumbs: #202122;
+  --color-timeline-frame: #ffffff;
+  --color-timeline-frame-audio: #ccffff;
+  --color-timeline-playhead: #ff5c5c; /* 4.53:1 on timeline-bg */
+  --color-timeline-playhead-stroke: #d83333;
+  --color-timeline-layer-inactive: #b7b7b7;
+  --color-timeline-layer-active: #1ee29a;
+  /* contrast: FRAME_SCRIPT_DOT_COLOR #F5A623 was 2.03:1 on a white frame */
+  --color-timeline-script-dot: #c8881d; /* 3.00:1 on #ffffff */
+  /* contrast: TWEEN_FILL_COLOR_1 / NUMBER_LINE_NUMBERS_COMMON #494949 was 1.52:1 */
+  --color-timeline-tween: #767676; /* 3.02:1 on timeline-bg */
+  --color-timeline-tween-alt: #8e8e8e;
+
+  /*
+   * Frame cell geometry, from GUIElement.js's GRID_*_CELL_* statics. Phase 2's DOM
+   * timeline reads these instead of re-deriving them, so the density modes stay in one
+   * place. Normal is the default on desktop; large is what the engine already switches
+   * to for tablets, and is comfortably past the 24x24 minimum target size.
+   */
+  --spacing-cell-sm-w: 22px;
+  --spacing-cell-sm-h: 32px;
+  --spacing-cell-w: 38px;
+  --spacing-cell-h: 42px;
+  --spacing-cell-lg-w: 62px;
+  --spacing-cell-lg-h: 52px;
+
+  /* ---- chrome geometry, from _wickbrand.scss ---- */
+  --spacing-panel-pad: 10px;
+  --spacing-panel-title: 26px;
+  --spacing-panel-gap: 6px;
+  --spacing-splitter: 4px;
+
+  --radius-xs: 2px; /* $interface-roundness-primary */
+  --radius-sm: 4px; /* $interface-roundness-secondary */
+  --radius-md: 5px; /* $interface-input-roundness */
+
+  --font-ui: "Nunito Sans", system-ui, sans-serif;
+}
+
+/*
+ * The editor is a fixed-viewport app, not a document: the canvas and timeline manage
+ * their own scrolling and the page itself must never scroll or rubber-band.
+ * `touch-action: none` is what stops a drag on the canvas from panning the page.
+ */
+body,
+html {
   touch-action: none;
   position: fixed;
 }
@@ -39,4 +164,16 @@ body {
 #root {
   width: 100%;
   height: 100%;
+}
+
+/*
+ * One focus style for the whole app, replacing the `button:focus, input:focus` rule that
+ * lived in _wickbrand.scss. `:focus-visible` rather than `:focus` so a mouse click on a
+ * button no longer leaves a ring behind — that rule fired on every click and is why the
+ * old chrome looks noisy under the pointer. Keyboard focus is unaffected, which is the
+ * whole point of the ring.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
 }

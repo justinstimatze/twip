@@ -18,7 +18,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { ReflexContainer, ReflexSplitter, ReflexElement } from 'react-reflex'
+import { PanelGroup, Panel, PanelSeparator } from '@/ui/resizable'
 import WickInput from 'Editor/Util/WickInput/WickInput';
 import { Rnd } from 'react-rnd';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
@@ -96,9 +96,9 @@ export default function WickCodeEditor(props) {
    * the size of the console in the main editor.
    * @param {object} console 
    */
-  function resizeConsole(console) {
+  function resizeConsole(panelSize) {
     props.updateCodeEditorWindowProperties({
-      consoleHeight: console.domElement.offsetHeight,
+      consoleHeight: panelSize.inPixels,
     });
   }
 
@@ -392,17 +392,20 @@ export default function WickCodeEditor(props) {
         </div>
         <div className="wick-code-editor-content">
           {renderCodeTabs()}
-          <ReflexContainer>
-            <ReflexElement>
+          {/* Code above, console below — a vertical separator in v4's naming. */}
+          <PanelGroup orientation="vertical">
+            <Panel minSize={60}>
               {renderCodeEditor()}
-            </ReflexElement>
+            </Panel>
 
-            <ReflexSplitter></ReflexSplitter>
+            <PanelSeparator/>
 
-            <ReflexElement
+            <Panel
+              id="console"
               minSize={40}
-              size={props.codeEditorWindowProperties.consoleOpen ? props.codeEditorWindowProperties.consoleHeight : 1}
-              onStopResize={resizeConsole}>
+              defaultSize={props.codeEditorWindowProperties.consoleOpen ? props.codeEditorWindowProperties.consoleHeight : 1}
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={resizeConsole}>
               <div className="wick-code-editor-console">
 
                 <div className="we-code-console-bar">
@@ -450,8 +453,8 @@ export default function WickCodeEditor(props) {
                 {consoleType === 'console' && <Console logs={props.consoleLogs} variant="dark"/>}
                 {consoleType === 'options' && renderCodeEditorOptions()}
               </div>
-            </ReflexElement>
-          </ReflexContainer>
+            </Panel>
+          </PanelGroup>
         </div>
       </div>
 

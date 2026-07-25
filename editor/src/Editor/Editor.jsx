@@ -26,13 +26,12 @@ import './styles/default_styles.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { HTML5Backend } from 'react-dnd-html5-backend'
 import { DndProvider } from 'react-dnd'
-import 'react-reflex/styles.css'
-import { ReflexContainer, ReflexSplitter, ReflexElement } from 'react-reflex'
+import { PanelGroup, Panel, PanelSeparator } from '@/ui/resizable'
 import { throttle } from 'underscore';
 import localForage from 'localforage';
 import 'react-toastify/dist/ReactToastify.css';
 import { toast } from 'react-toastify';
-import { SizeMe } from 'react-sizeme';
+import ResizeSensor from './Util/ResizeSensor';
 
 import HotKeyInterface from './hotKeyMap';
 import ActionMapInterface from './actionMap';
@@ -82,12 +81,8 @@ class Editor extends EditorCore {
       showGradientToolModes: false,
       showCodeErrors: false,
       codeError: null,
-      popoutOutlinerSize: 250,
       outlinerPoppedOut: false,
-      inspectorSize: 250,
-      timelineSize: 175,
-      assetLibrarySize: 150,
-      consoleLogs: [], 
+      consoleLogs: [],
       warningModalInfo: {
         description: "No Description Given",
         title: "Title",
@@ -178,20 +173,24 @@ class Editor extends EditorCore {
     this.maxLastColors = 8;
     this._onEyedropperPickedColor = (color) => {};
 
-    // Resizable panels
+    /*
+     * Resizable panels. react-resizable-panels owns panel sizing now, so the only thing
+     * left for the editor to do on a resize is tell the engine — `onResize` re-renders the
+     * paper.js view and redraws the timeline canvas, neither of which reflows on its own.
+     *
+     * The four onStop*Resize handlers that used to live here are gone with reflex. Three of
+     * them (inspector, asset library, popout outliner) wrote to state nothing ever read;
+     * the fourth fed `timelineSize` straight back into the size the library had already
+     * applied. The library persists layout itself, which is more than the old code did.
+     */
     this.RESIZE_THROTTLE_AMOUNT_MS = 100;
     this.WINDOW_RESIZE_THROTTLE_AMOUNT_MS = 300;
-    this.resizeProps = {
-      onStopResize: throttle(this.onStopResize, this.resizeThrottleAmount),
-      onStopPopoutOutlinerResize: throttle(this.onStopPopoutOutlinerResize, this.resizeThrottleAmount),
-      onStopInspectorResize: throttle(this.onStopInspectorResize, this.resizeThrottleAmount),
-      onStopAssetLibraryResize: throttle(this.onStopAssetLibraryResize, this.resizeThrottleAmount),
-      onStopTimelineResize: throttle(this.onStopTimelineResize, this.resizeThrottleAmount),
-      onStopCodeEditorResize: throttle(this.onStopCodeEditorResize, this.resizeThrottleAmount),
-      onResize: throttle(this.onResize, this.resizeThrottleAmount),
-      onWindowResize: throttle(this.onWindowResize, this.windowResizeThrottleAmount),
-    };
-    window.addEventListener("resize", this.resizeProps.onWindowResize);
+    // These read `this.resizeThrottleAmount` / `this.windowResizeThrottleAmount` before,
+    // neither of which is ever assigned — so both throttles have had a wait of `undefined`,
+    // which underscore treats as 0. Nothing here was throttled. Now it is.
+    this.onResize = throttle(this.onResize, this.RESIZE_THROTTLE_AMOUNT_MS);
+    this.onWindowResize = throttle(this.onWindowResize, this.WINDOW_RESIZE_THROTTLE_AMOUNT_MS);
+    window.addEventListener("resize", this.onWindowResize);
 
     this.canvasComponent = null;
     this.timelineComponent = null;
@@ -382,7 +381,7 @@ class Editor extends EditorCore {
 
   onWindowResize = () => {
     // Ensure that all elements resize on window resize.
-    this.resizeProps.onResize();
+    this.onResize();
 
     // reset the code window if we resize the window.
     this.setState({
@@ -441,16 +440,15 @@ class Editor extends EditorCore {
     this.project.guiElement.draw();
   }
 
-  onStopResize = ({domElement, component}) => {
-
-  }
-
-  getSizeHorizontal = (domElement) => {
-    return domElement.offsetWidth;
-  }
-
-  getSizeVertical = (domElement) => {
-    return domElement.offsetHeight;
+  /**
+   * Called when the canvas element's own box changes size, from whatever cause — a panel
+   * drag, the window, a panel appearing. paper.js sizes its backing store once at mount
+   * and does not reflow, so it has to be told.
+   */
+  onCanvasResize = () => {
+    if (!this.project) return;
+    this.project.view.resize();
+    this.project.view.render();
   }
 
   /**
@@ -478,56 +476,6 @@ class Editor extends EditorCore {
     }
   }
 
-  /**
-   * Called when the outliner is resized.
-   * @param  {DomElement} domElement DOM element containing the outliner
-   * @param  {React.Component} component  React component of the outliner.
-   */
-  onStopPopoutOutlinerResize = ({domElement, component}) => {
-    if (!domElement) return
-
-    this.setState({
-      popoutOutlinerSize: this.getSizeHorizontal(domElement)
-    });
-  }
-
-  /**
-   * Called when the inspector is resized.
-   * @param  {DomElement} domElement DOM element containing the inspector
-   * @param  {React.Component} component  React component of the inspector.
-   */
-  onStopInspectorResize = ({domElement, component}) => {
-    if (!domElement) return
-    this.setState({
-      inspectorSize: this.getSizeHorizontal(domElement)
-    });
-  }
-
-  /**
-   * Called when the asset library is resized.
-   * @param  {DomElement} domElement DOM element containing the asset library
-   * @param  {React.Component} component  React component of the asset library
-   */
-  onStopAssetLibraryResize = ({domElement, component}) => {
-    if (!domElement) return
-    this.setState({
-      assetLibrarySize: this.getSizeVertical(domElement)
-    });
-  }
-
-  /**
-   * Called when the timeline is resized.
-   * @param  {DomElement} domElement DOM element containing the timeline
-   * @param  {React.Component} component  React component of the timeline.
-   */
-  onStopTimelineResize = ({domElement, component}) => {
-    if (!domElement) return
-    var size = this.getSizeVertical(domElement);
-
-    this.setState({
-      timelineSize: size
-    });
-  }
 
   /**
    * Opens the requested modal.
@@ -988,9 +936,16 @@ class Editor extends EditorCore {
         <div id="editor-body">
           <div id="flexible-container">
             {/*App*/}
-            <ReflexContainer windowResizeAware={true} orientation="vertical">
+            {/*
+              * react-resizable-panels calls the axis by the SEPARATOR's orientation, where
+              * react-reflex called it by the split direction — so reflex's
+              * orientation="vertical" (a left/right split) is orientation="horizontal" here.
+              * Every group below is flipped relative to the code it replaces; that is not a
+              * transcription error.
+              */}
+            <PanelGroup orientation="horizontal" onLayoutChanged={this.onResize}>
               {/* Middle Panel */}
-              <ReflexElement {...this.resizeProps}>
+              <Panel minSize="40%">
                 {/*Toolbox*/}
                 <div className={classNames("toolbox-container", {'toolbox-container-medium': renderSize === 'medium'}, {'toolbox-container-small': renderSize === 'small'})}>
                   <DockedPanel showOverlay={this.state.previewPlaying}>
@@ -1022,16 +977,15 @@ class Editor extends EditorCore {
                   </DockedPanel>
                 </div>
                 <div className={classNames("editor-canvas-timeline-panel", {'editor-canvas-timeline-panel-medium': renderSize === 'medium'}, {'editor-canvas-timeline-panel-small': renderSize === 'small'})}>
-                  <ReflexContainer windowResizeAware={true} orientation="horizontal">
+                  <PanelGroup orientation="vertical" onLayoutChanged={this.onResize}>
                     {/* Canvas and Popout Outliner */}
-                    <ReflexElement>
-                      <ReflexContainer windowResizeAware={true} orientation="vertical">
+                    <Panel minSize={120}>
+                      <PanelGroup orientation="horizontal" onLayoutChanged={this.onResize}>
                         {/*Canvas*/}
-                        <ReflexElement {...this.resizeProps}>
+                        <Panel minSize="40%">
                           <DockedPanel>
-                            <SizeMe>{({ size }) => {
-                              this.project.view.render();
-                              return (<Canvas
+                            <ResizeSensor onResize={this.onCanvasResize}>
+                              <Canvas
                                 editor={this}
                                 project={this.project}
                                 projectDidChange={this.projectDidChange}
@@ -1041,11 +995,11 @@ class Editor extends EditorCore {
                                 createImageFromAsset={this.createImageFromAsset}
                                 toast={this.toast}
                                 onEyedropperPickedColor={this.onEyedropperPickedColor}
-                                createAssets={this.createAssets} 
+                                createAssets={this.createAssets}
                                 importProjectAsWickFile={this.importProjectAsWickFile}
                                 onRef={ref => this.canvasComponent = ref}
-                              />);}}
-                            </SizeMe>
+                              />
+                            </ResizeSensor>
                             
                             <CanvasTransforms
                               onionSkinEnabled={this.project.onionSkinEnabled}
@@ -1072,16 +1026,16 @@ class Editor extends EditorCore {
                               toggleOutliner={this.toggleOutliner}
                             />}
                           </DockedPanel>
-                        </ReflexElement>
+                        </Panel>
 
                         {/* Popout Outliner */}
-                        {renderSize === "large" && this.state.outlinerPoppedOut && <ReflexSplitter {...this.resizeProps}/>}
-                        {renderSize === "large" && this.state.outlinerPoppedOut && 
-                        <ReflexElement
-                          size={250}
+                        {renderSize === "large" && this.state.outlinerPoppedOut && <PanelSeparator/>}
+                        {renderSize === "large" && this.state.outlinerPoppedOut &&
+                        <Panel
+                          id="popout-outliner"
+                          defaultSize={250}
                           maxSize={300} minSize={200}
-                          onResize={this.resizeProps.onResize}
-                          onStopResize={this.resizeProps.onStopPopoutOutlinerResize}>
+                          groupResizeBehavior="preserve-pixel-size">
                           <Outliner 
                             className="popout-outliner"
                             project={this.project}
@@ -1095,18 +1049,18 @@ class Editor extends EditorCore {
                             toggleHidden={this.toggleHidden}
                             toggleLocked={this.toggleLocked}
                           />
-                        </ReflexElement>}
-                      </ReflexContainer>
-                    </ReflexElement>
+                        </Panel>}
+                      </PanelGroup>
+                    </Panel>
 
-                    <ReflexSplitter {...this.resizeProps}/>
+                    <PanelSeparator/>
 
                     {/*Timeline*/}
-                    <ReflexElement
+                    <Panel
+                      id="timeline"
                       minSize={100}
-                      size={this.state.timelineSize}
-                      onResize={this.resizeProps.onResize}
-                      onStopResize={this.resizeProps.onStopTimelineResize}>
+                      defaultSize={175}
+                      groupResizeBehavior="preserve-pixel-size">
                       <DockedPanel  showOverlay={this.state.previewPlaying}>
                         <Timeline
                           project={this.project}
@@ -1121,22 +1075,22 @@ class Editor extends EditorCore {
                           dragSoundOntoTimeline={this.dragSoundOntoTimeline}
                         />
                       </DockedPanel>
-                    </ReflexElement>
-                  </ReflexContainer>
+                    </Panel>
+                  </PanelGroup>
                 </div>
-              </ReflexElement>
+              </Panel>
 
               {/* Right Sidebar */}
-              <ReflexSplitter {...this.resizeProps}/>
+              <PanelSeparator/>
 
-                <ReflexElement
-                size={250}
+                <Panel
+                id="sidebar"
+                defaultSize={250}
                 maxSize={300} minSize={200}
-                onResize={this.resizeProps.onResize}
-                onStopResize={this.resizeProps.onStopInspectorResize}>
-                <ReflexContainer windowResizeAware={true} orientation="horizontal">
+                groupResizeBehavior="preserve-pixel-size">
+                <PanelGroup orientation="vertical" onLayoutChanged={this.onResize}>
                   {/* Inspector */}
-                  <ReflexElement {...this.resizeProps}>
+                  <Panel minSize={120}>
                     <DockedPanel showOverlay={this.state.previewPlaying}>
                       <Inspector
                         getToolSetting={this.getToolSetting}
@@ -1162,12 +1116,13 @@ class Editor extends EditorCore {
                         getClipAnimationTypes={this.getClipAnimationTypes}
                       />
                     </DockedPanel>
-                  </ReflexElement>
+                  </Panel>
 
-          
+
                   {/* Outliner */}
-                  {renderSize === 'medium' && <ReflexSplitter {...this.resizeProps}/>}
-                  {renderSize === 'medium' && <ReflexElement
+                  {renderSize === 'medium' && <PanelSeparator/>}
+                  {renderSize === 'medium' && <Panel
+                    id="outliner"
                     minSize={100}>
                     <DockedPanel showOverlay={this.state.previewPlaying}>
                       <Outliner 
@@ -1183,18 +1138,18 @@ class Editor extends EditorCore {
                         toggleLocked={this.toggleLocked}
                       />
                     </DockedPanel>
-                  </ReflexElement>}
+                  </Panel>}
 
-                  
 
-                  {window.enableAssetLibrary &&  <ReflexSplitter {...this.resizeProps}/>}
+
+                  {window.enableAssetLibrary &&  <PanelSeparator/>}
                   {/* Asset Library */}
-                  {window.enableAssetLibrary && 
-                  <ReflexElement
+                  {window.enableAssetLibrary &&
+                  <Panel
+                    id="asset-library"
                     minSize={100}
-                    size={300}
-                    onResize={this.resizeProps.onResize}
-                    onStopResize={this.resizeProps.onStopAssetLibraryResize}>
+                    defaultSize={300}
+                    groupResizeBehavior="preserve-pixel-size">
                     <DockedPanel showOverlay={this.state.previewPlaying}>
                       <AssetLibrary
                         projectData={this.state.project}
@@ -1212,10 +1167,10 @@ class Editor extends EditorCore {
                         addSoundToActiveFrame={this.addSoundToActiveFrame}
                       />
                     </DockedPanel>
-                  </ReflexElement> }
-                </ReflexContainer>
-              </ReflexElement>
-            </ReflexContainer>
+                  </Panel> }
+                </PanelGroup>
+              </Panel>
+            </PanelGroup>
           </div>
           {this.state.codeEditorOpen &&
             <WickCodeEditor

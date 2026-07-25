@@ -18,32 +18,12 @@
  */
 
 import React, { Component } from 'react';
-import { DragSource } from 'react-dnd';
+import { useDrag } from 'react-dnd';
 import './_asset.scss';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 import classNames from 'classnames';
-const assetSource = {
-  beginDrag(props, monitor, component) {
-    // Return the data describing the dragged item
-    let info = {
-      uuid : props.asset.uuid,
-    }
-
-    return info;
-  },
-}
-
-/**
- * Specifies which props to inject into your component.
- */
-function collect(connect, monitor) {
-  return {
-    connectDragSource: connect.dragSource(),
-  }
-}
-
 class Asset extends Component {
   getIcon(classname) {
     if (classname === "ImageAsset") {
@@ -94,13 +74,12 @@ class Asset extends Component {
   }
 
   render() {
-    // These props are injected by React DnD, as defined by the `collect` function above:
-    const { connectDragSource } = this.props;
+    const { dragRef } = this.props;
 
     let icon = this.getIcon(this.props.asset.classname);
 
-    return connectDragSource (
-      <div className={classNames("asset-item", {"asset-selected": this.props.isSelected})}>
+    return (
+      <div ref={dragRef} className={classNames("asset-item", {"asset-selected": this.props.isSelected})}>
       <button 
         className="select"
         onClick={this.props.onClick}>
@@ -128,4 +107,17 @@ class Asset extends Component {
   }
 }
 
-export default DragSource(DragDropTypes.GET_ASSET_TYPE, assetSource, collect)(Asset)
+/*
+ * react-dnd 16 removed the DragSource() decorator in favour of hooks. GET_ASSET_TYPE is a
+ * function of props (it returns the asset's classname, so a SoundAsset only drops on the
+ * timeline and an ImageAsset only on the canvas), which the decorator resolved for us —
+ * the hook needs it called explicitly.
+ */
+export default function AssetDragSource (props) {
+  const [, dragRef] = useDrag(() => ({
+    type: DragDropTypes.GET_ASSET_TYPE(props),
+    item: { uuid: props.asset.uuid },
+  }), [props.asset]);
+
+  return <Asset {...props} dragRef={dragRef} />;
+}

@@ -17,9 +17,9 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { Component } from 'react';
+import React, { Component, useCallback } from 'react';
 
-import { DropTarget } from 'react-dnd';
+import { useDrop } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 
 import './_timeline.scss';
@@ -96,10 +96,10 @@ class Timeline extends Component {
   }
 
   render() {
-    const { connectDropTarget, isOver } = this.props;
+    const { dropRef, isOver } = this.props;
 
-    return connectDropTarget (
-      <div id="animation-timeline-container" aria-label="Timeline">
+    return (
+      <div id="animation-timeline-container" ref={dropRef} aria-label="Timeline">
         { isOver && <div className="drag-drop-overlay" /> }
         <div id="animation-timeline" ref={this.canvasContainer} />
       </div>
@@ -115,25 +115,27 @@ class Timeline extends Component {
   }
 }
 
-// react-dnd drag and drop target params
-const timelineTarget = {
-  drop(props, monitor) {
-    const dropLocation = monitor.getClientOffset();
-    let draggedItem = monitor.getItem();
-    props.dragSoundOntoTimeline(draggedItem.uuid, dropLocation.x, dropLocation.y, true);
-  },
-  hover(props, monitor, component) {
-    const dropLocation = monitor.getClientOffset();
-    let draggedItem = monitor.getItem();
-    props.dragSoundOntoTimeline(draggedItem.uuid, dropLocation.x, dropLocation.y, false);
-  }
-}
+/*
+ * react-dnd 16 removed the DropTarget() decorator in favour of hooks. Same wrapper shape as
+ * Canvas.jsx: the class keeps its engine mount (guiElement.canvasContainer) and this owns
+ * the hook. `hover` and `drop` call the same handler with a different `commit` flag, which
+ * is how a sound preview follows the pointer and then lands.
+ */
+export default function TimelineDropTarget (props) {
+  const { dragSoundOntoTimeline } = props;
 
-function collect(connect, monitor) {
-  return {
-    connectDropTarget: connect.dropTarget(),
-    isOver: monitor.isOver(),
-  };
-}
+  const place = useCallback((item, monitor, commit) => {
+    const dropLocation = monitor.getClientOffset();
+    if (!dropLocation) return;
+    dragSoundOntoTimeline(item.uuid, dropLocation.x, dropLocation.y, commit);
+  }, [dragSoundOntoTimeline]);
 
-export default DropTarget(DragDropTypes.TIMELINE, timelineTarget, collect)(Timeline)
+  const [{ isOver }, dropRef] = useDrop(() => ({
+    accept: DragDropTypes.TIMELINE,
+    drop: (item, monitor) => place(item, monitor, true),
+    hover: (item, monitor) => place(item, monitor, false),
+    collect: (monitor) => ({ isOver: monitor.isOver() }),
+  }), [place]);
+
+  return <Timeline {...props} dropRef={dropRef} isOver={isOver} />;
+}

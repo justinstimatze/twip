@@ -18,7 +18,7 @@
  */
 
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import './index.css';
 import Editor from './Editor/Editor';
 import * as serviceWorker from './serviceWorker';
@@ -27,7 +27,11 @@ import initializeDefaultFileHandlers from './files/filehandler';
 // Creates file handlers in the window.
 initializeDefaultFileHandlers();
 
-ReactDOM.render(<Editor />, document.getElementById('root'));
+// React 18+ root API. Deliberately NOT wrapped in <React.StrictMode>: the editor mounts
+// paper.js and the Wick engine imperatively from componentDidMount (Canvas.jsx:52,
+// Timeline.jsx:54), and StrictMode's double-invoke would build two of each against one
+// canvas. Revisit once those mounts are idempotent.
+createRoot(document.getElementById('root')).render(<Editor />);
 
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.

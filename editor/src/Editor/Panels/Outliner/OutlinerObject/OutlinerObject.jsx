@@ -40,28 +40,27 @@ export const OutlinerObject = ({clearSelection, selectObjects,
 
   const ref = useRef(null);
 
+  /*
+   * react-dnd 14 moved `type` out of the item and removed `begin` — the side effects that
+   * used to live in `begin` go in `item` as a factory, which runs at the same moment. The
+   * returned item still carries `type` because the drop handler below reads `item.type` to
+   * decide whether a drop is same-kind (reorder) or cross-kind (reparent).
+   */
+  const dragType = DragDropTypes.GET_OUTLINER_SOURCE({data});
   const [, drag, preview] = useDrag({
-    item: {
-      type: DragDropTypes.GET_OUTLINER_SOURCE({data}),
-      uuid: data.uuid,
-    },
-    begin: () => {
+    type: dragType,
+    item: () => {
       setDragging(true);
 
-      if (data.isSelected) {
-        return;
-      }
-      
-      clearSelection();
-      selectObjects([data]);
-
-      if (data.classname === 'Layer') {
-        setActiveLayerIndex(data.index);
-      }
-      else {
-        setActiveLayerIndex(data.parentLayer.index);
+      // Dragging something outside the current selection selects it first, so a drag
+      // always moves what is under the pointer rather than a stale selection.
+      if (!data.isSelected) {
+        clearSelection();
+        selectObjects([data]);
+        setActiveLayerIndex(data.classname === 'Layer' ? data.index : data.parentLayer.index);
       }
 
+      return { type: dragType, uuid: data.uuid };
     },
     end: () => {
       setDragging(false);

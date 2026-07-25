@@ -17,8 +17,8 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { Component } from 'react';
-import { DropTarget } from 'react-dnd';
+import React, { Component, useCallback } from 'react';
+import { useDrop } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 
 import './_canvas.scss';
@@ -70,10 +70,10 @@ class Canvas extends Component {
   }
 
   render() {
-    const { connectDropTarget, isOver } = this.props;
+    const { dropRef, isOver } = this.props;
 
-    return connectDropTarget (
-      <div id="canvas-container-wrapper" style={{width:"100%", height:"100%"}} aria-label="Canvas">
+    return (
+      <div id="canvas-container-wrapper" ref={dropRef} style={{width:"100%", height:"100%"}} aria-label="Canvas">
         { isOver && <div className="drag-drop-overlay" /> }
         <div id="wick-canvas-container" ref={this.canvasContainer}></div>
       </div>
@@ -81,33 +81,37 @@ class Canvas extends Component {
   }
 }
 
-// react-dnd drag and drop target params
-const canvasTarget = {
-  drop(props, monitor, component) {
+/*
+ * react-dnd 16 removed the DropTarget()/DragSource() decorators in favour of hooks, so the
+ * class keeps its imperative engine mount (attachProjectToComponent, componentDidMount) and
+ * this thin function wrapper owns the hook, handing the connector down as a plain ref prop.
+ * Deliberately not converting Canvas itself: it holds the paper.js view and turning it into
+ * a function component is Phase 1b work, not a side effect of a dependency bump.
+ */
+export default function CanvasDropTarget (props) {
+  const { importProjectAsWickFile, createAssets, createImageFromAsset } = props;
+
+  const onDrop = useCallback((item, monitor) => {
     const dropLocation = monitor.getClientOffset();
-    let draggedItem = monitor.getItem();
-    if(draggedItem.files && draggedItem.files.length > 0) {
-      // Dropped a file from native filesystem
-      if(draggedItem.files[0].name.endsWith('.wick')) {
-        // Wick Project (.wick file)
-        var file = draggedItem.files[0];
-        props.importProjectAsWickFile(file);
+    if (item.files && item.files.length > 0) {
+      // Dropped a file from the native filesystem
+      if (item.files[0].name.endsWith('.wick')) {
+        importProjectAsWickFile(item.files[0]);
       } else {
         // Assets (images, sounds, etc)
-        props.createAssets(draggedItem.files, [], {create: true, location: dropLocation});
+        createAssets(item.files, [], { create: true, location: dropLocation });
       }
     } else {
       // Dropped an asset from the asset library
-      props.createImageFromAsset(draggedItem.uuid, dropLocation.x, dropLocation.y);
+      createImageFromAsset(item.uuid, dropLocation.x, dropLocation.y);
     }
-  }
-}
+  }, [importProjectAsWickFile, createAssets, createImageFromAsset]);
 
-function collect(connect, monitor) {
-  return {
-    connectDropTarget: connect.dropTarget(),
-    isOver: monitor.isOver(),
-  };
-}
+  const [{ isOver }, dropRef] = useDrop(() => ({
+    accept: DragDropTypes.CANVAS,
+    drop: onDrop,
+    collect: (monitor) => ({ isOver: monitor.isOver() }),
+  }), [onDrop]);
 
-export default DropTarget(DragDropTypes.CANVAS, canvasTarget, collect)(Canvas);
+  return <Canvas {...props} dropRef={dropRef} isOver={isOver} />;
+}

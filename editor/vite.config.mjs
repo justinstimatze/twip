@@ -1,15 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
 // CRA -> Vite. The old editor is React 16 with JSX in `.js` files and CRA's
 // NODE_PATH='src/' absolute imports (only the `Editor/` root is used).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     // Replaces NODE_PATH='src/' for src-absolute imports. Only `Editor/` and
     // `resources/` are used as bare roots (the latter for image/asset imports).
+    // `@/` is the shadcn convention and points at src/, which is where ui/ and lib/ live.
     alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
       Editor: fileURLToPath(new URL('./src/Editor', import.meta.url)),
       resources: fileURLToPath(new URL('./src/resources', import.meta.url)),
     },
