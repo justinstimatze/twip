@@ -14,3 +14,34 @@
     overflow-x: hidden; 
     width: 100%;
 }
+
+.open-source-notice-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 12px 12px;
+}
+
+.open-source-notice {
+    margin-bottom: 20px;
+}
+
+.open-source-notice h3 {
+    margin-bottom: 2px;
+}
+
+.open-source-notice h4 {
+    margin: 0 0 6px;
+    font-weight: 400;
+    opacity: 0.75;
+}
+
+// The licence texts are hard-wrapped in the files they come from, so they are shown as
+// written rather than reflowed. They used to be one <br />-joined line each.
+.open-source-notice-license {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    opacity: 0.8;
+}
