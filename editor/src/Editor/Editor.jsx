@@ -280,9 +280,15 @@ class Editor extends EditorCore {
      *
      * Armed only for a real user. The dev server and the Playwright scripts reload dozens of
      * times a run and the dialog is in the way of both.
+     *
+     * `localStorage['twip:leave-warning'] = 'on'` (or 'off') overrides that in either
+     * direction and survives a reload, so the dialog can be exercised in dev without a
+     * rebuild — and silenced in a production build if it is ever in the way there.
      */
+    const forced = window.localStorage.getItem('twip:leave-warning');
     const underTest = navigator.webdriver || import.meta.env.DEV;
-    window.onbeforeunload = underTest ? null : (event) => {
+    const armed = forced ? forced === 'on' : !underTest;
+    window.onbeforeunload = !armed ? null : (event) => {
       if (this.project.history.numUndoStates <= 1) return undefined;
       const confirmationMessage = 'Warning: All unsaved changes will be lost!';
       (event || window.event).returnValue = confirmationMessage; //Gecko + IE

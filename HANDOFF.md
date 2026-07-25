@@ -881,6 +881,11 @@ cargo-machete / gitleaks (no Rust sibling uses them).
 
 ## Still open (deferred, non-blocking)
 
+- **Leave-page confirm dialog is off in dev and under automation** (`Editor.jsx`, `949364d`).
+  Justin's call while the redesign is being tested; revisit when the testing loop settles.
+  It is a flag, not a deletion — `localStorage['twip:leave-warning'] = 'on'` arms it in dev
+  without a rebuild, `'off'` silences it in a production build. Decide then whether the
+  default should stay "real users only" or go back to always-on.
 - Ruffle preview: self-hosted web build (day one) vs native ruffle_core link (later) — start
   with the web build, revisit for the single-binary goal.
 - Agent-memory routing (winze vs native MEMORY.md) — infra, not product; native for now.
