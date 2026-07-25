@@ -181,6 +181,19 @@ appeared in five — the five where builds were running concurrently — and not
 idle box. Treat 8 as the baseline; if this one fails on a quiet machine it is a real
 regression, not the machine being busy.
 
+**Updated 2026-07-24: the baseline is 7, and it is enforced now.** The tween-rotation case
+above passes. A suite that always exits non-zero is a suite nobody can gate on, so
+`engine/tests/known-failures.json` lists the seven by title and `run.mjs` fails only on an
+unlisted failure. Three further wrinkles fell out of making it a gate. Matching is on title
+alone, so a listed test that starts failing a *new* way still passes — the price of a list
+that survives assertion messages drifting. A listed test that passes is reported as STALE
+rather than fatal, since one entry is the load-correlated AutoSave flake and passing is its
+normal case. And more cases than that one time out under load: `Wick.HTMLPreview should
+create a popup window correctly` blew the 2000ms default on one run of three here. So an
+unexpected failure now re-runs the whole suite once and only what fails both times is fatal —
+a real regression fails twice, and the ~10s retry is only paid on a run that was going to be
+red. `--strict` ignores the list.
+
 **Verified in Chrome.** The editor loads and is interactive at 1568px: full chrome, engine
 bundle, timeline, tooltips on hover (which exercises the new `pointerCannotHover()` path —
 desktop Chrome reports `(hover: none)` false, so tooltips still render). On a cold reload the
@@ -326,6 +339,34 @@ opening a second page, because the interesting part is the transition. It caught
 `window.project` is not a reliable handle: `Tickable.js:549` assigns it for the script
 sandbox and deletes it at line 571, so it is gone after anything plays.
 `window.editor.project` is the one that survives.
+
+## The checks run somewhere now (2026-07-24)
+
+Everything above was verified by running `pnpm smoke`, `pnpm interact` and `pnpm test-engine`
+by hand. `ci.yml` is Rust-only, so none of it gated anything —
+`.github/workflows/editor.yml` now runs `notices:check`, `pnpm build`, the engine suite,
+`smoke --sweep` and `interact` on every push that touches `editor/`. Path-filtered, because a
+commit in `src/` or `fixtures/` has no reason to spend five minutes on a browser.
+
+The browser checks run against `pnpm preview` on the built bundle rather than the dev server.
+That is what ships, and it costs nothing extra — `pnpm build` already has to run.
+
+Two things stood between the local scripts and a bare runner. Every script hardcoded
+`channel: 'chrome'`, which is right locally (no 150MB browser download to read a console) and
+wrong for a runner that may not have Chrome; `dev/browser.mjs` is the one place that decides
+now, honouring `PLAYWRIGHT_CHANNEL`, and CI sets it to the empty string to select Playwright's
+own chromium — empty, not unset, since unset means `chrome`. And `public/corelibs/ruffle` is
+gitignored while `index.html` loads `ruffle.js` from a plain script tag, so a fresh clone 404s
+and every console check carries a resource error. `dev/fetch-ruffle.sh` stages it, pinned to
+release **v0.4.1** rather than the nightly BUILD.md pointed at — Ruffle prunes old nightly
+assets, so that URL 404s eventually too. The SWF preview modal still mounts a `ruffle-player`
+at 720×480 under 0.4.1.
+
+The leave-page confirm dialog is gone from dev and test runs, which is what made this
+tractable: it fired on **every** reload because `project.numUndoStates` is undefined (the
+counter is on `project.history`), the guard was inverted against its own comment, and `this`
+inside a plain function on `window.onbeforeunload` is `window` — whose `project` the script
+sandbox deletes. It is armed only when `navigator.webdriver` is false outside a dev build.
 
 ## Phase 1 — the chrome, on Tailwind + shadcn
 

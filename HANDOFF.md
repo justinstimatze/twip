@@ -314,6 +314,26 @@ from reading the code plus a localforage dump in the browser:
    rules. 348 lines out, 43 in. **`window.project` is not a reliable handle** — `Tickable.js:549`
    assigns it for the script sandbox and deletes it at 571, so it is gone after anything
    plays; use `window.editor.project`.
+   **EDITOR CI DONE 2026-07-24 (`b76957e`).** `.github/workflows/editor.yml` runs
+   `notices:check`, `pnpm build`, the engine suite, `smoke --sweep` and `interact` against a
+   `pnpm preview` of the production build, path-filtered to commits touching `editor/`. Until
+   now `ci.yml` was Rust-only and every one of those ran wherever someone remembered to.
+   Three things had to change to make them runnable on a bare runner. The scripts hardcoded
+   `channel: 'chrome'`; `dev/browser.mjs` is now the one place that decides, honouring
+   `PLAYWRIGHT_CHANNEL`, which CI sets empty to get Playwright's own chromium. The engine
+   suite exited non-zero on **seven** cases that fail in the committed `dist/wickengine.js`,
+   so the other 540 gated nothing — `engine/tests/known-failures.json` lists them and only an
+   unlisted failure is fatal, with an automatic single re-run so a case that timed out under
+   load does not turn CI red (`--strict` ignores the list). Recorded baseline was 8; the
+   tween-rotation one now passes. And `public/corelibs/ruffle` is gitignored while
+   `index.html` loads `ruffle.js` from a script tag, so a fresh clone 404s —
+   `dev/fetch-ruffle.sh` stages it, pinned to release **v0.4.1**, since Ruffle prunes old
+   nightly assets and the nightly URL BUILD.md pointed at would eventually 404 too.
+   Also fixed on the way (`949364d`): the leave-page warning fired on **every** reload. It
+   read `project.numUndoStates`, which is undefined (the counter is on `project.history`), so
+   its early return never happened; the test was inverted against its own comment; and `this`
+   in a plain function on `window.onbeforeunload` is `window`, whose `project` the sandbox
+   deletes. Now armed only when `navigator.webdriver` is false and the build is not a dev one.
    Scoping record follows.
 
    **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
