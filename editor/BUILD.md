@@ -82,7 +82,33 @@ pnpm test-engine      # the engine's 547-case mocha suite, headless
 pnpm build
 pnpm smoke --sweep    # load the page at every breakpoint, read the console
 pnpm interact         # click through the popovers, tooltips, code editor, view-only mode
+pnpm visual           # screenshot 20 scenes and diff against a blessed baseline
 ```
+
+`visual` is the only one that measures geometry, and it is the check to reach for before and
+after any CSS change. The others do not: the Toolbox migration shipped three regressions —
+numeric fields rendered at 111px instead of 40 — with `smoke`, `interact` and the engine
+suite all green, because none of them looks at where anything is.
+
+It compares against a baseline you capture, not a committed golden:
+
+```
+node dev/visual.mjs --bless    # capture the build you are changing away from
+# ...make the change, pnpm build...
+node dev/visual.mjs            # capture again, report what moved
+node dev/visual.mjs --list     # the scenes
+node dev/visual.mjs --only toolbox-brush
+```
+
+Baselines live in `dev/.visual/` and are gitignored on purpose: browser text rendering
+differs between this box and a CI runner, so a committed PNG would fail there for reasons
+unrelated to the change under test. Two builds on one machine is the workflow, which is also
+why `editor.yml` does not run it.
+
+A pixel counts as an outlier when a channel differs by more than 2, and a scene fails above
+64 outliers. Both numbers are measured — see the comment at the top of `dev/visual.mjs`. Two
+glyphs rasterize differently between runs of the *same* build and produce 8 and 23 outliers;
+the regressions above measured 4,316 to 12,852.
 
 `smoke` and `interact` need a server — `pnpm dev` (port 3000, the default) or `pnpm preview`
 with `SMOKE_URL` pointed at it. `.github/workflows/editor.yml` runs all five against a

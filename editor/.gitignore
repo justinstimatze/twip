@@ -39,3 +39,8 @@ engine/docs/*
 
 # Python bytecode from dev/twip_bridge.py
 __pycache__/
+
+# Baselines for dev/visual.mjs. Per-machine on purpose: browser text rendering
+# differs between this box and a CI runner, so a committed PNG would fail there for
+# reasons unrelated to the change under test. Bless locally, compare locally.
+/dev/.visual

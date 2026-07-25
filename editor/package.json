@@ -98,6 +98,7 @@
     "test-engine": "pnpm --dir engine test",
     "smoke": "node dev/smoke.mjs",
     "interact": "node dev/interact.mjs",
+    "visual": "node dev/visual.mjs",
     "notices": "node dev/gen-notices.mjs",
     "notices:check": "node dev/gen-notices.mjs --check"
   },
@@ -121,6 +122,7 @@
     "gulp-rename": "^2.0.0",
     "gulp-uglify": "^3.0.2",
     "playwright": "^1.62.0",
+    "pngjs": "^7.0.0",
     "sass": "^1.83.0",
     "tailwindcss": "^4.3.3",
     "vite": "^6.0.7"
