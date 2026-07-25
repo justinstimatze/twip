@@ -431,6 +431,48 @@ types a width and confirms the *engine* took it rather than just the input. It a
 failed step once now, for the same reason `engine/tests/run.mjs` does: its assertions are
 3000ms waits and the slider step flaked here on a loaded box.
 
+## The Toolbox, and the layer rule the migration runs into (2026-07-24)
+
+Second panel across: `Toolbox.jsx`, `ToolButton`, `ToolboxBreak`, `CanvasActions`,
+`ToolSettings`, `ToolSettingsInput` and `SettingsNumericSlider`, against six `.scss` files and
+one `.css`. 344 lines gone, `src/` down to 47 stylesheets and 4,546 lines from 54 and 4,890.
+Built CSS 77.85 → 75.79 kB.
+
+**Un-migrated SCSS beats every Tailwind utility, and specificity has nothing to do with it.**
+`@import "tailwindcss"` puts utilities in `@layer utilities`; the component `.scss` files are
+unlayered, and unlayered CSS wins over layered CSS regardless of selector weight. So
+`.wick-input { width: 100% }`, `.img-tool-icon { height: 100% }` and `.action-button { width:
+100%; height: 100% }` silently override `w-10`, `size-6` and `size-[35px]` on the elements
+they match. This does not announce itself — the build succeeds, the class is in the DOM, and
+the element is the wrong size. It cost three passes here before the screenshots came back
+clean. The fix in each case is to move the dimension onto a **wrapper** and let the legacy
+`100%` fill it, which is also what the tree should look like when those stylesheets are gone.
+Where there is no wrapper to use — the tool-button icon is a direct child of the button
+ActionButton renders — the escape is `h-4/5!`, to come off with ToolIcon's stylesheet. Expect
+this on every remaining panel: the elements at risk are the ones whose class comes from
+`Util/`, since `Util/` migrates last.
+
+`_toolsettings.scss` `@import`'ed `../toolbox.scss` and `_toolsettingsinput.scss` `@import`'ed
+`../toolsettings.scss`, so `_toolbox.scss`'s rules were emitted four times over — SCSS
+`@import` inlines rules, it does not dedupe them. `#settings-panel-container` and
+`.settings-input-container` were each defined twice, in `_toolsettings.scss` and in
+`settingsnumericslider.css`, and which one won depended on import order.
+
+Dead on arrival: `.toolbox-actions-center`, `.bump-up-no-dropdown`, `.tool-button-container`,
+`.settings-slider-wick-input-container`, and `#tool-box-fill-color-button` /
+`#tool-box-stroke-color-button` — nothing ever gets those ids, because ActionButton forwards
+`props.id` verbatim and no caller appends `-button`. `.actions-container` was defined
+identically in `_canvasactions.scss` and `_popupmenu.scss`; all four call sites are in this
+tree, so both copies go.
+
+Verification was a before/after screenshot pair at six states — cursor, brush, brush-modes
+open, canvas-actions open, rectangle, and the medium layout — captured through a headless
+Playwright viewport, since headed Chrome under Wayland ignores resize requests. Five came back
+pixel-identical. The medium layout differs in 42 pixels at a maximum channel delta of 13/255,
+subpixel resampling along the line icon's diagonal. Two of the three layer collisions above
+were found this way and by nothing else; `pnpm smoke`, `pnpm interact` and the engine suite
+were all green while the numeric fields were nearly three times too wide.
+
 ## Phase 1 — the chrome, on Tailwind + shadcn
 
 This is what most people would call "the redesign," and it is the part with no unknowns.

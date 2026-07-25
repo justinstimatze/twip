@@ -361,6 +361,28 @@ from reading the code plus a localforage dump in the browser:
    would drop Google entirely and work offline — measured and rejected, 55MB vs 2.22MB of
    subsetted woff2, revisit if the listbox virtualizes. `interact.mjs` has an `inspector` step
    now (12/12) and retries a failed step once, like the engine runner.
+   **THE TOOLBOX 2026-07-24 (`54ca3e2`).** Second panel across: `Toolbox`, `ToolButton`,
+   `ToolboxBreak`, `CanvasActions`, `ToolSettings`, `ToolSettingsInput`,
+   `SettingsNumericSlider`. Six `.scss` and one `.css` gone, 344 lines; `src/` at 47
+   stylesheets / 4,546 lines from 54 / 4,890; built CSS 77.85 → 75.79 kB. **Read this before
+   migrating another panel: un-migrated SCSS outranks every Tailwind utility, and specificity
+   is not the reason.** Utilities live in `@layer utilities`; the component `.scss` files are
+   unlayered, and unlayered wins over layered whatever the selector weight. `.wick-input`'s
+   `width: 100%`, `.img-tool-icon`'s `height: 100%` and `.action-button`'s `width/height: 100%`
+   each silently beat the utility on the element — build green, class present in the DOM,
+   element the wrong size. Move the dimension to a **wrapper** and let the legacy `100%` fill
+   it; where there is no wrapper (the tool-button icon is a direct child of ActionButton's
+   button) use `h-4/5!` and remove it with ToolIcon's stylesheet. The at-risk elements are the
+   ones whose class comes from `Util/`, which migrates last. Also: `_toolsettings.scss` and
+   `_toolsettingsinput.scss` each `@import`'ed the file above them, so `_toolbox.scss`'s rules
+   were emitted **four times**; `#settings-panel-container` and `.settings-input-container`
+   were defined twice with import order deciding; `.actions-container` was duplicated between
+   `_canvasactions.scss` and `_popupmenu.scss`; and six more selectors were dead, including
+   `#tool-box-fill-color-button` / `#tool-box-stroke-color-button`, which nothing ever gets.
+   Verified by before/after screenshots at six toolbox states through a headless Playwright
+   viewport — five pixel-identical, medium differing in 42 pixels at max delta 13/255. **Two of
+   the three collisions were caught by nothing else**: smoke, interact and the engine suite
+   were all green while the numeric fields were nearly three times too wide.
    Scoping record follows.
 
    **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
