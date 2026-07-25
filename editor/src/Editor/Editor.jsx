@@ -28,8 +28,7 @@ import { DndProvider } from 'react-dnd'
 import { PanelGroup, Panel, PanelSeparator } from '@/ui/resizable'
 import { throttle } from 'underscore';
 import localForage from 'localforage';
-import 'react-toastify/dist/ReactToastify.css';
-import { toast } from 'react-toastify';
+import { notify, updateNotification } from '@/ui/toast';
 import ResizeSensor from './Util/ResizeSensor';
 
 import HotKeyInterface from './hotKeyMap';
@@ -683,8 +682,9 @@ class Editor extends EditorCore {
   /**
    * Create a toast notification.
    * @param {string} message - the message to display inside the toast.
-   * @param {string} type - the type of the toast. ("info", "success", "warning", or "error". See react-toastify docs for more info)
-   * @param {object} options - the options for the toast notification. For all options, see the demo for react-toastify: https://fkhadra.github.io/react-toastify/
+   * @param {string} type - "info", "success", "warning" or "error".
+   * @param {object} options - `{autoClose: false}` to leave it up until updated.
+   * @returns {string|number} the toast's id, which updateToast() takes.
    */
   toast = (message, type, options) => {
     if(!message) {
@@ -692,56 +692,21 @@ class Editor extends EditorCore {
       return;
     }
 
-    // If no type is given, default to "info"
-    if(!type) type = "info";
-
-    if(["info", "success", "warning", "error"].indexOf(type) === -1) {
+    if(type && ["info", "success", "warning", "error"].indexOf(type) === -1) {
       console.error("toast(): Invalid type: " + type);
       return;
     }
 
-    // If no options are given, set the options param to an empty object so only the default options are used.
-    if(!options) options = {};
-
-    // Default options for the toast:
-    let defaultOptions = {
-      position: "top-right",
-      autoClose: 3000,
-      hideProgressBar: true,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      className: (type + '-toast-background'),
-      bodyClassName: (type + '-toast-body'),
-      progressClassName: (type + '-toast-progress'),
-    };
-
-    // Mix default options and options param:
-    let mixOptions = Object.assign(defaultOptions, options);
-
-    return toast[type](message, mixOptions);
+    return notify(message, type, options);
   }
 
   /**
    * Updates an existing toast to a new toast type
    * @param {string} id ID of the toast to update.
-   * @param {object} options options to apply to the newly updated toast.
+   * @param {object} options `{text, type}` — the message and the colour to switch to.
    */
   updateToast = (id, options) => {
-    if (options.text) {
-      options.render = options.text;
-    }
-
-    if (options.type) {
-      options.className = options.type + '-toast-background';
-      options.bodyClassName = options.type + '-toast-body';
-    }
-
-    if (!options.autoClose) {
-      options.autoClose = 5000;
-    }
-
-    toast.update(id, options);
+    updateNotification(id, options);
   }
 
 

@@ -133,6 +133,18 @@
   --radius-sm: 4px; /* $interface-roundness-secondary */
   --radius-md: 5px; /* $interface-input-roundness */
 
+  /*
+   * ---- toasts ----
+   * Carried over from the .{type}-toast-background rules in _editor.scss, unchanged:
+   * measured at 12.29:1, 7.29:1, 16.21:1 and 14.21:1 against the text colour each pairs
+   * with, so all four already clear AA and none needed the correction the palette above
+   * did.
+   */
+  --color-toast-info: #383434;    /* white text */
+  --color-toast-error: #ac1706;   /* white text */
+  --color-toast-warning: #ffe243; /* black text */
+  --color-toast-success: #29f1a3; /* black text */
+
   --font-ui: "Nunito Sans", system-ui, sans-serif;
 }
 

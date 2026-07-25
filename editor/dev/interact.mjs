@@ -123,6 +123,43 @@ const STEPS = [
     },
   },
   {
+    name: 'toast',
+    what: 'Toasts appear, recolour on update, and dismiss (was react-toastify)',
+    async run () {
+      // Editor.jsx assigns window.editor, so the real toast()/updateToast() pair can be
+      // driven directly. Going through a hotkey would only test the hotkey.
+      await page.evaluate(() => {
+        window.__toastId = window.editor.toast('Exporting…', 'info', { autoClose: false });
+      });
+      await page.waitForSelector('[data-sonner-toast]', { timeout: 3000 });
+      const text = (await page.locator('[data-sonner-toast]').first().innerText()).trim();
+      if (!text.includes('Exporting')) throw new Error(`unexpected toast text: ${text}`);
+
+      // The type has to reach the DOM as a colour, not just sit in an options object —
+      // that was the whole of the old `<type>-toast-background` plumbing.
+      const read = () => page.evaluate(() => {
+        const el = document.querySelector('[data-sonner-toast]');
+        return { bg: getComputedStyle(el).backgroundColor, text: el.innerText.trim() };
+      });
+      const info = await read();
+      if (!info.bg || info.bg === 'rgba(0, 0, 0, 0)') throw new Error('toast has no background');
+
+      // updateToast has to replace the same toast rather than stack a second one.
+      await page.evaluate(() => window.editor.updateToast(window.__toastId, { type: 'success', text: 'Done.' }));
+      await page.waitForTimeout(400);
+      if (await page.locator('[data-sonner-toast]').count() !== 1) throw new Error('update stacked a second toast');
+      const done = await read();
+      if (!done.text.includes('Done')) throw new Error(`update did not change the text: ${done.text}`);
+      if (done.bg === info.bg) throw new Error(`update did not change the colour (still ${done.bg})`);
+
+      const closer = page.locator('[data-sonner-toast] [data-close-button]').first();
+      if (await closer.count()) await closer.click();
+      else await page.evaluate(() => window.editor && document.querySelector('[data-sonner-toast]').click());
+      await page.waitForTimeout(700);
+      if (!(await gone('[data-sonner-toast]'))) throw new Error('toast would not dismiss');
+    },
+  },
+  {
     name: 'ids-unique',
     what: 'no duplicate element ids (ActionButton now forwards id)',
     async run () {

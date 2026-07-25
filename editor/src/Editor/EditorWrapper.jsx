@@ -20,8 +20,7 @@
 import React, { useEffect } from 'react';
 import ErrorBoundary from './Util/ErrorBoundary';
 import { TooltipProvider } from '@/ui/tooltip';
-import { Slide } from 'react-toastify';
-import { ToastContainer } from 'react-toastify';
+import { Toaster } from '@/ui/toast';
 import { GlobalHotKeys } from 'react-hotkeys';
 import ErrorPage from './Util/ErrorPage';
 import ModalHandler from './Modals/ModalHandler/ModalHandler';
@@ -50,17 +49,7 @@ export default function EditorWrapper(props) {
               timing across the whole editor, so moving between adjacent buttons shows the
               second tooltip immediately instead of re-waiting the delay. */}
           <TooltipProvider delayDuration={200} skipDelayDuration={400}>
-            <ToastContainer
-                transition={Slide}
-                position="top-right"
-                autoClose={5000}
-                hideProgressBar={false}
-                newestOnTop={false}
-                closeOnClick
-                rtl={false}
-                pauseOnVisibilityChange
-                draggable
-                pauseOnHover />
+            <Toaster />
             <GlobalHotKeys
                 allowChanges={true}
                 keyMap={props.editor.getKeyMap()}

@@ -306,10 +306,6 @@ a:hover {
   border: darken($wick-green-dark, 12.5%);
 }
 // define interface element properties
-$splitter-size: calc(#{$editor-outline-padding} / 2);
-$splitter-color: $editor-primary-outline;
-$splitter-highlight-color: $editor-primary-property-text;
-
 $interface-roundness-primary: 2px;
 $interface-roundness-secondary: 4px;
 $interface-input-roundness: 5px;
