@@ -210,6 +210,49 @@ the canvas is a 168px sliver; the timeline shows one frame and the layer name tr
 (hard minimum authoring width ~1024, switch layout below it rather than shrink, view-only
 below 768) is confirmed as needed rather than merely advisable, and Phase 1a owns it.
 
+## Phase 1a status — DONE except the sub-768 layout (2026-07-24)
+
+Commits `febf3d3`, `23965a4`. The four things 1a was scoped as — shell, tokens, the
+shadcn primitive layer, `WickInput` — are all in. What the plan did not anticipate is
+that **React 19 was the gate, and three of the dependency swaps were forced by it rather
+than chosen**: react-reflex throws out of `<ReflexElement>` under React 19 at both v3 and
+v5, react-dnd 11 has no hooks API, and react-sizeme reaches its element through the
+removed `findDOMNode`. The shell rewrite could not be deferred behind anything.
+
+Corrections to what is written below:
+
+- **react-resizable-panels is v4, not the v2 this table assumed.** The components are
+  `Group` / `Panel` / `Separator`, the axis prop is `orientation`, and it names the axis
+  after the *separator* rather than the split — so every group is flipped relative to
+  reflex. It also accepts explicit units, so the 250px sidebar and 175px timeline
+  survived instead of being re-guessed as percentages.
+- **`WickInput.jsx` is 282 lines, not 610** — that count was the directory, including
+  `WickTextInput` and `WickButton`, which are untouched and still fine.
+- **react-dropdown was never a component here.** The only reference anywhere was
+  `import 'react-dropdown/style.css'` — a dependency for one stylesheet.
+- **rc-slider is not installed at all**, so that row of the table has nothing to do.
+- **`WickInput` used reactstrap for exactly one thing**, `<Input type="radio">`, which is
+  a plain `<input>` plus a Bootstrap class. reactstrap survives in three other files
+  (`ExportMedia`, `ColorPicker`, `PopupMenu`), so the bootstrap CSS import stays for now.
+
+Contrast was measured rather than assumed, and five values in `_wickbrand.scss` failed:
+`interface-secondary-text` 4.21:1, `wick-gray-text-light` 4.04:1, `interface-tertiary-text`
+1.94:1 (search fields), `FRAME_SCRIPT_DOT_COLOR` 2.03:1 on a white frame, and
+`TWEEN_FILL_COLOR_1` 1.52:1. All corrected in the token layer, each by the smallest
+lightness move along its own hue that clears the bar.
+
+**Not done: the sub-768 layout.** `getRenderSize()` still splits at 1200/800 rather than
+the 1024/768 this document argues for, and there is no view-only mode. At 375px the editor
+renders without overflowing and without erroring, but "Layer" truncates to "Laye" and the
+canvas is effectively gone — usable-looking and not actually usable. Moving the thresholds
+is a one-line change; what it needs is the *layout* below them, plus a re-tune of
+`Toolbox`'s three renderSize variants, which are written against the old numbers. That is
+real design work and is left for whoever picks up 1b.
+
+Still on the replacement list and untouched: reactstrap (3 files) with its bootstrap CSS,
+react-popover (`SettingsNumericSlider`), react-color (`ColorPicker`), react-toastify,
+react-hotkeys, react-ace.
+
 ## Phase 1 — the chrome, on Tailwind + shadcn
 
 This is what most people would call "the redesign," and it is the part with no unknowns.

@@ -383,9 +383,25 @@ class Editor extends EditorCore {
     // Ensure that all elements resize on window resize.
     this.onResize();
 
-    // reset the code window if we resize the window.
-    this.setState({
-      codeEditorWindowProperties: this.getDefaultCodeEditorProperties(),
+    /*
+     * Keep the floating code window inside the viewport, but keep everything else the user
+     * chose. This used to assign getDefaultCodeEditorProperties() wholesale, which resets
+     * not just position and size but consoleHeight, consoleOpen, fontSize and theme — so
+     * dragging the browser window edge silently threw away the font size and editor theme
+     * picked in Settings. Only the geometry has any reason to react to a viewport change.
+     */
+    this.setState(({ codeEditorWindowProperties: props }) => {
+      const width = Math.min(props.width, window.innerWidth);
+      const height = Math.min(props.height, window.innerHeight);
+      return {
+        codeEditorWindowProperties: {
+          ...props,
+          width,
+          height,
+          x: Math.max(0, Math.min(props.x, window.innerWidth - width)),
+          y: Math.max(0, Math.min(props.y, window.innerHeight - height)),
+        },
+      };
     });
 
     // re-render project to avoid incorrect pan

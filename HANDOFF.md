@@ -256,7 +256,26 @@ from reading the code plus a localforage dump in the browser:
      created — so every session may be writing an empty autosave, and Load would then be
      working correctly and restoring genuine emptiness. Settle it by dumping
      `objectsData.map(o => o.classname)` for the newest entry: no `Path` among them means empty.
-4. **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
+4. **PHASE 1a DONE 2026-07-24 (`febf3d3`, `23965a4`) — except the sub-768 layout.** The
+   editor runs on React 19, Tailwind v4 tokens, and shadcn/Radix primitives; `WickInput` is
+   rewritten and four dependencies are gone (react-select, react-tooltip, react-dropdown,
+   react-spinners), plus react-reflex and react-sizeme with the shell. **React 19 turned out
+   to be the gate** — react-reflex throws out of `<ReflexElement>` under it at both v3 and
+   v5, so the shell rewrite was forced rather than chosen. Full status and the corrections
+   to the plan's assumptions are in `docs/ui-redesign-plan.md` under "Phase 1a status".
+   What is NOT done: the sub-768 view-only layout. `getRenderSize()` still splits at
+   1200/800 rather than 1024/768, and at 375px the editor renders cleanly but is not usable
+   for authoring — "Layer" truncates to "Laye" and the canvas is gone. Moving the thresholds
+   is one line; the layout below them, and re-tuning `Toolbox`'s three renderSize variants
+   against the new numbers, is the actual work. Left for 1b.
+   New tool: **`editor/dev/smoke.mjs`** loads the dev server in headless Chrome and reports
+   console errors, whether anything rendered, and horizontal overflow at each breakpoint
+   (`--sweep`, `--width N`, `--shot out.png`). The chrome has no unit tests, so this is the
+   feedback loop — it caught every regression in this phase within seconds. Headless
+   because `resize_window` is a no-op under Wayland.
+   Scoping record follows.
+
+   **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
    now a phased plan. Stack was already decided (Vite + React + Tailwind/shadcn, editor-only,
    no Next/gallery); what the scoping added is that the editor is three layers and the
    survey's asks split unevenly across them. React chrome is 19.4k JS + 6.8k SCSS. **The
