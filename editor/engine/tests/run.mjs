@@ -135,14 +135,15 @@ for (const f of known) console.error('known', `${f.title} :: ${f.message}`);
 
 /*
  * A listed failure that passed means the list is stale — the entry should come out, or the
- * test will rot back to failing without anyone noticing. Reported, not fatal, because one
- * entry is load-correlated flake and passing is its normal case. Meaningless under --grep,
- * which decides what ran.
+ * test will rot back to failing without anyone noticing. Reported, not fatal. Entries marked
+ * `intermittent` are exempt: some fail only under load, others only where the machine differs
+ * (audio sample rate), and passing is their normal case. Meaningless under --grep, which
+ * decides what ran.
  */
 if (!strict && !grep) {
   const failedTitles = new Set(results.failed.map(f => f.title));
   for (const f of allowed) {
-    if (!f.flaky && !failedTitles.has(f.title)) console.error('STALE', `${f.title} — passes now; drop it from known-failures.json`);
+    if (!f.intermittent && !failedTitles.has(f.title)) console.error('STALE', `${f.title} — passes now; drop it from known-failures.json`);
   }
 }
 
