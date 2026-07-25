@@ -207,6 +207,44 @@ const STEPS = [
     },
   },
   {
+    name: 'code-editor',
+    what: 'CodeMirror opens, edits, and shows an error diagnostic (was react-ace)',
+    async run () {
+      // Open the popout and give it something scriptable to edit: with no selection the
+      // editor is read-only and typing would prove nothing.
+      await page.evaluate(() => {
+        // A frame is scriptable and one already exists, so selecting it is the shortest
+        // route to a writable editor. Without a scriptable selection the pane renders
+        // "No Scriptable Object Selected" read-only and typing would prove nothing.
+        const project = window.editor.project;
+        project.selection.clear();
+        project.selection.select(project.activeFrame);
+        window.editor.projectDidChange();
+        window.editor.toggleCodeEditor(true);
+        window.editor.editScript('default');
+      });
+      await page.waitForSelector('.cm-editor', { timeout: 5000 });
+      const line = page.locator('.cm-content').first();
+      await line.click();
+      await page.keyboard.type('var x = 1;');
+      await page.waitForTimeout(500);
+
+      const doc = await page.evaluate(() => document.querySelector('.cm-content').innerText);
+      if (!doc.includes('var x = 1;')) throw new Error(`typing did not land: ${doc.slice(0, 80)}`);
+
+      // The gutter marker and the underline were two props describing the same error; one
+      // diagnostic does both, so assert the diagnostic reaches the DOM.
+      await page.evaluate(() => window.editor.setState({ codeError: { lineNumber: 1, message: 'boom' } }));
+      await page.waitForTimeout(600);
+      const marks = await page.evaluate(() =>
+        document.querySelectorAll('.cm-lintRange-error, .cm-lint-marker-error').length);
+      if (marks === 0) throw new Error('no error diagnostic rendered');
+
+      await page.evaluate(() => { window.editor.clearCodeEditorError(); window.editor.toggleCodeEditor(false); });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     name: 'ids-unique',
     what: 'no duplicate element ids (ActionButton now forwards id)',
     async run () {

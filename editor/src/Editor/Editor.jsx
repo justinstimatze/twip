@@ -421,7 +421,7 @@ class Editor extends EditorCore {
         consoleHeight: 100,
         consoleOpen: true,
         fontSize: 16,
-        theme: 'monokai'
+        theme: 'dark'
       }
     );
   }

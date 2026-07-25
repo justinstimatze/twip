@@ -25,51 +25,20 @@ import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 import AddScriptPanel from './AddScriptPanel/AddScriptPanel';
 import { Console } from 'console-feed'
 
-// Import Ace Editor and themes.
-import AceEditor from 'react-ace';
-import 'brace/mode/javascript';
-import 'brace/ext/searchbox';
-
-import 'brace/theme/monokai';
-import 'brace/theme/cobalt';
-import 'brace/theme/dracula';
-import 'brace/theme/eclipse';
-import 'brace/theme/github';
+import { CodeEditor, CODE_THEMES, normalizeTheme } from '@/ui/code-editor';
 
 import 'Editor/styles/PopOuts/_wickcodeeditor.css';
 
 import capitalize from 'Editor/Util/DataFunctions/capitalize';
 import ToolIcon from '../../Util/ToolIcon/ToolIcon';
 
-const editorThemes = [
-  {
-    value: 'monokai',
-    label: 'Monokai'
-  },
-  {
-    value: 'cobalt',
-    label: 'Cobalt'
-  },
-  {
-    value: 'dracula',
-    label: 'Dracula'
-  },
-  {
-    value: 'eclipse',
-    label: 'Eclipse'
-  },
-  {
-    value: 'github',
-    label: 'Github',
-  }]
+const editorThemes = CODE_THEMES;
 import classNames from 'classnames';
 export default function WickCodeEditor(props) {
 
   const [addScriptTab, setAddScriptTab] = useState('Mouse');
   const [consoleType, setConsoleType] = useState('console');
-  const [aceEditor, setAceEditor] = useState(null);
-
-  const editorThemeSelectRef = useRef();
+  const codeEditor = useRef(null);
 
   /**
    * To be called when the code editor popout is repositioned.
@@ -140,46 +109,9 @@ export default function WickCodeEditor(props) {
    * @param {string} code to add to tab.
    */
   function addCodeToTab(code) {
-    if (aceEditor && props.script && props.scriptToEdit !== "add") {
-      aceEditor.session.insert(aceEditor.getCursorPosition(), code);
+    if (props.script && props.scriptToEdit !== "add") {
+      codeEditor.current?.insertAtCursor(code);
     }
-  }
-
-  /**
-   * Map error from editor to markers for Ace Editor
-   * @param {object} error - Object representing error from editor. Should include lineNumber.
-   */
-  function mapErrorToMarkers(error) {
-    if (!error) {
-      return [];
-    }
-
-    let marker = {};
-    marker.startRow = error.lineNumber - 1;
-    marker.endRow = error.lineNumber - 1;
-    marker.startCol = 0;
-    marker.endCol = 1000; // Set length to an arbitrary amount that should encompass the whole line.
-    marker.className = 'error-marker';
-    marker.type = 'background';
-
-    return [marker];
-  }
-
-  /**
-   * Maps errors to annotations in the gutter.
-   * @param {object} error - Object representing error from editor. Should include lineNumber, message.
-   */
-  function mapErrorToAnnotations(error) {
-    if (!error) {
-      return [];
-    }
-
-    let annotation = {};
-    annotation.row = error.lineNumber - 1;
-    annotation.type = 'error';
-    annotation.text = error.message;
-
-    return [annotation];
   }
 
   /**
@@ -216,21 +148,20 @@ export default function WickCodeEditor(props) {
           </tr>
           <tr>
             <td>Editor Style</td>
-            <td>
-              <select
-                selected={props.codeEditorWindowProperties.theme}
-                ref={editorThemeSelectRef}
-                onChange={(e) => {
-                  props.updateCodeEditorWindowProperties({ theme: editorThemeSelectRef.current.value })
-                }}>
-                {editorThemes.map(theme => {
-                  return <option
-                    value={theme.value}
-                    key={'code-theme-' + theme.value}>{theme.label}</option>
-                })}
-
-              </select>
-            </td>
+            {/* Was a bare <select> with `selected=` on it, which React ignores — so the
+                dropdown always read as the first theme no matter what was stored. Passing
+                the value through normalizeTheme also means a project saved with one of the
+                five ace theme names shows the theme it actually gets. */}
+            <td> <WickInput
+              className="code-editor-option-input"
+              id="code-editor-theme"
+              type="select"
+              options={editorThemes}
+              value={normalizeTheme(props.codeEditorWindowProperties.theme)}
+              onChange={(option) => {
+                props.updateCodeEditorWindowProperties({ theme: option.value })
+              }}
+            /></td>
           </tr>
         </tbody>
       </table>
@@ -298,20 +229,14 @@ export default function WickCodeEditor(props) {
       }
       {
         props.scriptToEdit !== 'add' &&
-        <AceEditor
+        <CodeEditor
+          ref={codeEditor}
+          className="wick-code-editor-surface"
           value={scriptToShow}
-          mode="javascript"
           theme={props.codeEditorWindowProperties.theme}
-          fontSize={props.codeEditorWindowProperties.fontSize} // TODO: Controllable by User
-          width="100%"
-          height="100%"
-          name="wick-ace-editor"
-          focus={true}
-          editorProps={{ $blockScrolling: true }}
+          fontSize={props.codeEditorWindowProperties.fontSize}
           onChange={scriptOnChange}
-          onLoad={(editor) => setAceEditor(editor)}
-          markers={mapErrorToMarkers(props.error)}
-          annotations={mapErrorToAnnotations(props.error)}
+          error={props.error}
           readOnly={!props.script}
         />
       }

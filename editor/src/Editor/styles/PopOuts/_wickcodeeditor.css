@@ -111,8 +111,14 @@
     overflow-x: scroll;
 }
 
-.ace-scroller {
-    scrollbar-width: none;
+/* CodeMirror fills the code pane and does its own scrolling. */
+.wick-code-editor-surface,
+.wick-code-editor-surface .cm-editor {
+    height: 100%;
+}
+
+.wick-code-editor-surface .cm-editor.cm-focused {
+    outline: none;
 }
 
 .wick-code-editor-console {
@@ -347,40 +353,8 @@
     margin-left: 4px;
 }
 
-/* Theme Overrides */
-.ace-monokai > .ace_gutter {
-    background: #292929 !important;
-    color: #FFFFFF ! important;
-  }
-  
-.ace-monokai > .ace_scroller {
-    background-color: #202020;
-}
-
-.ace-monokai > .ace_constant.ace_numeric {
-    color: #CAADFF !important;
-}
-
-.ace-monokai > .ace_comment {
-    color: #ABABAB !important;
-}
-
-.ace-monokai > .ace_keyword {
-    color: #FF80B9 !important;
-}
-
-.error-marker {
-    position: absolute;
-    background-color: var(--wick-error);
-    padding-right: 4px;
-}
-
 .we-code-add {
     background-color: var(--wick-tertiary); 
-}
-
-.ace_search {
-    width: 250px;
 }
 
 .we-code-editor-title-error {
