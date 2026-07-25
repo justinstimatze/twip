@@ -473,6 +473,49 @@ subpixel resampling along the line icon's diagonal. Two of the three layer colli
 were found this way and by nothing else; `pnpm smoke`, `pnpm interact` and the engine suite
 were all green while the numeric fields were nearly three times too wide.
 
+## A check that measures geometry, and the layer flip it made safe (2026-07-25)
+
+The throwaway screenshot script above is now `dev/visual.mjs`: 20 scenes — four viewports
+whole, the Toolbox per tool, the Inspector per selection, the menu bar, assets, timeline,
+canvas transforms, a popover and two modals — captured and diffed against a baseline you
+bless locally. Baselines are gitignored rather than committed, because browser text rendering
+differs between this box and a CI runner and a committed PNG would fail there for reasons
+unrelated to the change under test; two builds on one machine is the workflow it exists for,
+which is also why `editor.yml` does not run it. A pixel is an outlier when a channel differs
+by more than 2, and a scene fails above 64 of them — measured against the build it was
+blessed from, where a few glyphs rasterize differently between runs for 8 to 23 outliers.
+The regressions it is meant to catch measured 4,316 to 12,852. Getting it deterministic
+needed an animation freeze; without it the full-page shots disagreed with themselves across
+99% of pixels.
+
+**The un-migrated stylesheets now live in `@layer legacy`.** A vite transform wraps every
+`.scss` before sass runs, and `src/index.css` declares `@layer theme, base, legacy,
+components, utilities`. Position matters on both sides: below `base` and Preflight wins,
+which recolours essentially every pixel in the editor (the first attempt did exactly that,
+and all 20 scenes failed at a maximum channel delta of 232); above `utilities` and nothing
+has changed. Between them, a utility written today beats a rule the redesign is in the middle
+of deleting, which is what everyone writing `w-10` already assumes. The three wrappers and
+the one `!` the Toolbox needed are gone, and all 20 scenes stayed inside the noise floor
+without them — which is the end-to-end proof that the flip does what it says.
+
+The flip also surfaced something the concatenated output had been hiding. `_wickbrand.scss`
+is a variables file that also emits **sixteen global rule blocks**, and 40 stylesheets
+`@import` it, so sass inlined those rules 40 times over. Unlayered they collapsed to a
+handful of copies; inside per-file layer blocks they do not, and the shipped stylesheet went
+from 76kB to 147kB. Twelve of the sixteen were dead — react-modal's overlay transitions,
+bootstrap's `.btn-wick-*` pair, the pruned mobile tree's overlay, two bootstrap popover rules
+— along with `:export { editorCanvasBorder }`, which no JS reads. The four that live moved to
+`_globals.scss`, imported once from `Editor.jsx`. 82.5kB now, and 14.73kB gzipped against
+14.89kB before any of this.
+
+`button:focus, input:focus { outline: 2px solid $focus-orange }` went with them. `index.css`
+has claimed since the breakpoint work that it replaced that rule with a single
+`:focus-visible`, and it never did — the original was still there, still ringing every button
+you clicked with a mouse. That is the one visible change in the whole flip: five scenes
+differed from the pre-flip baseline, each by exactly the 264-pixel ring around whatever the
+scene had clicked. Tab still rings at 2px `#ff7867`, and a text input still rings on mouse
+click, which is what `:focus-visible` is for.
+
 ## Phase 1 — the chrome, on Tailwind + shadcn
 
 This is what most people would call "the redesign," and it is the part with no unknowns.

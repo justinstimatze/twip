@@ -383,6 +383,31 @@ from reading the code plus a localforage dump in the browser:
    viewport — five pixel-identical, medium differing in 42 pixels at max delta 13/255. **Two of
    the three collisions were caught by nothing else**: smoke, interact and the engine suite
    were all green while the numeric fields were nearly three times too wide.
+   **THE LAYER FLIP 2026-07-25 (`4694210`, `72103b9`, `c197ac5`).** The tax above is retired.
+   `pnpm visual` (`dev/visual.mjs`) is a fourth check and the only one that measures geometry:
+   20 scenes — four viewports whole, the Toolbox per tool, the Inspector per selection, menu
+   bar, assets, timeline, canvas transforms, a popover, two modals — diffed against a baseline
+   you bless locally into a gitignored `dev/.visual/`. Not committed goldens: browser text
+   rendering differs from a CI runner's, so a committed PNG fails there for reasons unrelated
+   to the change, and `editor.yml` does not run it. Outlier = a channel differing by >2; a
+   scene fails above 64, measured (a few glyphs rasterize differently between runs of the same
+   build for 8–23 outliers, and the regressions it catches measured 4,316–12,852). It needed
+   an animation freeze to be deterministic. **Then: every `.scss` is wrapped in `@layer legacy`
+   by a vite transform, and `index.css` declares `@layer theme, base, legacy, components,
+   utilities`.** Position matters on both sides — below `base` and Preflight wins, which
+   recolours the whole editor (the first attempt did, all 20 scenes failed at max delta 232);
+   above `utilities` and nothing changed. The Toolbox's three wrappers and its `!` are gone and
+   all 20 scenes stayed in the noise floor without them. The flip surfaced that
+   **`_wickbrand.scss` emits 16 global rule blocks and 40 stylesheets import it**, so sass
+   inlined them 40× — invisible while unlayered (they collapsed to a few copies), 76kB → 147kB
+   once layered. Twelve were dead (react-modal overlays, bootstrap `.btn-wick-*`, the pruned
+   mobile overlay, two bootstrap popover rules) plus `:export { editorCanvasBorder }` which no
+   JS reads; the four live ones are in `_globals.scss`, imported once. 82.5kB, gzip 14.73kB vs
+   14.89kB before. `button:focus, input:focus { outline }` went too — **`index.css` has claimed
+   since the breakpoint work that `:focus-visible` replaced it and it never did**, so every
+   mouse click still left an orange ring. That is the only visible change: five scenes differed
+   by exactly the 264px ring around whatever they clicked. Tab still rings, text inputs still
+   ring on click.
    Scoping record follows.
 
    **SCOPED 2026-07-24 — `docs/ui-redesign-plan.md`.** The survey (`docs/ui-research.md`) is
