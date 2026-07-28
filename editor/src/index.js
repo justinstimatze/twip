@@ -23,9 +23,13 @@ import './index.css';
 import Editor from './Editor/Editor';
 import * as serviceWorker from './serviceWorker';
 import initializeDefaultFileHandlers from './files/filehandler';
+import installTauriFileHandlers from './files/tauri-filehandler';
 
 // Creates file handlers in the window.
 initializeDefaultFileHandlers();
+// Then override saving with a native dialog when running as the desktop app. See
+// tauri-filehandler.js for why this comes after rather than before.
+installTauriFileHandlers();
 
 // React 18+ root API. Deliberately NOT wrapped in <React.StrictMode>: the editor mounts
 // paper.js and the Wick engine imperatively from componentDidMount (Canvas.jsx:52,

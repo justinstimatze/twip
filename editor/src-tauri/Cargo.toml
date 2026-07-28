@@ -20,6 +20,10 @@ tauri = { version = "2", features = [] }
 # twip/editor/src-tauri/, and the twip crate root is the repo root (twip/), so "../.."
 # from here. (Excluded from twip's cargo workspace via [workspace] exclude in twip/Cargo.toml.)
 twip = { path = "../.." }
+# Native save dialog for save_file. xdg-portal is rfd 0.17's default on Linux and the right
+# one here: the portal is callable off the main thread, which a Tauri command is, where the
+# gtk3 backend wants the main loop. The session already runs xdg-desktop-portal-gnome.
+rfd = "0.17"
 
 # This is a preview shell, not something we gdb — drop DWARF for all 310 crates in the
 # dep tree (webkit/wry + the bundler's codec stack). Cuts the debug target from ~4G to <2G.

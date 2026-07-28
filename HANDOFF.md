@@ -546,11 +546,28 @@ running it, and watching `~/Downloads` go from zero `.wick` files to
 `My_Project7-28-2026_15-57-47.wick`, which unzips to a real project (`wickengine 2026.7.24.16.26.12`,
 720x480, 12fps) and compiles. Probe removed and both the frontend and the binary rebuilt clean
 afterwards.
-So every `saveFileFromWick` export — `.wick`, `.swf` to disk, GIF, ZIP, HTML — reaches the disk
-on this box. It reaches *the Downloads directory* with no file dialog and no way to choose,
-which is a UX gap rather than a broken button, and it depends on a WebKitGTK default rather than
-on anything twip asks for. A `download_started_handler` in the shell would make the destination
-twip's decision instead of the library's. Hand-built JSON (what brush-donut and skew-tween did) cannot
+So every `saveFileFromWick` export — `.wick`, `.swf` to disk, GIF, ZIP, HTML — reached disk on
+this box, in the Downloads directory, with no dialog and no way to choose. Working, but the
+destination came from a WebKitGTK default rather than from anything twip asked for.
+**CLOSED 2026-07-28 — the desktop app now opens a native save dialog.** `save_file` in
+`src-tauri/src/lib.rs` puts up an `rfd::AsyncFileDialog` and writes the bytes to whatever is
+chosen; `src/files/tauri-filehandler.js` replaces `window.saveFileFromWick` with a call to it
+when `window.__TAURI__` is present. Async and rfd's default `xdg-portal` backend on purpose:
+GTK dialogs want the main loop and a Tauri command does not run on it, while the portal is
+callable from anywhere and the session already runs `xdg-desktop-portal-gnome`. rfd 0.17 has no
+`tokio` feature — the first attempt asked for one and failed to resolve.
+Installed AFTER `initializeDefaultFileHandlers()` rather than before, which inverts what
+`filehandler.js`'s docstring suggests. Installing first lands in its `else` branch, which wraps
+the handler in an "Overwrite Save?" prompt driven by `getSavedWickFiles` — a list of
+localStorage projects, not files on disk. The native dialog already asks about overwriting the
+real file, so that wrapper would ask a second time about something else.
+Verified through D-Bus rather than by looking: `dbus-monitor` on
+`interface='org.freedesktop.portal.FileChooser'` captured `member=SaveFile` when the save fired,
+and the Downloads directory stopped gaining files. Both matter — no new download alone is also
+what a thrown invoke looks like. The browser build is untouched (`installTauriFileHandlers`
+returns false without `window.__TAURI__`, and a Playwright run still captures the download).
+One rough edge left: dismissing the dialog calls `failureCallback`, so the toast reads "Error
+saving..." for a deliberate cancel. The handler signature has no third outcome. Hand-built JSON (what brush-donut and skew-tween did) cannot
 catch drift by construction, which is the whole point of this one.
 Pinned by `compiles_editor_authored_wick`: 720x480 stage (the editor's default, not the
 compiler's 550x400), 12fps, 24 frames, one DefineShape inside one DefineSprite, 24 placements.
