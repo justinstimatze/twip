@@ -544,8 +544,15 @@ engine's, and the header takes it. Pinned twice: `compiles_test1_wick` asserts t
 constant for another fails. Verified independently of the swf crate by reading the fixed8 bytes
 out of a compiled `motion-tween.swf` — 12.0, 24 frames.
 The general shape: **a property that appears once, in a header, is invisible to oracles that
-walk the body.** Anything else living there — stage size, SWF version, compression — has the
-same exposure and only `width`/`height` are currently asserted anywhere.
+walk the body.** `header_carries_the_document_not_defaults` now covers the rest of that surface
+— stage rect against the document's width/height, version 8 (below 6 and clip PRESS silently
+stops working), compression, and `num_frames` against the ShowFrame count actually emitted,
+since the writer takes that number from the caller rather than deriving it and a header that
+disagrees with the body stalls or truncates a movie whose every frame is individually right.
+Each assertion was mutation-checked rather than trusted: hardcoding the stage width, bumping
+`num_frames` by one, and dropping version to 6 each fail it, and the first attempt at the
+version mutation silently hit a demo binary's header instead of `compile_document`'s, which is
+its own small lesson about `replace(…, 1)` on a file with three similar headers.
 
 NEXT UP, FOUND 2026-07-28 while auditing for a public release — **nobody but this box can
 export a SWF from the editor.** `EditorCore.jsx:1156` branches: `window.__TAURI__` invokes the

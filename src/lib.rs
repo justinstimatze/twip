@@ -1447,6 +1447,96 @@ mod tests {
         assert_eq!(m.ty.get(), Twips::from_pixels(150.0).get(), "clip y -> ty");
     }
 
+    /// The rest of the header, for the reason the framerate bug existed: these fields are
+    /// written once and never appear in the tag stream, so the structural oracle walking tags
+    /// cannot see them and the goldens rendering one frame cannot either. Framerate sat in
+    /// that gap for the project's whole life. Everything else living there gets an assertion
+    /// here so the gap is covered rather than re-discovered one field at a time.
+    #[test]
+    fn header_carries_the_document_not_defaults() {
+        use wick::{Contour, Document, Frame, Layer};
+
+        let doc = Document {
+            width: 640.0,
+            height: 360.0,
+            framerate: 30.0,
+            layers: vec![Layer {
+                frames: vec![
+                    Frame {
+                        start: 1,
+                        end: 3,
+                        contours: vec![Contour {
+                            points: vec![(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)],
+                            holes: vec![],
+                            closed: true,
+                            fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
+                            stroke: None,
+                        }],
+                        clips: vec![],
+                        scripts: Vec::new(),
+                        tweens: vec![],
+                    },
+                    Frame {
+                        start: 4,
+                        end: 5,
+                        contours: vec![Contour {
+                            points: vec![(20.0, 0.0), (30.0, 0.0), (25.0, 10.0)],
+                            holes: vec![],
+                            closed: true,
+                            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+                            stroke: None,
+                        }],
+                        clips: vec![],
+                        scripts: Vec::new(),
+                        tweens: vec![],
+                    },
+                ],
+            }],
+        };
+
+        let swf_bytes = compile_document(&doc).expect("compile");
+        let buf = swf::decompress_swf(&swf_bytes[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let header = &parsed.header;
+
+        // Stage size. Nothing asserted this before, so a document's dimensions reached the
+        // header on trust alone — the same standing this framerate had.
+        let stage = header.stage_size();
+        assert_eq!(stage.x_min, Twips::ZERO, "stage starts at the origin");
+        assert_eq!(stage.y_min, Twips::ZERO);
+        assert_eq!(
+            stage.x_max,
+            Twips::from_pixels(640.0),
+            "width -> stage x_max"
+        );
+        assert_eq!(
+            stage.y_max,
+            Twips::from_pixels(360.0),
+            "height -> stage y_max"
+        );
+
+        // SWF 8: PRESS clip events need 6+, and DefineShape4 and LineStyle2 are already in
+        // use. Dropping below 8 silently loses click handlers.
+        assert_eq!(header.version(), 8, "version 8 is what clip PRESS requires");
+        assert_eq!(header.compression(), swf::Compression::None);
+
+        // num_frames is caller-supplied rather than derived by the writer, so it can disagree
+        // with the number of frames actually emitted. A player trusts the header: too high
+        // stalls on blank frames, too low truncates the movie. Both render every individual
+        // frame correctly, which is exactly why neither oracle would notice.
+        let show_frames = parsed
+            .tags
+            .iter()
+            .filter(|t| matches!(t, Tag::ShowFrame))
+            .count();
+        assert_eq!(show_frames, 5, "frames 1..=5 across two keyframes");
+        assert_eq!(
+            header.num_frames() as usize,
+            show_frames,
+            "header count must equal the ShowFrames actually written"
+        );
+    }
+
     /// The header rate must be whatever the document says, not a constant. It was
     /// hardcoded to 24 while every fixture is 12, so everything twip ever exported played at
     /// double speed — every frame correct, the whole movie wrong. Asserting against a real
