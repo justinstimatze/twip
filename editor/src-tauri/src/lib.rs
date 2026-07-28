@@ -1,8 +1,8 @@
-// twip-editor desktop shell.
+// twip desktop shell.
 //
-// Wraps the wick-editor CRA build and exposes the twip compiler as an in-process
-// Tauri command, so the editor's Export button compiles .wick -> .swf without the
-// dev HTTP bridge.
+// Loads the editor's Vite build from ../build and exposes the twip compiler as an
+// in-process Tauri command, so the SWF button compiles .wick -> .swf without the dev
+// HTTP bridge on :8752.
 
 /// Compile serialized .wick bytes to .swf bytes via the twip compiler.
 ///

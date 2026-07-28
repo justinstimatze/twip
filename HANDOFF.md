@@ -251,11 +251,22 @@ from reading the code plus a localforage dump in the browser:
      looks like. The guard above it, `// if (!project) return;`, is commented out, so someone
      already hit this and hid it rather than surfacing it. Whatever the root cause, this should
      report instead of handing back an empty canvas.
-   * OPEN: whether the autosaves contain a real project or an empty one. `setupNewProject`
-     fires `projectDidChange` at startup, which requests an autosave of the blank project just
-     created — so every session may be writing an empty autosave, and Load would then be
-     working correctly and restoring genuine emptiness. Settle it by dumping
-     `objectsData.map(o => o.classname)` for the newest entry: no `Path` among them means empty.
+   * SETTLED 2026-07-28 — **both, which is why the symptom looked inconsistent.** Read straight
+     out of the desktop shell's IndexedDB rather than through a browser console: the store lives
+     at `~/.local/share/com.twip.editor/databases/indexeddb/v1/tauri_localhost_0/*/IndexedDB.sqlite3`,
+     `sqlite3 … "SELECT quote(value) FROM Records"` dumps WebKit's serialization, and the
+     classnames are legible as hex in it (`50617468` = `Path`). Nine entries in the index. Of the
+     four payloads still held, two carried only Selection/Clip/Timeline/Layer/Frame — no `Path`,
+     so genuinely empty, which confirms the `setupNewProject` → `projectDidChange` theory above
+     writes a blank autosave at startup. The other two carried real geometry: one with two `Path`
+     objects and their segment arrays, one with a closed four-segment rectangle and a fill colour.
+     So Load restoring nothing is sometimes correct behaviour on an empty entry and sometimes the
+     `:1486` blank-project fallback swallowing a real failure, and the two are indistinguishable
+     from the outside. Fix the fallback first (it is what makes the two look alike), then stop
+     writing the startup autosave.
+     Clearing the desktop store to get a first-run launch: close the app, `rm -rf` that
+     `tauri_localhost_0` directory. The browser dev-server keeps a separate copy in Chrome's
+     profile, so clearing one does not quiet the other.
 4. **PHASE 1a DONE 2026-07-24 (`febf3d3`, `23965a4`, `e6ec35d`).** The
    editor runs on React 19, Tailwind v4 tokens, and shadcn/Radix primitives; `WickInput` is
    rewritten and four dependencies are gone (react-select, react-tooltip, react-dropdown,
@@ -518,16 +529,24 @@ NEXT UP, FOUND 2026-07-28 while auditing for a public release — **nobody but t
 export a SWF from the editor.** `EditorCore.jsx:1156` branches: `window.__TAURI__` invokes the
 in-process Rust `compile_swf`, everything else POSTs to `http://localhost:8752/compile`, which
 is `dev/twip_bridge.py`. A stranger running `pnpm dev` gets "could not reach the twip bridge on
-:8752" from the one button twip exists for. The Tauri side has not been launched since the Vite
-move (see DEFERRED below), and there is no wasm path — `wasm-bindgen` appears nowhere in the
-tree. Two exits: ship a Tauri desktop binary, or compile the crate to wasm32 so the browser
+:8752" from the one button twip exists for. There is no wasm path either — `wasm-bindgen` appears
+nowhere in the tree. The Tauri shell was re-verified working the same day (see the TAURI entry
+below), so the desktop half of this is a packaging problem now rather than a broken one; the
+browser half is untouched. Two exits: ship a Tauri desktop binary, or compile the crate to wasm32 so the browser
 stands alone. Tauri is the shorter one; that path was verified working in a native window on
 2026-07-23 and only the config drifted.
 
 ALSO OPEN for a public release, in the order they'd bite:
    * The root `LICENSE` is MIT and the tree now contains GPLv3 code at `editor/`. The README
-     states both licenses and that distributing them together means GPLv3 (2026-07-28), which
-     makes the repo honest; whether `LICENSE` itself should change is undecided.
+     states both licenses (2026-07-28), which makes the repo honest; whether `LICENSE` itself
+     should change is undecided. The first wording said "distributing the two together means the
+     combined work goes out under GPLv3" and was too strong — GPLv3's aggregate clause
+     (`editor/LICENSE.md:235-243`) says a compilation of a covered work with separate works "not
+     combined with it such as to form a larger program" is an aggregate, and inclusion in one
+     "does not cause this License to apply to the other parts." A source tree holding both fits
+     that; the desktop binary, which links `twip::compile_wick` into the same executable that
+     serves the GPLv3 frontend, does not. The README now says so and points the reader at the
+     licenses rather than at a paragraph written by someone who is not a lawyer.
    * `Cargo.toml:13` takes `swf` as a git dep, and crates.io rejects git deps — so
      `cargo install twip` is blocked by construction, `publish = false` notwithstanding.
    * No tags, no releases, no packaging workflow. All three workflows are checks.
@@ -543,11 +562,27 @@ ALSO OPEN for a public release, in the order they'd bite:
    compiling scripts inside a sprite body would force the whole `defs` pipeline off
    `'static`. Collected and warned today. No fixture demands it yet.
 
-DEFERRED (Justin, 2026-07-24: "put off 2 for a while") — **Tauri after the Vite move.**
-`editor/src-tauri/tauri.conf.json` has `frontendDist: "../build"` and NO `devUrl` /
-`beforeDevCommand`, so a production build still lines up (Vite's `outDir` is `build`) but
-`tauri dev` cannot serve the Vite dev server. The desktop shell has not been launched since
-the migration. Pick this up before anything depends on the desktop target.
+**TAURI RE-VERIFIED 2026-07-28 — the production path never broke; only `tauri dev` did.**
+`cargo build` in `editor/src-tauri` produced an 83MB debug binary that launches, renders the
+whole editor from `../build`, and carries the in-process `compile_swf` command. `vite.config.mjs:83`
+sets `build: { outDir: 'build' }` against the config's `frontendDist: "../build"`, and no `base`
+is set, so assets stay root-absolute, which is what the `tauri://` protocol wants. What is still
+missing is `devUrl` / `beforeDevCommand` and a `tauri` script in `package.json`, so `cargo tauri
+dev` has nothing to serve — a dev-loop gap, not a shipping one.
+`src-tauri/run-shell-check.sh` (new) is the check: launch, find the window, screenshot it, close.
+It forces `GDK_BACKEND=x11` because this box runs Wayland, where the compositor owns geometry and
+ImageMagick's `import` cannot address another client's surface — the same reason `smoke.mjs` is
+headless. Without a window grab the check could only prove the process stayed alive, not that the
+frontend painted.
+Two things the first launch showed. The window title is `twip` (the config strings were still
+`wick-editor` until this pass). And the **Load Autosave? dialog fires on a cold desktop launch**,
+reproducing the inherited bug from Next-up item 3 outside the browser for the first time.
+Build cost on this box, at `-j 2` to stay inside ~2G of available RAM: 8m01s cold for the whole
+dep tree, then 49.6s for a config-only change, since `tauri-build` rerunning invalidates the shell
+crate and the link but none of the ~300 dependencies. Peak pressure was transient — available RAM
+dipped to a few hundred MB during large crates and recovered to ~1.7G, with swap up 900MB total.
+STILL DEFERRED: a *release* build and the bundler (`cargo tauri build`), which is what a
+downloadable artifact needs. Nothing has run `--release` here yet.
 
 ## Working queue (record of items 1–11)
 

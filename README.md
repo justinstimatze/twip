@@ -41,4 +41,4 @@ Two licenses, because the tree holds two things.
 - The compiler — everything outside `editor/` — is **MIT**, and ships no Wick code. See [`LICENSE`](LICENSE).
 - The editor fork at `editor/` is **GPLv3**, because it contains Wick's code. See [`editor/LICENSE.md`](editor/LICENSE.md).
 
-Distributing the two together means the combined work goes out under GPLv3. The compiler crate remains independently usable under MIT.
+MIT is GPL-compatible, so there is no conflict in having both here. A desktop build links the compiler into the same binary as the editor and is conveyed under GPLv3; the compiler crate on its own stays MIT and can be taken and used as such. I am not a lawyer, and if you plan to redistribute, read both licenses rather than this paragraph.

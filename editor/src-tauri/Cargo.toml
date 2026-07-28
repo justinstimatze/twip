@@ -1,7 +1,7 @@
 [package]
 name = "twip-editor"
 version = "0.1.0"
-description = "wick-editor desktop shell (twip)"
+description = "twip desktop shell — the editor plus the compiler in one binary"
 edition = "2021"
 publish = false
 

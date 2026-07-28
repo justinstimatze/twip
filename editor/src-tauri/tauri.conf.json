@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "wick-editor",
+  "productName": "twip",
   "version": "0.1.0",
   "identifier": "com.twip.editor",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "wick-editor",
+        "title": "twip",
         "width": 1280,
         "height": 800,
         "resizable": true
