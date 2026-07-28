@@ -42,6 +42,8 @@ fn main() -> std::io::Result<()> {
     let doc = Document {
         width: 550.0,
         height: 400.0,
+        // This demo was authored to read at 24; a .wick would carry its own rate.
+        framerate: 24.0,
         layers: vec![Layer { frames }],
     };
 

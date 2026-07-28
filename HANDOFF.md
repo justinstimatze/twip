@@ -525,6 +525,28 @@ from reading the code plus a localforage dump in the browser:
    compiling scripts inside a sprite body would force the whole `defs` pipeline off
    `'static`. Collected and warned today. No fixture demands it yet.
 
+**FIXED 2026-07-28 — every SWF twip ever wrote played at the wrong speed.** `compile_document`
+hardcoded `frame_rate: Fixed8::from_f64(24.0)` and `wick.rs` never parsed `framerate` at all;
+`Document` carried width and height and nothing about timing. All nine fixtures are 12fps, and
+so is any default project (`engine/src/base/Project.js:39`), so everything exported at exactly
+double speed — every frame individually correct, the movie wrong. `motion-tween.wick` is 24
+frames: two seconds of animation delivered in one.
+Found by Justin animating in the installed desktop build and noticing the Ruffle playback ran
+"about twice as fast" as the editor preview. Worth dwelling on why nothing else caught it. The
+structural oracle asserts tags, depths and per-frame matrices and never looked at the header.
+The golden PNGs render a *specific frame* through `--skipframes`, and the raster at frame N does
+not depend on playback rate, so all seven still pass unchanged — verified, not assumed. Both
+oracles are frame-accurate and neither is time-accurate, and the one property that lives purely
+in the header fell exactly between them.
+`Document` now has `framerate: f64`, parsed from `project.json` with a 12.0 default matching the
+engine's, and the header takes it. Pinned twice: `compiles_test1_wick` asserts the fixture's own
+12, and `header_framerate_comes_from_the_document` round-trips 12/24/30/59.94 so swapping one
+constant for another fails. Verified independently of the swf crate by reading the fixed8 bytes
+out of a compiled `motion-tween.swf` — 12.0, 24 frames.
+The general shape: **a property that appears once, in a header, is invisible to oracles that
+walk the body.** Anything else living there — stage size, SWF version, compression — has the
+same exposure and only `width`/`height` are currently asserted anywhere.
+
 NEXT UP, FOUND 2026-07-28 while auditing for a public release — **nobody but this box can
 export a SWF from the editor.** `EditorCore.jsx:1156` branches: `window.__TAURI__` invokes the
 in-process Rust `compile_swf`, everything else POSTs to `http://localhost:8752/compile`, which
@@ -600,6 +622,20 @@ after a config-only change. The bundler always recompiles `tauri`, `tauri-macros
 crate regardless of what the release build produced, because the CLI adds
 `tauri/custom-protocol` for production — so one `cargo-tauri build` from cold is cheaper than a
 release build followed by a bundle. Disk fell 27G → 23G across the whole exercise.
+**END-TO-END CONFIRMED 2026-07-28, from the installed package.** `sudo dpkg -i` the deb, launch
+from the menu, draw a rectangle, press **SWF** — Ruffle plays it. That is `toWickFile` →
+`invoke('compile_swf')` → `twip::compile_wick` → Ruffle, running out of `/usr/bin/twip` with no
+dev server and no bridge on :8752. The desktop half of "nobody but this box can export a SWF"
+is closed; the browser half is untouched.
+Justin drove it, because **synthetic input cannot reach the window on this box.** XTEST clicks
+at coordinates verified against a screenshot produced no UI change at all — the tool button
+never highlighted — even with the app launched under `GDK_BACKEND=x11` as an Xwayland client.
+Same family as the `resize_window` no-op already in `desktop-gui-gotchas`: under Wayland the
+compositor owns input. There is no xdotool/ydotool/python3-xlib here, and building an XTEST
+clicker against libXtst did not help. Anything needing a click in the native window needs a
+human, or a test that goes through the browser build instead.
+Also learned the hard way: `pkill`/`kill` matching on the process name `twip` kills the user's
+own running copy, which reads to them as the app crashing on launch. Kill by recorded PID.
 STILL OPEN before this is a download anyone can take: nothing signs it, no workflow builds it,
 and `bundle.targets` is `"all"` while this box can only produce one of them.
 

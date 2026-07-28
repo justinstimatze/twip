@@ -13,10 +13,13 @@ use serde_json::Value;
 use std::io::{Cursor, Read};
 use swf::Color;
 
-/// A parsed document: stage size (pixels) plus the timeline's layers.
+/// A parsed document: stage size (pixels), playback rate, and the timeline's layers.
 pub struct Document {
     pub width: f64,
     pub height: f64,
+    /// Frames per second, straight from the project. The SWF header carries this, so getting
+    /// it wrong plays the whole movie at the wrong speed while every frame is still correct.
+    pub framerate: f64,
     /// Layers in Wick order — index 0 is frontmost (depth is resolved at compile).
     pub layers: Vec<Layer>,
 }
@@ -158,6 +161,13 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .get("height")
         .and_then(Value::as_f64)
         .unwrap_or(400.0);
+    // 12 is the engine's own default (engine/src/base/Project.js:39), so a project.json that
+    // omits the key means 12, not whatever the SWF spec would prefer.
+    let framerate = project
+        .get("framerate")
+        .and_then(Value::as_f64)
+        .filter(|f| *f > 0.0)
+        .unwrap_or(12.0);
 
     let objects = root
         .get("objects")
@@ -178,6 +188,7 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
     Ok(Document {
         width,
         height,
+        framerate,
         layers,
     })
 }

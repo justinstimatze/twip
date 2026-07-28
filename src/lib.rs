@@ -1151,7 +1151,7 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
             y_min: Twips::ZERO,
             y_max: Twips::from_pixels(doc.height),
         },
-        frame_rate: Fixed8::from_f64(24.0),
+        frame_rate: Fixed8::from_f64(doc.framerate),
         num_frames: total.max(1),
     };
 
@@ -1231,6 +1231,11 @@ mod tests {
         assert_eq!(shapes, 2, "black ellipse + green rectangle");
         assert_eq!(places, 2, "each shape placed once");
         assert_eq!(show_frames, 1, "single static frame");
+        assert_eq!(
+            parsed.header.frame_rate().to_f32(),
+            12.0,
+            "the fixture's own rate, not a hardcoded default"
+        );
 
         // Both engine-authored paths carry strokeColor:[0,0,0] + strokeCap:"round"
         // with strokeWidth omitted (paper.js default 1). Each shape must now have a
@@ -1442,7 +1447,51 @@ mod tests {
         assert_eq!(m.ty.get(), Twips::from_pixels(150.0).get(), "clip y -> ty");
     }
 
-    /// Phase 1b: a two-keyframe flipbook removes the old shape and places the new.
+    /// The header rate must be whatever the document says, not a constant. It was
+    /// hardcoded to 24 while every fixture is 12, so everything twip ever exported played at
+    /// double speed — every frame correct, the whole movie wrong. Asserting against a real
+    /// fixture alone would pass again if someone swapped one constant for another, so this
+    /// picks a rate no default would produce.
+    #[test]
+    fn header_framerate_comes_from_the_document() {
+        use wick::{Contour, Document, Frame, Layer};
+
+        // Contour is not Clone, so build a fresh one per iteration.
+        let dot = || Contour {
+            points: vec![(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)],
+            holes: vec![],
+            closed: true,
+            fill: Some(swf::Color::from_rgb(0xff0000, 255)),
+            stroke: None,
+        };
+        for rate in [12.0, 24.0, 30.0, 59.94] {
+            let doc = Document {
+                width: 100.0,
+                height: 100.0,
+                framerate: rate,
+                layers: vec![Layer {
+                    frames: vec![Frame {
+                        start: 1,
+                        end: 1,
+                        contours: vec![dot()],
+                        clips: vec![],
+                        scripts: Vec::new(),
+                        tweens: vec![],
+                    }],
+                }],
+            };
+            let swf = compile_document(&doc).expect("compile");
+            let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+            let parsed = swf::parse_swf(&buf).expect("parse");
+            // Fixed8 has 1/256 resolution, so 59.94 lands within a fraction of a frame.
+            assert!(
+                (parsed.header.frame_rate().to_f32() - rate as f32).abs() < 0.01,
+                "header carried {} for a document at {rate}",
+                parsed.header.frame_rate().to_f32()
+            );
+        }
+    }
+
     #[test]
     fn frame_by_frame_timeline() {
         use wick::{Contour, Document, Frame, Layer};
@@ -1457,6 +1506,7 @@ mod tests {
         let doc = Document {
             width: 100.0,
             height: 100.0,
+            framerate: 12.0,
             layers: vec![Layer {
                 frames: vec![
                     Frame {
@@ -1694,6 +1744,7 @@ mod tests {
         let doc = Document {
             width: 200.0,
             height: 200.0,
+            framerate: 12.0,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -1943,6 +1994,7 @@ mod tests {
         let doc = Document {
             width: 200.0,
             height: 200.0,
+            framerate: 12.0,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -2032,6 +2084,7 @@ mod tests {
         let doc = Document {
             width: 200.0,
             height: 200.0,
+            framerate: 12.0,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -2414,6 +2467,7 @@ mod tests {
         Document {
             width: 200.0,
             height: 200.0,
+            framerate: 12.0,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -2630,6 +2684,7 @@ mod tests {
         let doc = Document {
             width: 200.0,
             height: 200.0,
+            framerate: 12.0,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
