@@ -46,14 +46,22 @@ struct Case {
 /// `skew-tween` frame 24 is the exception: a matrix that transposes or sign-flips its
 /// skew term still parses as a valid matrix, so shape is the only thing that catches it.
 ///
-/// Every case here renders one frame, which for a while meant a tween could be right at
-/// both ends and wrong in between with nothing looking. That gap is closed in
-/// `compiles_motion_tween_wick`, which now walks all 24 frames against the interpolation
-/// the tween describes — a/b/c/d, tx, ty and the cxform per frame. Matrices rather than
-/// more goldens on purpose: they pin the interior exactly instead of to within an AA
-/// fringe, and they run on every commit rather than behind this file's manual dispatch.
-/// Adding mid-span PNGs here would mostly re-check that Ruffle renders a matrix it is
-/// already given correctly, which is Ruffle's business rather than twip's.
+/// Every case here rendered one frame, which for a while meant a tween could be right at
+/// both ends and wrong in between with nothing looking. `compiles_motion_tween_wick` closes
+/// that on the structural side — it walks all 24 frames against the interpolation the tween
+/// describes, a/b/c/d, tx, ty and the cxform per frame — and that is the tighter check of
+/// the two, since it pins the interior exactly rather than to within an AA fringe and runs
+/// on every commit instead of behind this file's manual dispatch.
+///
+/// The three `motion-tween-f*` cases below are deliberate belt-and-braces on top of it.
+/// What they add is what `skew-tween` was already here for: a matrix can be arithmetically
+/// what the assertions expect and still rasterize to something nobody wants — a shape
+/// collapsed at a near-degenerate scale, a fill that inverts as winding flips through a
+/// rotation. Frame 12 is the one to keep if these ever need trimming; it sits closest to
+/// 90 degrees, where sin and cos swap roles and both endpoints are blind.
+///
+/// Opacity is deterministic here despite HANDOFF excluding it: the divergence recorded there
+/// is paper.js-vs-SWF, and these compare Ruffle against Ruffle on one backend.
 const CASES: &[Case] = &[
     Case {
         name: "test1",
@@ -89,6 +97,23 @@ const CASES: &[Case] = &[
         name: "skew-tween",
         fixture: "fixtures/skew-tween.wick",
         skipframes: 23,
+    },
+    // Mid-span. The clip is rotating 0 -> 180 and scaling 1 -> 2.5 while fading to 0.3, so
+    // these three catch the interior at a quarter, a half and three quarters of the way.
+    Case {
+        name: "motion-tween-f6",
+        fixture: "fixtures/motion-tween.wick",
+        skipframes: 5,
+    },
+    Case {
+        name: "motion-tween-f12",
+        fixture: "fixtures/motion-tween.wick",
+        skipframes: 11,
+    },
+    Case {
+        name: "motion-tween-f18",
+        fixture: "fixtures/motion-tween.wick",
+        skipframes: 17,
     },
 ];
 

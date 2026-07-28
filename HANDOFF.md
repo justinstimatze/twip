@@ -607,8 +607,16 @@ them, flipping a sign, or dropping rotation entirely left every existing asserti
 describes: a, b, c, d, tx, ty and the cxform per frame, with expected values computed from the
 fixture's two keys rather than tabulated. Mutation-checked three ways — b sign-flipped so it
 equals c, rotation dropped, scale off by 0.1% — each fails it.
-Matrices rather than mid-span golden PNGs, which is what was originally proposed and is the
-weaker of the two. A matrix pins the interior exactly instead of to within an AA fringe, and it
+**Three mid-span goldens added too, at Justin's call** — `motion-tween-f6/f12/f18`, blessed on
+lavapipe and eyeballed: growing (scale 1.33 -> 1.72 -> 2.11), travelling lower-left to upper-right,
+fading (0.85 -> 0.67 -> 0.48), rotating 39 -> 86 -> 133 degrees. Frame 12 is the one worth keeping
+if they are ever trimmed, since 86 degrees maps a square almost back onto itself and is exactly
+where a transposed matrix looks innocent. They earn their place the way `skew-tween` does: a matrix
+can be arithmetically right and still rasterize to something nobody wants. Mutation-checked — a
+sign-flipped `b` fails the golden test as well as the structural one. Opacity is fine to pixel-compare
+here despite the exclusion recorded above, because that divergence is paper.js-vs-SWF and these
+compare Ruffle to Ruffle on one backend. Golden count 7 -> 10.
+Matrices remain the primary check, and mid-span PNGs alone would have been the weaker of the two. A matrix pins the interior exactly instead of to within an AA fringe, and it
 runs on every commit where `golden.yml` is manual dispatch behind a ~6 minute ruffle build. A
 mid-span PNG would mostly re-check that Ruffle renders a matrix it was handed correctly, which
 is Ruffle's business. The comment at the top of the `CASES` table in `tests/golden.rs` records
