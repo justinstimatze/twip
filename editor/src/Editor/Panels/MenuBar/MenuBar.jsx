@@ -21,7 +21,6 @@ import React, { Component } from 'react';
 import './_menubar.scss';
 import MenuBarButton from './MenuBarButton/MenuBarButton';
 import MenuBarIconButton from './MenuBarIconButton/MenuBarIconButton';
-import MenuBarSupportButton from './MenuBarSupportButton/MenuBarSupportButton';
 
 class MenuBar extends Component {
 
@@ -34,13 +33,6 @@ class MenuBar extends Component {
             tooltip="Editor Information"
             action={() => this.props.openModal('EditorInfo')}
             icon="mascotmark"
-            />
-
-          <MenuBarSupportButton
-            icon="redheart"
-            text="support us"
-            id="support-us-button"
-            action={() => this.props.openModal('SupportUs')}
             />
           </div>
 

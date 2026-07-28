@@ -31,7 +31,6 @@ import EditorInfo from '../EditorInfo/EditorInfo';
 import OpenSourceNotices from '../OpenSourceNotices/OpenSourceNotices';
 import SavedProjects from '../SavedProjects/SavedProjects';
 import SimpleProjectSettings from '../SimpleProjectSettings/SimpleProjectSettings';
-import SupportUs from '../SupportUs/SupportUs';
 import SwfPreview from '../SwfPreview/SwfPreview';
 
 class ModalHandler extends Component {
@@ -153,12 +152,6 @@ class ModalHandler extends Component {
           toggle={this.props.closeActiveModal}
           open={this.props.activeModalName === 'SimpleProjectSettings'}/>
 
-        <SupportUs
-          isMobile={isMobile}
-          openModal={this.props.openModal}
-          toggle={this.props.closeActiveModal}
-          open={this.props.activeModalName === 'SupportUs'}
-          />
         <SwfPreview
           open={this.props.activeModalName === 'SwfPreview'}
           toggle={this.props.closeActiveModal}

@@ -1,13 +1,13 @@
 {
-  "name": "wick-editor",
-  "version": "1.19.3",
-  "author": "Wicklets LLC",
+  "name": "twip-editor",
+  "version": "0.1.0",
+  "author": "Justin Stimatze",
+  "license": "GPL-3.0-or-later",
   "private": true,
-  "homepage": "https://stickmanred.github.io/wick-editor",
   "main": "./public/electron.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/StickmanRed/wick-editor.git"
+    "url": "https://github.com/justinstimatze/twip.git"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",

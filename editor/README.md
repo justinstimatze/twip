@@ -1,114 +1,43 @@
-<h1 align="center">
-  <br>
-  <a href="https://editor.wickeditor.com/"><img src=".github/images/logo.svg" alt="Wick Editor" width="25%"></a>
-  <br>
-</h1>
+# twip editor
 
-<p align="center">
-  <a href="https://github.com/Wicklets/wick-editor/issues">
-      <img src="https://img.shields.io/badge/contributions-welcome-orange.svg"/>
-  </a>
-  <a href="https://www.patreon.com/WickEditor">
-      <img src="https://img.shields.io/badge/$-donate-ff69b4.svg?maxAge=2592000&amp;style=flat"/>
-  </a>
-  <a href="LICENSE.md">
-    <img src="https://img.shields.io/badge/License-GPLv3-blue.svg"/>
-  </a>
-  <a href="https://twitter.com/wickeditor?ref_src=twsrc%5Etfw">
-    <img src="https://img.shields.io/twitter/follow/wickeditor?style=social&logo=twitter" alt="follow on Twitter"></a>
-</p>
+The drawing and animation front end for [twip](../README.md) — draw vector shapes on a
+timeline, tween them, press **SWF**, and the twip compiler turns the document into a real
+`.swf` that Ruffle plays.
 
-<h1>Wick Editor</h1>
+## Credit where it belongs
 
-The Wick Editor is a free and open-source tool for creating games, animations, and everything in-between. It's designed to be the most accessible tool for creating multimedia projects on the web.
+**This is a fork of the [Wick Editor](https://github.com/Wicklets/wick-editor) by Wicklets
+LLC**, and almost all of what makes it a usable drawing tool is theirs. The engine under
+`engine/` is ~87k lines of their JavaScript — the document model, the brush, the tween
+engine, the paper.js integration, the timeline GUI — plus another ~46k of libraries they
+vendored. The React chrome here is ~17k lines, and it was theirs before it was modified.
 
-<p align="center"><img width="100%" src=".github/images/editor.svg"></p>
+Wick Editor is licensed under the GNU General Public License v3, so this fork is too. See
+[`LICENSE.md`](LICENSE.md), the per-file `Copyright 2020 WICKLETS LLC` headers, and
+[`CREDITS.md`](CREDITS.md), which names the people who built it.
 
-## Getting started
+Two upstreams, both still worth visiting:
 
-These instructions are for MacOS and Linux, we currently don't have instructions for Windows, but if you need help, please contact upstream!
+- [Wicklets/wick-editor](https://github.com/Wicklets/wick-editor) — the original, last
+  pushed March 2023.
+- [StickmanRed/wick-editor](https://github.com/StickmanRed/wick-editor) — the fork this one
+  was taken from, which carried it further.
 
-### Requirements
+Nothing here is endorsed by or affiliated with either. Bugs in this fork belong in
+[twip's issues](https://github.com/justinstimatze/twip/issues), not theirs.
 
-You'll need to download the following:
+## What this fork changes
 
-- [NodeJS 14](https://nodejs.org/en/download) (**NOTE: This is a ancient version of NodeJS, from the ancient times**)
-- [NodeJS 14 from `scoop`](https://scoop.sh/#/apps?q=nodejs14&id=ad5eddce0b1705a4141b06f972d326a2aaf03d4c) (Great package manager for people who don't wanna install stuff using wonky installers)
-### Installation
+- A **SWF** button that compiles the document through the twip Rust crate and plays the
+  result in an embedded Ruffle, plus an export that writes the `.swf` to disk. No other
+  Wick fork exports playable SWF; it is the reason this one exists.
+- Build system moved from Create React App / webpack 4 / Node 14 to Vite 6 + pnpm, so it
+  builds on current Node.
+- React 19, with the UI moving panel by panel onto Tailwind v4 tokens and Radix primitives.
+  Two panels of twelve are across; the rest still run on the original SCSS.
+- A desktop shell (Tauri 2) that links the compiler in-process rather than shelling out.
 
-1) Clone this repository:
+## Building
 
-    ```bash
-    git clone https://github.com/StickmanRed/wick-editor.git
-    ```
-
-2) Using the command line, change directories into the newly created `wick-editor` folder:
-
-    ```bash
-    cd wick-editor
-    ```
-
-3) Install all dependencies using this command:
-
-    ```bash
-    npm install
-    ```
-
-### Running the Editor
-
-1) Run the editor with this command:
-
-    ```bash
-    npm start
-    ```
-
-2) Open a web browser and go to this URL:
-
-    ```bash
-    localhost:3000
-    ```
-    (**NOTE: It may open up itself once `npm start` is ran**).
-
-Have fun hacking on Wick! 🎉
-
-### Deploying to Production
-
-To deploy, you'll need to have push access to this repo.
-
-1) Test the production build by using `npm predeploy`
-
-2) Run `npm run deploy`
-
-### Deploying to Prerelease
-
-1) Run `npm run prerelease-deploy`
-
-## Support
-
-<a href="https://www.patreon.com/WickEditor">
-	<img src="https://c5.patreon.com/external/logo/become_a_patron_button@2x.png" width="160">
-</a>
-
-## License
-
-Wick Editor is under the GNU v3 Public License. See the [LICENSE](LICENSE.md) for more information.
-
-## Links
-
-* [Wick Editor Site](https://www.wickeditor.com) (**NOT OWENED BY FORKERS**)
-* [Wick Editor Community Forum](https://forum.wickeditor.com/) (**Nice place, but, NOT OWENED BY FORKERS**)
-* [Follow on Twitter](https://twitter.com/wickeditor) (**NOT OWENED BY FORKERS**)
-* [Follow on Facebook](https://www.facebook.com/wickeditor/) (**NOT OWENED BY FORKERS**)
-
-
-
-## Building and Releasing the Desktop App 
-
-Please refer to this Wiki entry for information on our desktop build processes! [https://github.com/Wicklets/wick-editor/wiki/Building-Desktop-Editors-for-Release](https://github.com/Wicklets/wick-editor/wiki/Building-Desktop-Editors-for-Release). (**NOTE: We don't actually build these, old electron is a finicky mess**).
-
-If you are familiar with electron-builder, electron-packager, or have experience building desktop electron apps for production, we could use your help! Please message us or open an issue.
-
-## Contributors
-<a href="https://github.com/StickmanRed/wick-editor/graphs/contributors">
-	<img src = "https://contrib.rocks/image?repo=StickmanRed/wick-editor"/>
-</a>
+See [`BUILD.md`](BUILD.md) for prerequisites, the install and run commands, how to stage the
+Ruffle runtime, how SWF export works in dev, and the five checks.

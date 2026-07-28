@@ -470,8 +470,75 @@ from reading the code plus a localforage dump in the browser:
    param)` expects 270, gets 90.00000000000001. A 9th is FLAKY, not deterministic — `Wick.AutoSave
    getSortedAutosavedProjects` blows mocha's 2000ms default under load (appeared in 5 of 7 runs,
    never on an idle box). `--grep <pattern>` and `--headed` both work.
-5. **Rebrand / attribution pass.** HARD GATE on any sharing or distribution — details under
-   item 9's backlog. No urgency while the repo is private and undistributed.
+5. **DONE 2026-07-28 — rebrand / attribution pass.** The gate is lifted. The framing that
+   made it easy: the credit gets MORE visible, not less. Measured before touching anything,
+   because the premise for dropping the branding ("we rewrote the frontend") is false —
+   `engine/src` is 87,518 lines of Wick's JavaScript and `engine/lib` another 46,079
+   (their vendored paper.js, croquis, Tween.js); the React chrome is 17,134, of which
+   `src/ui` — the genuinely new shadcn primitives — is 564. Everything that makes it a
+   drawing tool is theirs.
+   KEPT, as GPLv3 §5 requires and would be right anyway: every `Copyright 2020 WICKLETS LLC`
+   header, `editor/LICENSE.md`, `editor/CREDITS.md`, and the Wicklets entries in
+   `notices-vendored.json`. ADDED: a credit in the About modal (`EditorInfo.jsx`) linking
+   upstream, a "Credit where it belongs" section in `editor/README.md` carrying the line
+   counts above, and a Credit section in the root README. Before this the attribution lived
+   only in file headers nobody opens.
+   REMOVED — the donation ask, because its destination is gone. `patreon.com/WickEditor`
+   resolves 200 to `patreon.com/profile/creators?u=4688242`, Patreon's fallback for an
+   unpublished page, so the button collected nothing for them. Out: `Modals/SupportUs/`
+   (+231-line stylesheet), `MenuBar/MenuBarSupportButton/`, the `redheart` ToolIcon entry
+   that existed only for it, `.action-button-support` (33 lines of `_actionbutton.scss`),
+   the five `$patreon-*`/`$github-*` sass variables, `src/resources/support-us-icons/` (10
+   files), and `.github/FUNDING.yml`.
+   ALSO REMOVED — identity that would misroute a stranger. `CNAME`/`CNAME_test` (wickeditor.com
+   domains), `.github/images/` (upstream's logo and screenshot, orphaned once the README was
+   rewritten), and the three policy links plus community forum in the About modal: those are
+   Wicklets' terms, privacy and cookie policies, they govern wickeditor.com, and showing them
+   told a twip user something false about where their data goes. `index.html` `<title>`, the
+   preloader SVG text and `Editor.jsx`'s `document.title` say twip. `package.json` is
+   `twip-editor` 0.1.0 — it was Wick's 1.19.3, which the About modal rendered as twip's
+   version number, claiming nineteen releases that never happened.
+   NOT TOUCHED, and worth a decision: **the mascot is still Wick's ghost** (`ToolIcon`
+   `mascot`/`mascotmark`, the preloader SVG, the favicon) — inventing a logo is design work,
+   not a rename. And `EditorCore.jsx:1584` hardcodes a fetch allowlist of
+   `['wickeditor.com', 'editor.wickeditor.com', 'test.wickeditor.com', 'aka.ms']` for
+   open-project-from-URL. That is upstream identity with teeth rather than copy: it grants
+   remote-load rights to hosts twip does not control, and emptying it disables the feature.
+   Verified: `pnpm build` green, engine suite 540/0/7 known, `smoke --sweep` 0 errors at six
+   widths, `interact` 12/12, and `visual` failed exactly the six scenes containing the menu
+   bar and nothing else — outliers confined to `38,6-688,33`, the strip the support button
+   occupied — then 20/20 clean against a re-blessed baseline. `.menu-bar-project-name` is
+   `margin: 0 auto` between two flex neighbours, so the project name sits 62px further left
+   now; that is the rule doing what it always did with a narrower left container.
+6. **Nested-clip frame scripts + PRESS handlers.** The deferred lifetime wall (item 10):
+   compiling scripts inside a sprite body would force the whole `defs` pipeline off
+   `'static`. Collected and warned today. No fixture demands it yet.
+
+NEXT UP, FOUND 2026-07-28 while auditing for a public release — **nobody but this box can
+export a SWF from the editor.** `EditorCore.jsx:1156` branches: `window.__TAURI__` invokes the
+in-process Rust `compile_swf`, everything else POSTs to `http://localhost:8752/compile`, which
+is `dev/twip_bridge.py`. A stranger running `pnpm dev` gets "could not reach the twip bridge on
+:8752" from the one button twip exists for. The Tauri side has not been launched since the Vite
+move (see DEFERRED below), and there is no wasm path — `wasm-bindgen` appears nowhere in the
+tree. Two exits: ship a Tauri desktop binary, or compile the crate to wasm32 so the browser
+stands alone. Tauri is the shorter one; that path was verified working in a native window on
+2026-07-23 and only the config drifted.
+
+ALSO OPEN for a public release, in the order they'd bite:
+   * The root `LICENSE` is MIT and the tree now contains GPLv3 code at `editor/`. The README
+     states both licenses and that distributing them together means GPLv3 (2026-07-28), which
+     makes the repo honest; whether `LICENSE` itself should change is undecided.
+   * `Cargo.toml:13` takes `swf` as a git dep, and crates.io rejects git deps — so
+     `cargo install twip` is blocked by construction, `publish = false` notwithstanding.
+   * No tags, no releases, no packaging workflow. All three workflows are checks.
+   * `EditorCore.jsx:1486` still turns a failed project load into a silent blank project,
+     with the `// if (!project) return;` guard commented out one line above. The autosave
+     DELETE bug from the 2026-07-24 diagnosis is fixed (`:1754` deletes `autosaveList[0].uuid`);
+     this half is not.
+   * `HANDOFF.md` is linked from the README and is a session transcript — 16 "Justin"
+     references and `~/Documents/wick-editor` at lines 600, 638, 654. The public-release
+     checklist wants that swept before anyone outside reads it.
+   * `README-create-react-app.md` is 2,567 lines documenting a build system this repo left.
 6. **Nested-clip frame scripts + PRESS handlers.** The deferred lifetime wall (item 10):
    compiling scripts inside a sprite body would force the whole `defs` pipeline off
    `'static`. Collected and warned today. No fixture demands it yet.
@@ -678,13 +745,12 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
      * **Export vs preview split**: **SWF** button = in-app Ruffle preview (current behavior); **export** =
        save a `.swf` file to disk (file dialog → write bytes). The earlier "make export produce SWF" resolves
        to this — export writes a file, SWF previews.
-     * **Rebrand / attribution pass** (Justin, 2026-07-23: "what to do with the stale patreon link and names").
-       Two piles: (1) MUST KEEP — the `Copyright 2020 WICKLETS LLC` headers in every file + LICENSE (GPLv3 §5);
-       add a "twip is based on Wick Editor by Wicklets LLC (GPLv3)" credit rather than erasing origin. (2) REMOVE
-       (not license-bound) — the donation/identity content: `Panels/MenuBar/MenuBar.jsx` "support us" button;
-       `Modals/SupportUs/SupportUs.jsx` + `_supportus.scss` (Patreon link + patron names); patron names in
-       `Modals/WelcomeMessage/WelcomeMessage.jsx`. HARD RULE: the stale Patreon link must be gone before ANY
-       share/distribution (GPLv3 + not shipping a stale third-party donation ask). No urgency while private/undistributed.
+     * **Rebrand / attribution pass — DONE 2026-07-28**, writeup under Next-up item 5. This entry
+       scoped it and got two details wrong worth keeping as the record: the welcome modal it named
+       as a source of patron names was already deleted in Phase 1b, and the scope was wider than
+       "the stale patreon link and names" — `CNAME`/`CNAME_test`, `.github/FUNDING.yml`,
+       `.github/images/`, `package.json`'s whole identity block, `index.html`'s title and preloader
+       text, and three of Wicklets' policy links in the About modal were all still shipping.
 10. Frame actions + PRESS click handlers. **DONE 2026-07-23 (both milestones).**
     Wick stores behavior as `scripts:[{name,src}]` on every Frame/Clip (engine bundle:
     `data.scripts = ...this._scripts`; 15 valid names incl. `default`/`load`/`mousepressed`);

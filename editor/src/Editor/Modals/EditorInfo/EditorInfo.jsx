@@ -36,16 +36,22 @@ class WelcomeModal extends Component {
                     <div className="editor-info-icon">
                         <ToolIcon name="mascot"/>
                     </div>
-                    <div className="editor-info-name">Wick Editor</div>
+                    <div className="editor-info-name">twip</div>
                     <div className="editor-info-version">Version {this.props.editorVersion}</div>
-                    <a className="editor-info-link" href="https://www.wickeditor.com/#/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>
-                    <br/>
-                    <a className="editor-info-link" href="https://www.wickeditor.com/#/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
-                    <br/>
-                    <a className="editor-info-link" href="https://www.wickeditor.com/#/cookie-policy" target="_blank" rel="noopener noreferrer">Cookie Policy</a>
-                    <br/>
-                    <a className="editor-info-link" href="https://forum.wickeditor.com" target="_blank" rel="noopener noreferrer">Community Forum</a>
-                    <br/>
+                    {/*
+                      * The credit belongs on the page, not only in the file headers every user
+                      * never opens. What used to sit here were Wicklets' own terms, privacy and
+                      * cookie policies plus their community forum — those govern wickeditor.com
+                      * and have never governed this, so pointing a user at them told them
+                      * something false about where their data goes.
+                      */}
+                    <div className="editor-info-credit">
+                      Built on the <a
+                        href="https://github.com/Wicklets/wick-editor"
+                        target="_blank"
+                        rel="noopener noreferrer">Wick Editor</a> by Wicklets LLC, under the GNU
+                      General Public License v3.
+                    </div>
                     <div className="editor-info-open-source-notices">
                         <ActionButton
                             color="gray"
