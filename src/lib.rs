@@ -1903,6 +1903,84 @@ mod tests {
     /// tweened across a 24-frame span from (90, 300) scale 1 opacity 1 to (460, 100)
     /// scale 2.5 opacity 0.3. Validates the tween parser against Wick's own serialization
     /// (playheadPosition frame-relative, transform absolute — confirmed against the engine).
+    /// The only fixture written by the engine that actually ships. Every other one came off
+    /// wickeditor.com in 2021 (`wickengine 2021.1.22.14.13.2`); this one says
+    /// `2026.7.24.16.26.12`, authored through the real Rectangle tool and the engine's own
+    /// `createTween` by `editor/dev/make-fixture.mjs`. Without it the parser is only ever
+    /// tested against a serialization no code in this repo produces, so a field that moved in
+    /// five years of fork history would mis-parse every real save while the suite stayed green.
+    #[test]
+    fn compiles_editor_authored_wick() {
+        let bytes = include_bytes!("../fixtures/editor-tween.wick");
+        let swf = compile_wick(bytes).expect("compile a save from the shipping engine");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
+
+        // The project's own settings, not the compiler's defaults.
+        assert_eq!(parsed.header.num_frames(), 24, "frames 1..=24");
+        assert_eq!(parsed.header.frame_rate().to_f32(), 12.0);
+        assert_eq!(
+            parsed.header.stage_size().x_max,
+            Twips::from_pixels(720.0),
+            "the editor's default stage is 720x480, not the compiler's 550x400"
+        );
+
+        // createTween wraps the lone path in a Clip, so the shape rides inside a sprite.
+        assert_eq!(
+            count(&|t| matches!(t, Tag::DefineShape(_))),
+            1,
+            "one rectangle"
+        );
+        let sprites: Vec<_> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::DefineSprite(s) => Some(s),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sprites.len(), 1, "the clip createTween wrapped it in");
+
+        // A tween animates by re-placing the same depth every frame.
+        let places: Vec<_> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(places.len(), 24, "one placement per frame across the span");
+
+        // Endpoints come from the tween objects the engine wrote: x 269.3 -> 589.3.
+        let tx = |i: usize| places[i].matrix.expect("placement has a matrix").tx;
+        assert_eq!(tx(0), Twips::from_pixels(269.3), "first key's x");
+        assert_eq!(tx(23), Twips::from_pixels(589.3), "last key's x");
+
+        // The first key eases out-bounce, so the path between the endpoints must not be the
+        // straight line. This is the assertion that proves easingType survived the modern
+        // serialization — dropping it to 'none' leaves both endpoints correct and only the
+        // interior wrong, which is precisely what nothing else here would catch.
+        //
+        // Compare against the real linear curve at each frame, not against the midpoint of
+        // the endpoints: frame 12 of a 24-frame span sits at t=11/23, so it differs from that
+        // midpoint under any easing at all and asserting on it proves nothing. Checked by
+        // forcing `ease` to return k and confirming this fails.
+        let (x0, x1) = (269.3_f64, 589.3_f64);
+        let worst = (0..24)
+            .map(|i| {
+                let linear = x0 + (x1 - x0) * (i as f64) / 23.0;
+                (tx(i).to_pixels() - linear).abs()
+            })
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst > 5.0,
+            "out-bounce should depart from the straight line by more than 5px somewhere; \
+             worst departure was {worst:.2}px, which is what a dropped easingType looks like"
+        );
+    }
+
     #[test]
     fn compiles_motion_tween_wick() {
         let bytes = include_bytes!("../fixtures/motion-tween.wick");

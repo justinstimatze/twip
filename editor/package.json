@@ -100,7 +100,8 @@
     "interact": "node dev/interact.mjs",
     "visual": "node dev/visual.mjs",
     "notices": "node dev/gen-notices.mjs",
-    "notices:check": "node dev/gen-notices.mjs --check"
+    "notices:check": "node dev/gen-notices.mjs --check",
+    "fixture": "node dev/make-fixture.mjs"
   },
   "eslintConfig": {
     "extends": "react-app"

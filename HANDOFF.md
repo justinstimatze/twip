@@ -525,6 +525,28 @@ from reading the code plus a localforage dump in the browser:
    compiling scripts inside a sprite body would force the whole `defs` pipeline off
    `'static`. Collected and warned today. No fixture demands it yet.
 
+**FIXTURE FROM THE SHIPPING ENGINE 2026-07-28 — `fixtures/editor-tween.wick`.** Until now
+every fixture carried `wickengine 2021.1.22.14.13.2`, authored on wickeditor.com in the very
+first session; the vendored fork stamps saves `2026.7.24.16.26.12`. So the parser had only ever
+been tested against a serialization nothing in this repo produces, and a field that moved across
+five years of fork history would have mis-parsed every real save while all 34 tests stayed green.
+`editor/dev/make-fixture.mjs` (`pnpm fixture`) authors it: real Rectangle tool through Playwright
+mouse events, the engine's own `createTween` for the clip-wrap and keys, then
+`Wick.WickFile.toWickFile(project, cb, 'base64')` straight back to Node. Base64 rather than the
+save button on purpose — `saveFileFromWick` is a FileSaver blob download and the Tauri webview
+configures no download handler, so **the desktop app's save button probably does nothing**; that
+is unverified and worth checking. Hand-built JSON (what brush-donut and skew-tween did) cannot
+catch drift by construction, which is the whole point of this one.
+Pinned by `compiles_editor_authored_wick`: 720x480 stage (the editor's default, not the
+compiler's 550x400), 12fps, 24 frames, one DefineShape inside one DefineSprite, 24 placements.
+**The easing assertion took two tries and the first one was worthless.** `assert_ne!(tx(11),
+midpoint_of_endpoints)` looks like it proves the curve bends, and does not: frame 12 of a
+24-frame span sits at t=11/23, so it differs from that midpoint under any easing including none.
+Forcing `ease` to return `k` still passed. It now measures the worst departure from the true
+per-frame linear curve and requires >5px; under the same mutation that collapses to 0.05px and
+fails. Write the mutation before trusting the assertion — a green test and a test that can go
+red are different facts, and this is the second time today that gap was real.
+
 **FIXED 2026-07-28 — every SWF twip ever wrote played at the wrong speed.** `compile_document`
 hardcoded `frame_rate: Fixed8::from_f64(24.0)` and `wick.rs` never parsed `framerate` at all;
 `Document` carried width and height and nothing about timing. All nine fixtures are 12fps, and
