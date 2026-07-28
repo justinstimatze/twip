@@ -9,9 +9,11 @@ set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:-$HERE/target/shell-check.png}"
-BIN="$HERE/target/debug/twip-editor"
+# Release by default. mainBinaryName renames it to twip, so the debug build (still
+# target/debug/twip-editor, the cargo package name) needs TWIP_BIN to reach it.
+BIN="${TWIP_BIN:-$HERE/target/release/twip}"
 
-[ -x "$BIN" ] || { echo "no binary at $BIN — run cargo build first" >&2; exit 2; }
+[ -x "$BIN" ] || { echo "no binary at $BIN — run cargo build --release first" >&2; exit 2; }
 
 GDK_BACKEND=x11 "$BIN" > "$HERE/target/shell-check.log" 2>&1 &
 APP=$!

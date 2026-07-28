@@ -581,8 +581,27 @@ Build cost on this box, at `-j 2` to stay inside ~2G of available RAM: 8m01s col
 dep tree, then 49.6s for a config-only change, since `tauri-build` rerunning invalidates the shell
 crate and the link but none of the ~300 dependencies. Peak pressure was transient — available RAM
 dipped to a few hundred MB during large crates and recovered to ~1.7G, with swap up 900MB total.
-STILL DEFERRED: a *release* build and the bundler (`cargo tauri build`), which is what a
-downloadable artifact needs. Nothing has run `--release` here yet.
+**A .deb EXISTS 2026-07-28** — `target/release/bundle/deb/twip_0.1.0_amd64.deb`, 53.8MB,
+installed size 59.9MB, depending on `libwebkit2gtk-4.1-0` and `libgtk-3-0`. Package `twip`,
+`/usr/bin/twip`, menu entry `twip` under `Graphics;`, maintainer and both description fields
+set, and the long description carries the Wick credit. Built, inspected with `dpkg-deb`, and
+launched — NOT installed, and the packaged copy has never been run, only the one at
+`target/release/`.
+Four things learned putting it together, all in `editor/BUILD.md` under "The desktop build":
+`cargo-tauri` must be invoked by path, since putting `~/.cargo/bin` on `PATH` switches `cargo`
+to rustup's toolchain and invalidates every artifact the system one built; `--bundles deb`
+because only `dpkg-deb` is here and Tauri fetches AppImage tooling over the network;
+`mainBinaryName: "twip"` overrides the cargo package name, which cannot itself be `twip`
+because it depends on the compiler crate that already holds that name; and `tauri.conf.json`
+validates against a strict schema that REJECTS unknown properties, so it cannot carry
+`//`-prefixed comment keys — an attempt to annotate two fields failed the parse outright.
+Cost, at `-j 2`: 25m00s cold `cargo build --release`, 7m05s to bundle, then 2m08s to rebuild
+after a config-only change. The bundler always recompiles `tauri`, `tauri-macros` and the shell
+crate regardless of what the release build produced, because the CLI adds
+`tauri/custom-protocol` for production — so one `cargo-tauri build` from cold is cheaper than a
+release build followed by a bundle. Disk fell 27G → 23G across the whole exercise.
+STILL OPEN before this is a download anyone can take: nothing signs it, no workflow builds it,
+and `bundle.targets` is `"all"` while this box can only produce one of them.
 
 ## Working queue (record of items 1–11)
 

@@ -3,6 +3,7 @@
   "productName": "twip",
   "version": "0.1.0",
   "identifier": "com.twip.editor",
+  "mainBinaryName": "twip",
   "build": {
     "frontendDist": "../build"
   },
@@ -24,6 +25,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Justin Stimatze <justin@justinstimatze.com>",
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Draw on a timeline, export a .swf that Ruffle plays",
+    "longDescription": "A modern Flash. Draw vector shapes on a timeline, tween them, and export a real .swf that Ruffle plays. Built on the Wick Editor by Wicklets LLC (GPLv3).",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

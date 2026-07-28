@@ -74,6 +74,43 @@ shell); see the twip HANDOFF for the integration decisions.
 or path root (the Tauri shell and `pnpm preview` both do). To serve under a sub-path, set `base`
 in `vite.config.mjs`.
 
+## The desktop build
+
+```
+pnpm build                                    # the frontend first; the shell embeds build/
+cd src-tauri && ~/.cargo/bin/cargo-tauri build --bundles deb
+```
+
+Run `cargo-tauri` by path rather than as `cargo tauri`. Putting `~/.cargo/bin` on `PATH` makes
+`cargo` resolve to rustup's toolchain instead of the system one, and building the same tree under
+two rustc versions invalidates every artifact.
+
+`--bundles deb` because only `dpkg-deb` is present here; `appimagetool` and `rpmbuild` are not, and
+Tauri fetches the AppImage tooling over the network. `targets` stays `"all"` in `tauri.conf.json`
+so a runner with the full toolchain produces everything.
+
+`mainBinaryName` is `twip` while the cargo package is `twip-editor`. The package cannot be named
+`twip`: it depends on the compiler crate, which already holds that name, and two packages sharing
+one name break the dependency graph. Without the override the executable installs as
+`/usr/bin/twip-editor` inside a package called `twip`.
+
+`tauri.conf.json` rejects unknown properties, so it cannot carry `//`-prefixed comment keys — the
+config fails to parse rather than ignoring them. Rationale for its fields belongs here.
+
+Costs measured on this box at `-j 2`, chosen to stay inside ~2GB of available RAM: 25m00s for a
+cold `cargo build --release`, then 7m05s for the bundler. The bundler recompiles `tauri`,
+`tauri-macros` and the shell crate no matter what the release build already produced, because the
+CLI adds `tauri/custom-protocol` for a production bundle — that feature is what makes the binary
+serve its embedded assets instead of expecting a dev server. One `cargo-tauri build` from cold is
+cheaper than a `cargo build --release` followed by a bundle.
+
+`cargo tauri dev` does not work: there is no `devUrl` or `beforeDevCommand`, so it has nothing to
+serve. Run `pnpm dev` and the debug binary separately, or fix the config first.
+
+`src-tauri/run-shell-check.sh` launches the built binary, screenshots its window and closes it. It
+forces `GDK_BACKEND=x11` because under Wayland the compositor owns window geometry and `import(1)`
+cannot address another client's surface.
+
 ## Checks
 
 ```
