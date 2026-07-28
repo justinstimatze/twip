@@ -533,9 +533,24 @@ five years of fork history would have mis-parsed every real save while all 34 te
 `editor/dev/make-fixture.mjs` (`pnpm fixture`) authors it: real Rectangle tool through Playwright
 mouse events, the engine's own `createTween` for the clip-wrap and keys, then
 `Wick.WickFile.toWickFile(project, cb, 'base64')` straight back to Node. Base64 rather than the
-save button on purpose — `saveFileFromWick` is a FileSaver blob download and the Tauri webview
-configures no download handler, so **the desktop app's save button probably does nothing**; that
-is unverified and worth checking. Hand-built JSON (what brush-donut and skew-tween did) cannot
+save button on purpose — `saveFileFromWick` is a FileSaver blob download and going through it
+would only test FileSaver.
+**The save button does work in the desktop app — checked 2026-07-28, and the prediction that it
+would not was wrong.** The reasoning behind that prediction was half right: wry only wires
+download handling when a handler is supplied (`wry-0.55.1/src/webkitgtk/mod.rs:580` gates
+`register_download_handler` behind `download_started_handler.is_some()`), and `src-tauri/src/lib.rs`
+supplies neither. What it missed is that WebKitGTK 2.52.3 has its own default for an unhandled
+`decide-destination` — it writes to the user's Downloads directory using the suggested filename.
+Verified by injecting a temporary auto-click into `build/index.html`, rebuilding the shell,
+running it, and watching `~/Downloads` go from zero `.wick` files to
+`My_Project7-28-2026_15-57-47.wick`, which unzips to a real project (`wickengine 2026.7.24.16.26.12`,
+720x480, 12fps) and compiles. Probe removed and both the frontend and the binary rebuilt clean
+afterwards.
+So every `saveFileFromWick` export — `.wick`, `.swf` to disk, GIF, ZIP, HTML — reaches the disk
+on this box. It reaches *the Downloads directory* with no file dialog and no way to choose,
+which is a UX gap rather than a broken button, and it depends on a WebKitGTK default rather than
+on anything twip asks for. A `download_started_handler` in the shell would make the destination
+twip's decision instead of the library's. Hand-built JSON (what brush-donut and skew-tween did) cannot
 catch drift by construction, which is the whole point of this one.
 Pinned by `compiles_editor_authored_wick`: 720x480 stage (the editor's default, not the
 compiler's 550x400), 12fps, 24 frames, one DefineShape inside one DefineSprite, 24 placements.
