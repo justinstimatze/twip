@@ -2052,6 +2052,63 @@ mod tests {
             Fixed8::from_f64(0.3),
             "frame 24 opacity 0.3"
         );
+
+        // Everything above looks only at the two ends, and this tween is built so that the
+        // ends cannot show a whole class of error. It rotates 0 -> 180 degrees, so
+        // sin(rotation) is zero at BOTH endpoints: the matrix b and c terms are 0 on frame 1
+        // and frame 24 and nonzero on all 22 frames between. Emit them transposed, or with a
+        // sign flip, or drop the rotation entirely, and every assertion above still passes.
+        //
+        // So walk the whole span against the interpolation the tween describes rather than
+        // spot-checking a middle frame. Easing is 'none' here, so t is linear in the frame
+        // index; the transform channels come from the fixture's two keys (x 90->460,
+        // y 300->100, scale 1->2.5, rotation 0->180, opacity 1->0.3).
+        let lerp = |a: f64, b: f64, t: f64| a + (b - a) * t;
+        for (i, place) in places.iter().enumerate() {
+            let t = i as f64 / 23.0;
+            let s = lerp(1.0, 2.5, t);
+            let rot = lerp(0.0, 180.0, t).to_radians();
+            let m = place.matrix.expect("every frame carries a matrix");
+            // Fixed16 is 1/65536, Twips 1/20 px; the slack is for the conversion, not the math.
+            let close = |got: f64, want: f64, what: &str| {
+                assert!(
+                    (got - want).abs() < 1e-4,
+                    "frame {} {what}: got {got}, want {want}",
+                    i + 1
+                );
+            };
+            close(m.a.to_f64(), s * rot.cos(), "a = scale*cos");
+            close(m.b.to_f64(), s * rot.sin(), "b = scale*sin");
+            close(m.c.to_f64(), -s * rot.sin(), "c = -scale*sin");
+            close(m.d.to_f64(), s * rot.cos(), "d = scale*cos");
+            assert_eq!(
+                m.tx,
+                Twips::from_pixels(lerp(90.0, 460.0, t)),
+                "frame {} x",
+                i + 1
+            );
+            assert_eq!(
+                m.ty,
+                Twips::from_pixels(lerp(300.0, 100.0, t)),
+                "frame {} y",
+                i + 1
+            );
+            assert_eq!(
+                place.color_transform.expect("cxform").a_multiply,
+                Fixed8::from_f64(lerp(1.0, 0.3, t)),
+                "frame {} opacity",
+                i + 1
+            );
+        }
+
+        // The premise the loop rests on: b really is zero at both ends and not in between,
+        // so the endpoint assertions above genuinely cannot see these terms.
+        assert_eq!(places[0].matrix.unwrap().b, Fixed16::from_f64(0.0));
+        assert!(last.matrix.unwrap().b.to_f64().abs() < 1e-4);
+        assert!(
+            places[11].matrix.unwrap().b.to_f64().abs() > 0.9,
+            "mid-span b is large, which is what the ends hide"
+        );
     }
 
     /// Phase 1e: a motion tween on a clip. Two tween keys (x=0 at playhead 1, x=100 at

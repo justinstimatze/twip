@@ -45,6 +45,15 @@ struct Case {
 /// motion of motion-tween, which the structural oracle pins far tighter than pixels can.
 /// `skew-tween` frame 24 is the exception: a matrix that transposes or sign-flips its
 /// skew term still parses as a valid matrix, so shape is the only thing that catches it.
+///
+/// Every case here renders one frame, which for a while meant a tween could be right at
+/// both ends and wrong in between with nothing looking. That gap is closed in
+/// `compiles_motion_tween_wick`, which now walks all 24 frames against the interpolation
+/// the tween describes — a/b/c/d, tx, ty and the cxform per frame. Matrices rather than
+/// more goldens on purpose: they pin the interior exactly instead of to within an AA
+/// fringe, and they run on every commit rather than behind this file's manual dispatch.
+/// Adding mid-span PNGs here would mostly re-check that Ruffle renders a matrix it is
+/// already given correctly, which is Ruffle's business rather than twip's.
 const CASES: &[Case] = &[
     Case {
         name: "test1",

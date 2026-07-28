@@ -597,6 +597,23 @@ engine's, and the header takes it. Pinned twice: `compiles_test1_wick` asserts t
 12, and `header_framerate_comes_from_the_document` round-trips 12/24/30/59.94 so swapping one
 constant for another fails. Verified independently of the swf crate by reading the fixed8 bytes
 out of a compiled `motion-tween.swf` — 12.0, 24 frames.
+**MID-SPAN COVERAGE 2026-07-28 — and it went to matrices, not to more goldens.** Every golden
+renders one frame, and the structural oracle asserted `motion-tween` only at frames 1 and 24, so
+a tween could be right at both ends and wrong in between with nothing looking. That fixture makes
+the point sharply: it rotates 0 -> 180 degrees, so `sin(rotation)` is zero at *both* endpoints —
+the matrix `b` and `c` terms are 0 on frames 1 and 24 and nonzero on all 22 between. Transposing
+them, flipping a sign, or dropping rotation entirely left every existing assertion passing.
+`compiles_motion_tween_wick` now walks all 24 placements against the interpolation the tween
+describes: a, b, c, d, tx, ty and the cxform per frame, with expected values computed from the
+fixture's two keys rather than tabulated. Mutation-checked three ways — b sign-flipped so it
+equals c, rotation dropped, scale off by 0.1% — each fails it.
+Matrices rather than mid-span golden PNGs, which is what was originally proposed and is the
+weaker of the two. A matrix pins the interior exactly instead of to within an AA fringe, and it
+runs on every commit where `golden.yml` is manual dispatch behind a ~6 minute ruffle build. A
+mid-span PNG would mostly re-check that Ruffle renders a matrix it was handed correctly, which
+is Ruffle's business. The comment at the top of the `CASES` table in `tests/golden.rs` records
+this so the next person does not re-propose it.
+
 The general shape: **a property that appears once, in a header, is invisible to oracles that
 walk the body.** `header_carries_the_document_not_defaults` now covers the rest of that surface
 — stage rect against the document's width/height, version 8 (below 6 and clip PRESS silently
