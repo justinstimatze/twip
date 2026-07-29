@@ -1,5 +1,5 @@
 /*Wick Engine https://github.com/Wicklets/wick-engine*/
-var WICK_ENGINE_BUILD_VERSION = "2026.7.28.19.10.18";
+var WICK_ENGINE_BUILD_VERSION = "2026.7.28.22.56.24";
 /*!
  * Paper.js v0.12.4 - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
@@ -64098,6 +64098,14 @@ Wick.GUIElement.FRAME_MARGIN = 0.5;
 Wick.GUIElement.FRAME_DROP_SHADOW_DEPTH = 2; // Number of pixels to shift drop shadow below frame.
 Wick.GUIElement.FRAME_DROP_SHADOW_FILL = 'rgba(0,0,0,1)';
 Wick.GUIElement.FRAME_SCRIPT_DOT_COLOR = '#F5A623';
+Wick.GUIElement.FRAME_IDENTIFIER_FONT_COLOR = 'black';
+
+/* The remaining hardcoded styles in this directory, promoted to statics so the whole canvas
+   timeline is themeable from one place — see editor/src/theme.js, which assigns every
+   constant in this block from the CSS token layer once the bundle has loaded. */
+Wick.GUIElement.UI_FONT_FAMILY = 'Nunito Sans';
+Wick.GUIElement.LAYER_CREATE_LABEL_FILL_COLOR = 'rgba(255,255,255,0.3)';
+Wick.GUIElement.LAYER_CREATE_LABEL_HOVER_FILL_COLOR = 'rgba(255,255,255,0.6)';
 Wick.GUIElement.FRAME_HANDLE_HOVER_FILL_COLOR = Wick.GUIElement.SELECTED_ITEM_BORDER_COLOR;
 Wick.GUIElement.FRAME_HANDLE_WIDTH = 12;
 Wick.GUIElement.TWEEN_DIAMOND_RADIUS = 7;
@@ -64615,7 +64623,7 @@ Wick.GUIElement.BreadcrumbsButton = class extends Wick.GUIElement.Button {
     var ctx = this.ctx;
 
     // Button label settings
-    ctx.font = "14px Nunito Sans";
+    ctx.font = "13px " + Wick.GUIElement.UI_FONT_FAMILY;
     var textContent = this.model.identifier || 'Clip';
     var textWidth = ctx.measureText(textContent).width;
     var textX = Wick.GUIElement.BREADCRUMBS_PADDING;
@@ -64760,8 +64768,8 @@ Wick.GUIElement.Frame = class extends Wick.GUIElement {
       ctx.beginPath();
       ctx.rect(0, 0, this.model.length * this.gridCellWidth, this.gridCellHeight);
       ctx.clip();
-      ctx.font = '12px Courier New';
-      ctx.fillStyle = 'black';
+      ctx.font = '12px ' + Wick.GUIElement.NUMBER_LINE_NUMBERS_FONT_FAMILY;
+      ctx.fillStyle = Wick.GUIElement.FRAME_IDENTIFIER_FONT_COLOR;
       ctx.fillText(this.model.identifier, 0, 12);
       ctx.restore();
     }
@@ -65204,7 +65212,7 @@ Wick.GUIElement.FramesContainer = class extends Wick.GUIElement {
       ctx.fill();
 
       // Plus sign
-      ctx.font = '30px bold Courier New';
+      ctx.font = 'bold 30px ' + Wick.GUIElement.UI_FONT_FAMILY;
       ctx.fillStyle = Wick.GUIElement.ADD_FRAME_OVERLAY_PLUS_COLOR;
       ctx.globalAlpha = 0.5;
       ctx.fillText('+', x + this.gridCellWidth / 2 - 8, y + this.gridCellHeight / 2 + 8);
@@ -65585,7 +65593,7 @@ Wick.GUIElement.LayerCreateLabel = class extends Wick.GUIElement {
   draw() {
     super.draw();
     var ctx = this.ctx;
-    ctx.fillStyle = this.mouseState === 'over' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)';
+    ctx.fillStyle = this.mouseState === 'over' ? Wick.GUIElement.LAYER_CREATE_LABEL_HOVER_FILL_COLOR : Wick.GUIElement.LAYER_CREATE_LABEL_FILL_COLOR;
     var width = Wick.GUIElement.LAYERS_CONTAINER_WIDTH - Wick.GUIElement.LAYER_LABEL_MARGIN_SIDES * 2;
     var height = this.gridCellHeight - Wick.GUIElement.LAYER_LABEL_MARGIN_TOP_BOTTOM * 2;
 
@@ -66976,7 +66984,7 @@ Wick.GUIElement.Tooltip = class extends Wick.GUIElement {
     var ctx = this.ctx;
 
     // Font settings
-    ctx.font = "14px Nunito Sans";
+    ctx.font = "13px " + Wick.GUIElement.UI_FONT_FAMILY;
     var textContent = this.label;
     var textWidth = ctx.measureText(textContent).width;
     var textHeight = 14;

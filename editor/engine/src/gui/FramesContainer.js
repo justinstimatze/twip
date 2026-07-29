@@ -119,7 +119,7 @@ Wick.GUIElement.FramesContainer = class extends Wick.GUIElement {
             ctx.fill();
 
             // Plus sign
-            ctx.font = '30px bold Courier New';
+            ctx.font = 'bold 30px ' + Wick.GUIElement.UI_FONT_FAMILY;
             ctx.fillStyle = Wick.GUIElement.ADD_FRAME_OVERLAY_PLUS_COLOR;
             ctx.globalAlpha = 0.5;
             ctx.fillText('+', x + this.gridCellWidth / 2 - 8, y + this.gridCellHeight / 2 + 8);

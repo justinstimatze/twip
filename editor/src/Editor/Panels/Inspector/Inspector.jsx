@@ -22,6 +22,7 @@ import React, { Component } from 'react';
 import { loadFontPreviews } from 'Editor/Util/fontPreview';
 
 import InspectorTitle from './InspectorTitle/InspectorTitle';
+import { PanelEmpty } from '@/ui/panel';
 
 import InspectorNumericSlider from './InspectorRow/InspectorRowTypes/InspectorNumericSlider';
 import InspectorTextInput from './InspectorRow/InspectorRowTypes/InspectorTextInput';
@@ -258,13 +259,16 @@ class Inspector extends Component {
      * `.font-selector-<Name>` classes carried the per-option font-family before; the Radix
      * swap moved that to an inline style (ui/select.jsx) and left 156 rules nobody read.
      * The one thing worth keeping is the tint on fonts already in the project, which that
-     * swap dropped — #d3f8f4 then, --color-wick-sky-light now, same value.
+     * swap dropped. It is a left marker now rather than a fill — a tinted row in a list of
+     * 152 rows each set in its own face is one more thing competing for the eye.
      */
     let opts = this.props.fontInfoInterface.allFontNames.map(opt => ({
       value: opt,
       label: opt,
       style: { fontFamily: `'${opt}', Arial` },
-      className: this.props.fontInfoInterface.isExistingFont(opt) ? 'bg-wick-sky-light' : undefined,
+      className: this.props.fontInfoInterface.isExistingFont(opt)
+        ? 'border-l-2 border-l-ice-400'
+        : 'border-l-2 border-l-transparent',
     }));
 
     return (
@@ -1123,42 +1127,46 @@ class Inspector extends Component {
     if (!(selectionType in this.inspectorTitles)) selectionType = "";
 
     return (
-      <div className="relative shadow-[0_2px_4px_black]">
-        <InspectorTitle
-          type={selectionType}
-          title={this.inspectorTitles[selectionType]} />
-      </div>
+      <InspectorTitle
+        type={selectionType}
+        title={this.inspectorTitles[selectionType]} />
     );
   }
 
-  render() {
-    var activeTool = this.props.getActiveTool();
-    if (activeTool.name === 'gradienttool') {
-      let selectionType = activeTool.selectionType;
-      return(
-        <div className="h-full w-full overflow-hidden border-r-4 border-surface-sunken bg-surface font-ui" aria-label="Inspector Panel">
-          {this.renderTitle(selectionType)}
-          <div className="h-[calc(100%-36px)] w-full overflow-hidden hover:overflow-y-auto">
-            {this.renderDisplay(selectionType)}
-            {this.renderActions(selectionType)}
-          </div>
+  /*
+   * A column of flat colour is what the Inspector showed whenever nothing was selected,
+   * which on a fresh project is the state you first meet it in. It reads as broken. Saying
+   * what it is waiting for costs one line and makes the panel legible while idle.
+   */
+  render () {
+    const activeTool = this.props.getActiveTool();
+    const gradient = activeTool.name === 'gradienttool';
+    const selectionType = gradient ? activeTool.selectionType : this.props.getSelectionType();
+    // 'unknown' is what the engine reports for an empty selection, and it *is* a key in
+    // inspectorTitles — mapped to the empty string — so a membership test alone reads it as
+    // a real type and renders the panel's blank branch.
+    const empty = selectionType === 'unknown' || !(selectionType in this.inspectorTitles);
+
+    return (
+      <div
+        className="flex h-full w-full flex-col overflow-hidden border-r border-line bg-surface font-ui"
+        aria-label="Inspector Panel"
+      >
+        {this.renderTitle(selectionType)}
+        <div className="min-h-0 w-full flex-1 overflow-hidden hover:overflow-y-auto">
+          {empty
+            ? <PanelEmpty>Select something on the stage to see its properties here.</PanelEmpty>
+            : (
+              <>
+                {this.renderDisplay(selectionType)}
+                {this.renderActions(selectionType)}
+                {!gradient && this.props.selectionIsScriptable() && this.renderScripts()}
+                {!gradient && selectionType === 'clip' && this.renderAnimationSetting()}
+              </>
+            )}
         </div>
-      )
-    }
-    else {
-      let selectionType = this.props.getSelectionType();
-      return(
-        <div className="h-full w-full overflow-hidden border-r-4 border-surface-sunken bg-surface font-ui" aria-label="Inspector Panel">
-          {this.renderTitle(selectionType)}
-          <div className="h-[calc(100%-36px)] w-full overflow-hidden hover:overflow-y-auto">
-            {this.renderDisplay(selectionType)}
-            {this.renderActions(selectionType)}
-            {this.props.selectionIsScriptable() && this.renderScripts()}
-            {selectionType === 'clip' && this.renderAnimationSetting()}
-          </div>
-        </div>
-      )
-    }
+      </div>
+    );
   }
 }
 

@@ -20,6 +20,7 @@
 import React, { Component, useCallback } from 'react';
 import { useDrop } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
+import { stageBackground } from '@/theme';
 
 import './_canvas.scss';
 
@@ -46,11 +47,12 @@ class Canvas extends Component {
     if(this.currentAttachedProject === project) return;
     this.currentAttachedProject = project;
 
-    // $editor-canvas-border in Editor/_wickbrand.scss (was read via the scss :export
-    // block, which Vite only exposes for CSS modules — inlined during the CRA->Vite move).
-    // The viewer passes the page surface instead, so the stage reads as letterboxed rather
-    // than as a pasteboard with nothing pinned to it.
-    project.view.canvasBGColor = this.props.canvasBGColor ?? '#6A6A6A';
+    // The void the stage floats in — the darkest surface in the app, so the artwork is the
+    // brightest thing on screen and the eye goes there first. Read from the token layer
+    // rather than inlined, so index.css stays the one place the palette lives. The viewer
+    // passes the page surface instead, so the stage reads as letterboxed rather than as a
+    // pasteboard with nothing pinned to it.
+    project.view.canvasBGColor = this.props.canvasBGColor ?? stageBackground();
     project.view.canvasContainer = this.canvasContainer.current;
     project.view.resize();
 

@@ -103,8 +103,8 @@ Wick.GUIElement.Frame = class extends Wick.GUIElement {
             ctx.beginPath();
             ctx.rect(0, 0, this.model.length * this.gridCellWidth, this.gridCellHeight);
             ctx.clip();
-            ctx.font = '12px Courier New';
-            ctx.fillStyle = 'black';
+            ctx.font = '12px ' + Wick.GUIElement.NUMBER_LINE_NUMBERS_FONT_FAMILY;
+            ctx.fillStyle = Wick.GUIElement.FRAME_IDENTIFIER_FONT_COLOR;
             ctx.fillText(this.model.identifier, 0, 12);
             ctx.restore();
         }

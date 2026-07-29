@@ -18,17 +18,12 @@
  */
 
 import React, { Component } from 'react';
-import './_outlinertitle.scss';
+import { PanelHeader } from '@/ui/panel';
 
 class OutlinerTitle extends Component {
-
-  render() {
-    return(
-      <div className="outliner-title">
-        <div className="outliner-title-name">Outliner</div>
-      </div>
-    )
+  render () {
+    return <PanelHeader label="Outliner" />;
   }
 }
 
-export default OutlinerTitle
+export default OutlinerTitle;

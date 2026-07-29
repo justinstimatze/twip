@@ -248,31 +248,32 @@ body.hasHover .action-button-yellow:hover {
   color: $wick-yellow-text;
 }
 
+/*
+ * A tool button. The chosen tool is filled with the accent rather than outlined in it — an
+ * outline on a 24px square is two pixels of colour trying to say "this is the mode you are
+ * in", which is the single most important piece of state in a drawing program. The old rule
+ * also drew a 2px border on hover, which moved the icon inside it by two pixels every time
+ * the pointer crossed a tool.
+ */
 .action-button-tool {
   -webkit-transition-duration: $action-button-transition-duration; /* Safari */
   transition-duration: $action-button-transition-duration;
 
-  background-color: $editor-primary;
-  color: black;
+  background-color: transparent;
+  border-radius: $interface-roundness-secondary;
 }
 
 body.hasHover .action-button-tool:hover {
-  //background-color: $wick-green-light;
-  border: 2px solid #29F1A3;
-  color: black;
+  background-color: $editor-tertiary;
 }
 
 .action-button-tool:active {
-  //background-color: $wick-green-dark;
-  border: 2px solid #01C094;
   background-color: $editor-secondary;
-  color: black;
 }
 
-.action-button-tool.active-button {
-  //background-color: $wick-green-dark;
-  border: 2px solid #01C094;
-  color: black;
+.action-button-tool.active-button,
+body.hasHover .action-button-tool.active-button:hover {
+  background-color: $wick-green;
 }
 
 .action-button-menu {
@@ -335,34 +336,24 @@ body.hasHover .action-button-tool-settings:hover {
   -webkit-transition-duration: $action-button-transition-duration; /* Safari */
   transition-duration: $action-button-transition-duration;
 
-  background-color: $editor-primary;
-  color: $editor-primary-property-text;
-  border: 1.5px solid #CCCCCC; //$editor-primary-property-text;
-  font-size: 16px;
+  background-color: transparent;
+  color: $editor-secondary-text;
+  border: 1px solid transparent;
+  border-radius: $interface-roundness-secondary;
+  font-size: 13px;
 }
 
 .action-button-upload img {
-  width: 18px;
-  height: 18px;
-  padding: 0 2px 0 2px;
+  width: 16px;
+  height: 16px;
+  padding: 0 1px;
 }
 
-body.hasHover .action-button-upload:hover {
-  //background-color: $wick-green-light;
-  color: $wick-green-dark;
-  border: 1.5px solid $wick-green-light;
-}
-
-.action-button-upload:active {
-  //background-color: $wick-green;
-  color: $wick-green-dark;
-  border: 1.5px solid $wick-green;
-}
-
+body.hasHover .action-button-upload:hover,
+.action-button-upload:active,
 .action-button-upload.active-button {
-  //background-color: $wick-green-light;
-  color: $wick-green-dark;
-  border: 1.5px solid $wick-green-light;
+  color: $editor-primary-text;
+  background-color: $editor-tertiary;
 }
 
 .action-button-gray {
@@ -389,28 +380,32 @@ body.hasHover .action-button-gray:hover {
   color: $wick-gray-text;
 }
 
+/*
+ * The confirm button in every dialog — Export SWF, Export Video, and the rest. It was grey
+ * until you hovered it, which made the one action a dialog exists to perform the quietest
+ * thing in the dialog. A dialog has exactly one primary action; this is it, so it wears the
+ * accent from the start.
+ */
 .action-button-gray-green {
   -webkit-transition-duration: $action-button-transition-duration; /* Safari */
   transition-duration: $action-button-transition-duration;
 
-  background-color: $wick-gray;
-  color: white;
-  font-size: 16px;
+  background-color: $wick-green;
+  color: $wick-green-text;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: $interface-roundness-secondary;
 }
 
 body.hasHover .action-button-gray-green:hover {
-  background-color: $wick-green;
-  color: black;//white;
+  background-color: $wick-green-light;
+  color: $wick-green-text;
 }
 
-.action-button-gray-green:active {
-  background-color: $wick-green-dark;
-  color: black //white;
-}
-
+.action-button-gray-green:active,
 .action-button-gray-green.active-button {
   background-color: $wick-green-dark;
-  color: black; //white;
+  color: $wick-green-text;
 }
 
 .action-button-error {

@@ -17,9 +17,14 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+@import 'Editor/_wickbrand.scss';
+
 .error-page {
   height: 100%;
-  background-color: #1EE29A;
+  // The crash screen was a full-bleed mint field, which is a cheerful colour to meet a lost
+  // project on. Same surface as the editor, so it reads as the program still being there.
+  background-color: $editor-primary;
+  color: $editor-primary-text;
   display: flex;
   flex-direction: column;
   text-align: center;

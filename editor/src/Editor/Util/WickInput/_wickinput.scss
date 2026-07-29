@@ -144,8 +144,8 @@ $numeric-input-background: $editor-text-input-background;
 }
 
 .Dropdown-option.is-selected {
-  background-color: #29F1A3!important;
-  color: #1D1921 !important; 
+  background-color: $wick-green !important;
+  color: $wick-green-text !important;
 }
 
 .Dropdown-placeholder {

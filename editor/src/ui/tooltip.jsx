@@ -49,14 +49,14 @@ export function Tooltip ({ content, side = 'bottom', delay = 200, children, clas
           side={side}
           sideOffset={6}
           className={cn(
-            'z-50 max-w-xs rounded-sm bg-wick-sky px-2 py-1 text-sm text-[#222222]',
+            'z-50 max-w-xs rounded-sm border border-line bg-ash-950 px-2 py-1 text-micro text-content',
             'shadow-md select-none',
             'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out',
             className,
           )}
         >
           {content}
-          <TooltipPrimitive.Arrow className="fill-wick-sky" />
+          <TooltipPrimitive.Arrow className="fill-ash-950" />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>

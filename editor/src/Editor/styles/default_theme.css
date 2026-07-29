@@ -1,56 +1,64 @@
-
+/*
+ * The code-editor pop-out's own variable set, from before the token layer existed.
+ *
+ * Kept as a separate block rather than folded into src/index.css because the pop-out is a
+ * detached window with its own document, and `.theme-default` is the hook it applies. Every
+ * value now points at twip's palette (see src/index.css for the ramp and the reasoning);
+ * only the script-event hues are chosen here, and they are chosen to be told apart at a
+ * glance in a list — a warm, a cold and a neutral rather than three saturated brights.
+ */
 .theme-default {
-    --border-radius-primary: 8px;
-    --border-radius-secondary: 4px;
+    --border-radius-primary: 5px;
+    --border-radius-secondary: 3px;
 
     /* Main Colors */
-    --wick-primary: #303030;
-    --wick-secondary: #3B3B3B;
-    --wick-tertiary: #706d6d;
-    --wick-disabled: #666666;
+    --wick-primary: #24211f;
+    --wick-secondary: #2c2a26;
+    --wick-tertiary: #44403c;
+    --wick-disabled: #534f4a;
 
 
     /* Text Colors */
-    --wick-text-primary: white;
-    --wick-text-secondary: #BDBDBD;
-    --wick-text-tertiary: #919191;
-    --wick-text-disabled: white;
-    --wick-text-event: black;
+    --wick-text-primary: #e7e4e0;
+    --wick-text-secondary: #b9b5b0;
+    --wick-text-tertiary: #9c9792;
+    --wick-text-disabled: #817c77;
+    --wick-text-event: #110f0e;
 
-    /* Events */
-    --wick-event-mouse: #01C094;
-    --wick-event-keyboard: #E9AA02;
-    --wick-event-timeline: #00A1E0;
+    /* Events: mouse / keyboard / timeline. */
+    --wick-event-mouse: #64b6df;
+    --wick-event-keyboard: #e89719;
+    --wick-event-timeline: #69b183;
 
-    --wick-event-mouse-selected: #29F1A3;
-    --wick-event-keyboard-selected: #FFE243;
-    --wick-event-timeline-selected: #05B8FF;
+    --wick-event-mouse-selected: #92cded;
+    --wick-event-keyboard-selected: #f2b54a;
+    --wick-event-timeline-selected: #8bc8a0;
 
     /* Theme Colors */
-    --wick-red: #FF7878;
-    --wick-red-light: #ff5c5c;
-    
-    --wick-green: #09F197;
-    --wick-green-light: #19ffa7;
+    --wick-red: #fd765d;
+    --wick-red-light: #ff9d89;
 
-    --wick-yellow: #F0CC00;
-    --wick-yellow-light: #ffde20;
+    --wick-green: #8bc8a0;
+    --wick-green-light: #a9d8ba;
 
-    --wick-light-blue: #92D8FF;
-    --wick-light-blue-light: #74ceff;
+    --wick-yellow: #e89719;
+    --wick-yellow-light: #f2b54a;
 
-    --wick-purple: #C987FA;
-    --wick-purple-light: #d49bff;
+    --wick-light-blue: #64b6df;
+    --wick-light-blue-light: #92cded;
 
-    --wick-teal: #26DED2;
-    --wick-teal-light: #43fff2;
+    --wick-purple: #b39ddb;
+    --wick-purple-light: #c9b8e6;
 
-    --wick-pink: #FF66F0;
-    --wick-pink-light: #ff80f2;
+    --wick-teal: #6ec5bd;
+    --wick-teal-light: #92d6cf;
 
-    --wick-error: rgba(255, 0, 0, .6);
+    --wick-pink: #e07fa8;
+    --wick-pink-light: #ec9dbe;
+
+    --wick-error: #a62914;
 
 
     /* Shadows */
-    --wick-box-shadow: 2px 2px 8px var(--wick-primary); 
+    --wick-box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }

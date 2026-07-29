@@ -26,7 +26,9 @@ import React, { Component } from 'react';
  */
 class ToolboxBreak extends Component {
   render() {
-    return <div className="mx-2 h-[70%] w-[3px] min-w-[3px] bg-surface-sunken" />
+    /* A hairline, not a 3px slab. At 3px against the panel it read as a gap between two
+       toolbars; at 1px it reads as a rule between two groups of one. */
+    return <div className="mx-2 h-4 w-px min-w-px bg-line-strong" />
   }
 }
 

@@ -29,7 +29,9 @@ Wick.GUIElement.LayerCreateLabel = class extends Wick.GUIElement {
 
         var ctx = this.ctx;
 
-        ctx.fillStyle = (this.mouseState === 'over') ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)';
+        ctx.fillStyle = (this.mouseState === 'over')
+            ? Wick.GUIElement.LAYER_CREATE_LABEL_HOVER_FILL_COLOR
+            : Wick.GUIElement.LAYER_CREATE_LABEL_FILL_COLOR;
 
         var width = Wick.GUIElement.LAYERS_CONTAINER_WIDTH - Wick.GUIElement.LAYER_LABEL_MARGIN_SIDES*2;
         var height = this.gridCellHeight - Wick.GUIElement.LAYER_LABEL_MARGIN_TOP_BOTTOM*2;

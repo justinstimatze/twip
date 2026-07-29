@@ -516,6 +516,113 @@ differed from the pre-flip baseline, each by exactly the 264-pixel ring around w
 scene had clicked. Tab still rings at 2px `#ff7867`, and a text input still rings on mouse
 click, which is what `:focus-visible` is for.
 
+## The identity, decided and applied (2026-07-28)
+
+Everything up to here was structural: libraries swapped, panels moved onto Tailwind, breakpoints
+fixed, CI wired. None of it answered what the editor should *look* like, so it went on looking
+like Wick — mint green on nine barely-distinguishable greys, in Nunito Sans.
+
+The brief is the name. A twip is a twentieth of a pixel, 1440 to the inch, and it is the grid
+Flash's coordinate system was drawn on. So: **an instrument, not a dashboard.** Warm neutral
+chrome that gets out of the way, hairlines instead of shadows, numbers set in a face that lines
+them up, and exactly one hot colour.
+
+**The neutrals are generated, not picked.** An even lightness ramp in OKLCH at hue 70, chroma
+under 0.010 — warm enough to read as ash or paper under a lamp, and far enough from the
+blue-grey that every dark app defaults to that the warmth is the first thing anyone notices.
+Fourteen steps, `#110F0E` to `#F6F3F0`. Contrast is measured against the surface each colour
+actually sits on rather than against black, and the ratios are in the comments.
+
+**The accent is Flash's own red, and it is also the playhead.** Not a coincidence worth
+throwing away: every timeline since Flash draws its playhead in red, so using one colour for
+both gives the accent a single meaning across the whole app — *this, here, now*. It is
+deliberately not the blue or violet a dark tool reaches for by reflex. Three supporting hues,
+each with a job: **ice** for what the system points at (selection, focus), **ochre** for
+warnings and script markers, **sage** for the quiet positive. Focus moved from a coral that was
+byte-identical to the error colour onto ice, so a focus ring can no longer be misread as an
+error or as the accent.
+
+**Type is Archivo and JetBrains Mono**, self-hosted, so the Tauri build has type offline and the
+browser makes no third-party request for it. Archivo is a grotesque drawn for signage and forms:
+engineered, slightly narrow, legible at 11px, and not the neutral sans every app ships. Every
+number in the interface takes the mono — coordinates, frame counts, framerates, durations. In a
+tool named after a unit, the numbers are the content and they should line up in a column.
+`font-variant-numeric: tabular-nums` is on for the whole app rather than opted into per field.
+
+### Where it landed
+
+**Two token layers move together.** `src/index.css` is the authority; `_wickbrand.scss` mirrors
+the same hex under its inherited variable names, because 40 un-migrated stylesheets `@import`
+it and re-pointing the values there rethemes all of them at once without touching 40 files that
+are being deleted as they migrate. Some names now lie about their colour — `$wick-green` is red,
+`$focus-orange` is blue — and are kept anyway, because renaming them is a 40-file diff that says
+nothing and they die with their stylesheets.
+
+**The canvas timeline is themed from the same tokens** via `src/theme.js`, which reassigns the
+52 hex statics on `Wick.GUIElement` from `getComputedStyle` after the bundle loads. No fork of
+`engine/src/` for the colours themselves, so upstream merges stay possible. Five hardcoded
+styles inside `engine/src/gui/` did need promoting to statics — `'12px Courier New'`,
+`"14px Nunito Sans"` twice, `'black'` for the frame identifier, and `rgba(255,255,255,0.3)` for
+the add-layer bar — and the engine rebuild that costs turns out to be a **two-line diff**, not
+the 2.2MB of line-ending churn recorded earlier in this document. That measurement is stale.
+
+**One design decision inside the timeline.** Wick drew a frame as a white cell on a dark bed. At
+38×42 and forty cells across that is a wall of white, it outshines the stage, and the playhead —
+the one thing you need to find instantly — has to compete with it. twip draws a frame as a
+filled ash cell and lets flare be the only saturated thing in the panel. The active layer is
+*named* in flare rather than filled with it, for the same reason.
+
+**Structure, which is what "dated" actually meant.** Recolouring a flat grey app produced a flat
+dark app; the screenshot after the palette flip made that obvious and the rest of the pass went
+into hierarchy:
+
+- `$editor-outline-padding` 4px → 1px. That variable is the border width on all seven docked
+  panels, so one line turned seven gutters into seven hairlines and the chrome started reading
+  as one instrument instead of floating slabs.
+- `ui/panel.jsx` — one `PanelHeader` for Inspector, Assets and Outliner, replacing three
+  hand-written titles at 22px, 20px and 22px. 11px, tracked, uppercase, on the sunken surface
+  with a rule under it: a label on an instrument, not a heading in a document. `PanelEmpty` says
+  what an empty panel is waiting for, which the Inspector — empty on every fresh project — never
+  did.
+- The menu bar: project name off the optical centre and onto the left where a document's name
+  goes; the five same-weight lowercase actions down to one filled control. SWF is that control.
+  "SWF leads" was settled during the export work and this is it reaching the chrome.
+- `ui/mark.jsx` — the mark was **Wick's mascot**, which was wrong on top of being off-brief.
+  It is a playhead now. Wick's mark stays in the credits, where it belongs.
+- The preloader was a full-screen mint field with that mascot floating on it. It is a frame ruler
+  with a playhead running across it: the two objects the program is about, doing the one thing
+  that makes a progress indicator honest.
+- The active tool is filled with the accent rather than outlined in it. The old rule drew a 2px
+  border on hover *and* on active, so the icon jumped two pixels every time the pointer crossed
+  a tool.
+- Play/stop was `<input type="image">` pointing at two PNGs with Wick's green ring baked into
+  the pixels. It is a path now, and it takes the accent from the token layer like everything
+  else.
+
+**Two bugs surfaced while re-theming, both invisible before.** Only `WickModal` styled its
+overlay; Export, Settings, Autosave and the rest each invented their own class name
+(`export-modal-overlay`, `settings-modal-overlay`, …) and matched no rule, so they fell through
+to react-modal's built-in inline styles — a **white 75% overlay** washing the whole editor out
+and a white box with a grey border. Matching on `[class*='modal-overlay']` fixes the ten that
+exist and the eleventh someone adds next. And every dialog opened with a focus ring around
+itself: react-modal moves focus onto the container, the container carries `tabindex="-1"`, and
+the app-wide `:focus-visible` rule fired on it. Both had been shipping in the old palette too —
+an orange ring instead of a blue one.
+
+**Verified**: `smoke --sweep` zero console errors at six widths, `interact` 12/12, the engine
+suite 540 passed / 7 known. `visual.mjs` is not useful for a change of this size — every one of
+its 20 scenes fails by design when the palette moves — so it was re-blessed after rather than
+used as a gate.
+
+### Still on the list
+
+The 46 icon assets that are PNG rather than SVG, including 33 in `mobile-inspector-icons/` and
+`mobile-container-icons/` that the Phase 0 prune orphaned and nothing imports. The toolbar's
+icon set is inconsistent in weight and metaphor and wants redrawing as one family at one stroke
+width. `TabbedInterface` underlines every tab, active or not, so the inactive ones read as
+links. And the Inspector's row geometry is still the inherited 30% label / 70% field, which is
+generous at 250px and wrong at 400.
+
 ## Phase 1 — the chrome, on Tailwind + shadcn
 
 This is what most people would call "the redesign," and it is the part with no unknowns.

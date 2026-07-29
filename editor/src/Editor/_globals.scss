@@ -29,26 +29,45 @@ a:hover {
   color: $editor-green-highlight-dark;
 }
 
-.modal-body {
-  border-radius: 4px;
+/*
+ * Every modal, not just the ones that remembered to ask.
+ *
+ * `.modal-body` / `.modal-overlay` were the only two styled, and only WickModal used those
+ * names — Export, Settings, Autosave, Editor Info and the rest each invented their own
+ * (`export-modal-overlay`, `settings-modal-overlay`, …) and matched no rule at all. So they
+ * fell back to react-modal's built-in inline styles, which are a white 75% overlay and a
+ * white box with a grey border: the export dialog was washing the entire editor out in pale
+ * grey and drawing itself in a colour scheme from a different program.
+ *
+ * Substring matching rather than a comma list of the ten current names, because the next
+ * modal someone adds will invent an eleventh.
+ */
+[class*='modal-body'] {
+  border-radius: $interface-input-roundness;
   background-color: $editor-modal-gray;
+  border: 1px solid $editor-primary-outline;
+  color: $editor-primary-text;
   margin: 0;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-family: 'Nunito Sans';
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  font-family: var(--font-ui);
+  // A hard, low shadow. Something is above the surface here; it is not glowing.
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
-.modal-overlay {
+[class*='modal-overlay'] {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  // ash-950 rather than pure black, so the editor recedes behind the dialog instead of
+  // disappearing under it.
+  background-color: rgba(17, 15, 14, 0.72);
 }
+
 
 // The chevron in the keyboard-shortcuts list; .arrow-* picks the direction.
 .wick-brand-arrow {

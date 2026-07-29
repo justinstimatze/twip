@@ -11,8 +11,11 @@ $canvas-transforms-size: 40px;
   margin-bottom: 15px;
   display: flex;
   align-items: center;
-  background-color: $editor-primary-outline;
-  border-radius: 4px;
+  // Floating over the stage, so it needs its own edge to sit on rather than borrowing the
+  // artwork's. A hairline and a raised fill do that; the old flat chip on the void did not.
+  background-color: $editor-secondary;
+  border: 1px solid $editor-primary-outline;
+  border-radius: $interface-roundness-secondary;
 }
 #canvas-zoom-options-container {
   display: flex;
@@ -68,14 +71,15 @@ $canvas-transforms-size: 40px;
   padding: 3px; 
 }
 
+// 1.5x the transform buttons, down from 1.5x plus a ring of its own. The button *is* the
+// circle now (PlayButton draws it), so the container only has to place it.
 .play-button-container {
-  width: calc(#{$canvas-transforms-size} * 1.5);
-  height: calc(#{$canvas-transforms-size} * 1.5);
+  width: calc(#{$canvas-transforms-size} * 1.05);
+  height: calc(#{$canvas-transforms-size} * 1.05);
+  margin-left: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: $editor-primary-outline;
-  border-radius: 30px; 
 }
 
 .transforms-container {

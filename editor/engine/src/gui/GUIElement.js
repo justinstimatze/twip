@@ -265,6 +265,14 @@ Wick.GUIElement.FRAME_MARGIN = 0.5;
 Wick.GUIElement.FRAME_DROP_SHADOW_DEPTH = 2; // Number of pixels to shift drop shadow below frame.
 Wick.GUIElement.FRAME_DROP_SHADOW_FILL = 'rgba(0,0,0,1)';
 Wick.GUIElement.FRAME_SCRIPT_DOT_COLOR = '#F5A623';
+Wick.GUIElement.FRAME_IDENTIFIER_FONT_COLOR = 'black';
+
+/* The remaining hardcoded styles in this directory, promoted to statics so the whole canvas
+   timeline is themeable from one place — see editor/src/theme.js, which assigns every
+   constant in this block from the CSS token layer once the bundle has loaded. */
+Wick.GUIElement.UI_FONT_FAMILY = 'Nunito Sans';
+Wick.GUIElement.LAYER_CREATE_LABEL_FILL_COLOR = 'rgba(255,255,255,0.3)';
+Wick.GUIElement.LAYER_CREATE_LABEL_HOVER_FILL_COLOR = 'rgba(255,255,255,0.6)';
 
 Wick.GUIElement.FRAME_HANDLE_HOVER_FILL_COLOR = Wick.GUIElement.SELECTED_ITEM_BORDER_COLOR;
 Wick.GUIElement.FRAME_HANDLE_WIDTH = 12;

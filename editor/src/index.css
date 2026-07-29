@@ -32,96 +32,138 @@
 
 @import "tailwindcss";
 
+/* Self-hosted so the Tauri build has type offline and the browser makes no third-party
+ * request for it. Archivo carries the UI, JetBrains Mono carries every number. */
+@import "@fontsource-variable/archivo";
+@import "@fontsource-variable/jetbrains-mono";
+
 /*
- * TOKENS
+ * TOKENS — twip's visual identity.
  *
- * Derived from _wickbrand.scss's 130 SCSS variables rather than invented, so the
- * migration can proceed component by component with both layers agreeing on colour.
- * _wickbrand.scss stays authoritative for un-migrated SCSS; this is authoritative for
- * everything built from here on, and the two are expected to coexist until the last
- * .scss file is gone.
+ * The thing twip is named after is a unit of measurement: one twip is a twentieth of a
+ * pixel, 1440 to the inch, and it is the grid Flash's whole coordinate system was drawn
+ * on. That is the design brief. An instrument, not a dashboard: warm neutral chrome that
+ * gets out of the way, hairlines instead of shadows, numbers set in a face that lines
+ * them up, and exactly one hot colour.
  *
- * Five values differ from the SCSS deliberately — they failed WCAG and are corrected
- * HERE, once, instead of per-component. Each is marked `contrast:` with the measured
- * before -> after. The fix in every case is the smallest lightness move along the
- * original hue that clears the threshold, so nothing shifts perceptibly in hue.
- * Thresholds: 4.5:1 for text, 3:1 for non-text UI (WCAG 2.2 1.4.3 / 1.4.11).
+ * Everything below was generated rather than picked. The neutrals are an even lightness
+ * ramp in OKLCH at hue 70 and chroma under 0.010 — warm enough to read as ash or paper
+ * under a lamp, far enough from the blue-grey every dark app defaults to that the warmth
+ * is the first thing you notice. Contrast ratios in the comments are measured against the
+ * surface each colour actually sits on: 4.5:1 for text, 3:1 for non-text UI
+ * (WCAG 2.2 1.4.3 / 1.4.11).
  */
 @theme {
-  /* ---- brand palette (raw, 1:1 with _wickbrand.scss) ---- */
-  --color-wick-green: #1ee29a;
-  --color-wick-green-light: #29f1a3;
-  --color-wick-green-dark: #01c094;
-  --color-wick-blue: #00adef;
-  --color-wick-blue-light: #00b9ff;
-  --color-wick-blue-dark: #00709c;
-  --color-wick-red: #f86868;
-  --color-wick-red-light: #ff8c8c;
-  --color-wick-red-dark: #e61e07;
-  --color-wick-yellow: #ffc835;
-  --color-wick-yellow-light: #ffe243;
-  --color-wick-yellow-dark: #e9aa02;
-  --color-wick-flame: #f66a37;
-  --color-wick-flame-light: #ff7848;
-  --color-wick-flame-dark: #e6460e;
-  --color-wick-magenta: #cb00e4;
-  --color-wick-sky: #b4ece6;
-  --color-wick-sky-light: #d3f8f4;
-  --color-wick-sky-dark: #8dded6;
-
-  /* ---- surfaces, darkest to lightest ---- */
-  --color-surface-sunken: #191919; /* $editor-primary-outline, splitters, scroll track */
-  --color-surface-base: #1e1e1e; /* $editor-modal-dark */
-  --color-surface: #303030; /* $editor-primary — the editor body */
-  --color-surface-raised: #3b3b3b; /* $editor-secondary — panel bodies */
-  --color-surface-overlay: #383434; /* $editor-modal-gray — modals, popovers */
-  --color-surface-input: #4f4f4f; /* $editor-text-input-background */
-  --color-surface-hover: #4a4a4a; /* $editor-tertiary */
-  --color-surface-panel: #464646; /* $interface-primary */
-  --color-surface-header: #535353; /* $interface-secondary — panel title bars */
-
-  /* ---- text ---- */
-  --color-content: #ffffff; /* $editor-primary-text */
-  --color-content-muted: #bdbdbd; /* $editor-secondary-text — 7.02:1 on surface */
-  /* contrast: $interface-secondary-text #ADADAD was 4.21:1 on surface-panel */
-  --color-content-subtle: #b3b3b3; /* 4.50:1 on surface-panel */
-  /* contrast: $wick-gray-text-light #b6b6b6 was 4.04:1 on surface-input */
-  --color-content-dim: #c0c0c0; /* 4.50:1 on surface-input */
-  /* contrast: $interface-tertiary-text #626262 was 1.94:1 on #919191 (search fields) */
-  --color-content-on-light: #2a2a2a; /* 4.55:1 on #919191 */
-
-  /* ---- intent ---- */
-  --color-accent: #1ee29a; /* selection, confirm, links — 7.79:1 on surface */
-  --color-accent-hover: #29f1a3;
-  --color-accent-active: #01c094;
-  --color-accent-content: #303030; /* text ON accent */
-  --color-danger: #e27663;
-  --color-danger-content: #ff7867; /* 4.76:1 on surface-overlay */
-  --color-warning: #e6460e;
-  --color-selected: #00adef; /* 5.37:1 on timeline-bg, clears the 3:1 non-text bar */
+  /* ---- ash: the warm neutral ramp, dark to light ---- */
+  --color-ash-950: #110f0e;
+  --color-ash-900: #1b1917;
+  --color-ash-850: #24211f;
+  --color-ash-800: #2c2a26;
+  --color-ash-750: #373330;
+  --color-ash-700: #44403c;
+  --color-ash-650: #534f4a;
+  --color-ash-600: #67625d;
+  --color-ash-500: #817c77;
+  --color-ash-400: #9c9792;
+  --color-ash-300: #b9b5b0;
+  --color-ash-200: #d2cfca;
+  --color-ash-100: #e7e4e0;
+  --color-ash-50: #f6f3f0;
 
   /*
-   * Focus ring. $focus-orange, kept because it is the one hue in the palette that is
-   * neither the accent green nor the danger red, so focus never reads as selection or
-   * as error. 5.11:1 on surface and 5.31:1 on the timeline — passes as a UI component
-   * against both surfaces it has to sit on.
+   * ---- flare: the one hot colour ----
+   * Flash's own red, and — not coincidentally — the colour every timeline since has drawn
+   * its playhead in. Using it for both means the accent has one meaning across the whole
+   * app: this, here, now. It is deliberately not the blue or violet a dark tool reaches
+   * for by reflex.
    */
-  --color-focus: #ff7867;
+  --color-flare-300: #ff9d89;
+  --color-flare-400: #fd765d;
+  --color-flare-500: #ef4a2f;
+  --color-flare-600: #d0351b;
+  --color-flare-700: #a62914;
 
-  /* ---- timeline (canvas today, DOM in Phase 2 — same values either way) ---- */
-  --color-timeline-bg: #2a2e30;
-  --color-timeline-breadcrumbs: #202122;
-  --color-timeline-frame: #ffffff;
-  --color-timeline-frame-audio: #ccffff;
-  --color-timeline-playhead: #ff5c5c; /* 4.53:1 on timeline-bg */
-  --color-timeline-playhead-stroke: #d83333;
-  --color-timeline-layer-inactive: #b7b7b7;
-  --color-timeline-layer-active: #1ee29a;
-  /* contrast: FRAME_SCRIPT_DOT_COLOR #F5A623 was 2.03:1 on a white frame */
-  --color-timeline-script-dot: #c8881d; /* 3.00:1 on #ffffff */
-  /* contrast: TWEEN_FILL_COLOR_1 / NUMBER_LINE_NUMBERS_COMMON #494949 was 1.52:1 */
-  --color-timeline-tween: #767676; /* 3.02:1 on timeline-bg */
-  --color-timeline-tween-alt: #8e8e8e;
+  /*
+   * ---- ice: what the system points at ----
+   * Cold on purpose. Selection and focus are the machine indicating something; flare is
+   * you doing something. Keeping those two on opposite sides of the wheel means a focus
+   * ring can never be misread as a selection, which is exactly what the old palette did
+   * by giving both of them the same coral.
+   */
+  --color-ice-200: #addcf5;
+  --color-ice-300: #92cded;
+  --color-ice-400: #64b6df;
+  --color-ice-500: #2f9ecf;
+  --color-ice-600: #007fac;
+
+  /* ---- ochre: warnings, script markers, onion skin ---- */
+  --color-ochre-400: #f2b54a;
+  --color-ochre-500: #e89719;
+
+  /* ---- sage: the quiet positive. Muted, because success is not worth shouting. ---- */
+  --color-sage-400: #8bc8a0;
+  --color-sage-500: #69b183;
+
+  /*
+   * ---- surfaces ----
+   * Three levels, not nine. Recessed (void/sunken) for anything the eye should fall
+   * through — the area around the stage, input wells, the scroll track. Body for panels.
+   * Raised for rows and controls that sit on a panel. Panels are separated by hairlines
+   * rather than gaps, so the chrome reads as one instrument instead of floating cards.
+   */
+  --color-surface-void: #110f0e;   /* ash-950 — around the stage, so the artwork is the brightest thing */
+  --color-surface-sunken: #1b1917; /* ash-900 — gutters, input wells, timeline bed */
+  --color-surface: #24211f;        /* ash-850 — panel bodies */
+  --color-surface-raised: #2c2a26; /* ash-800 — rows, controls, popovers */
+  --color-surface-hover: #373330;  /* ash-750 */
+  --color-surface-overlay: #24211f;
+  --color-surface-input: #1b1917;
+  --color-surface-header: #1b1917; /* headers sit *below* their panel, like a rail */
+
+  /* Hairlines. `line` divides, `line-strong` outlines something interactive. */
+  --color-line: #373330;        /* ash-750 */
+  --color-line-strong: #44403c; /* ash-700 */
+
+  /* ---- text, on ash-850 unless noted ---- */
+  --color-content: #e7e4e0;         /* ash-100 — 12.63:1. Warm white; pure #fff glares on ash. */
+  --color-content-muted: #b9b5b0;   /* ash-300 — 7.85:1 */
+  --color-content-subtle: #9c9792;  /* ash-400 — 5.53:1 */
+  --color-content-faint: #817c77;   /* ash-500 — 3.87:1, non-text only */
+  --color-content-inverse: #110f0e; /* on any light or accent fill */
+
+  /* ---- intent ---- */
+  --color-accent: #ef4a2f;         /* flare-500 — 3.88:1 as a UI component on ash-800 */
+  --color-accent-hover: #fd765d;   /* flare-400 */
+  --color-accent-active: #d0351b;  /* flare-600 */
+  --color-accent-content: #110f0e; /* text ON accent — 5.18:1 */
+  --color-accent-text: #fd765d;    /* accent AS text on dark — 6.04:1 on ash-850 */
+  --color-selected: #64b6df;       /* ice-400 — 7.09:1 */
+  --color-warning: #f2b54a;        /* ochre-400 — 8.75:1 */
+  --color-danger: #a62914;         /* flare-700 — destructive fills; darker and heavier than accent */
+  --color-danger-content: #fd765d; /* error text — 6.04:1 */
+  --color-positive: #8bc8a0;       /* sage-400 — 8.28:1 */
+
+  /* Focus ring. Ice, so it never reads as the accent or as an error. 9.28:1 on ash-850. */
+  --color-focus: #92cded;
+
+  /*
+   * ---- timeline ----
+   * Canvas today, DOM in Phase 2 — the engine reads these at boot (see theme.js) rather
+   * than carrying its own constants, so both implementations are themed from here.
+   * A frame is a filled cell on a dark bed, the inverse of the old white-on-dark: white
+   * cells at this density flare, and the eye needs to find the playhead first.
+   */
+  --color-timeline-bed: #1b1917;         /* ash-900 */
+  --color-timeline-gutter: #110f0e;      /* ash-950 — breadcrumbs and layer column */
+  --color-timeline-frame: #67625d;       /* ash-600 — a frame with content, 4.31:1 on the bed */
+  --color-timeline-frame-empty: #2c2a26; /* ash-800 — a held/blank cell */
+  --color-timeline-frame-audio: #2f9ecf; /* ice-500 */
+  --color-timeline-playhead: #ef4a2f;    /* flare-500 — 4.31:1 on the bed */
+  --color-timeline-tween: #44403c;       /* ash-700 — 3.01:1 on the bed */
+  --color-timeline-tween-alt: #534f4a;
+  --color-timeline-script-dot: #f2b54a;  /* ochre-400 — 4.55:1 on a frame cell */
+  --color-timeline-layer-active: #ef4a2f;
+  --color-timeline-layer-inactive: #67625d;
 
   /*
    * Frame cell geometry, from GUIElement.js's GRID_*_CELL_* statics. Phase 2's DOM
@@ -136,29 +178,48 @@
   --spacing-cell-lg-w: 62px;
   --spacing-cell-lg-h: 52px;
 
-  /* ---- chrome geometry, from _wickbrand.scss ---- */
-  --spacing-panel-pad: 10px;
-  --spacing-panel-title: 26px;
-  --spacing-panel-gap: 6px;
-  --spacing-splitter: 4px;
+  /*
+   * ---- chrome geometry ----
+   * Everything lands on a 4px grid, which is what makes density read as deliberate rather
+   * than cramped. Control heights are 20/24/28 — the 24px default clears WCAG 2.5.8's
+   * minimum target size without the padding a 32px control would need.
+   */
+  --spacing-panel-pad: 8px;
+  --spacing-panel-title: 28px;
+  --spacing-panel-gap: 0px; /* panels butt against each other; the hairline is the seam */
+  --spacing-splitter: 1px;
+  --spacing-control-sm: 20px;
+  --spacing-control: 24px;
+  --spacing-control-lg: 28px;
 
-  --radius-xs: 2px; /* $interface-roundness-primary */
-  --radius-sm: 4px; /* $interface-roundness-secondary */
-  --radius-md: 5px; /* $interface-input-roundness */
+  /* Small radii, and mostly the same one. Nothing here is a card. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+
+  /* ---- toasts ---- */
+  --color-toast-info: #2c2a26;    /* ash-800, ash-100 text */
+  --color-toast-error: #a62914;   /* flare-700, ash-50 text — 7.19:1 */
+  --color-toast-warning: #f2b54a; /* ochre-400, ash-950 text — 10.45:1 */
+  --color-toast-success: #8bc8a0; /* sage-400, ash-950 text — 9.85:1 */
 
   /*
-   * ---- toasts ----
-   * Carried over from the .{type}-toast-background rules in _editor.scss, unchanged:
-   * measured at 12.29:1, 7.29:1, 16.21:1 and 14.21:1 against the text colour each pairs
-   * with, so all four already clear AA and none needed the correction the palette above
-   * did.
+   * ---- type ----
+   * Archivo is a grotesque drawn for signage and forms — engineered, slightly narrow,
+   * legible at 11px, and not the neutral sans every app ships. JetBrains Mono takes every
+   * number in the interface: coordinates, frame counts, framerates, durations. In a tool
+   * named after a unit, the numbers are the content, and they should line up in a column.
    */
-  --color-toast-info: #383434;    /* white text */
-  --color-toast-error: #ac1706;   /* white text */
-  --color-toast-warning: #ffe243; /* black text */
-  --color-toast-success: #29f1a3; /* black text */
+  --font-ui: "Archivo Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
 
-  --font-ui: "Nunito Sans", system-ui, sans-serif;
+  /* Motion: short, and out of the way. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --animate-duration-fast: 90ms;
+  --animate-duration: 140ms;
 }
 
 /*
@@ -184,11 +245,83 @@ body {
   height: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--color-surface-void);
+  color: var(--color-content);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 16px;
+  /*
+   * A tool with this many numeric fields must not reflow when a 1 becomes an 8. Tabular
+   * figures are on for the whole app, not opted into per-field, because every place it
+   * matters is a place someone forgets.
+   */
+  font-variant-numeric: tabular-nums;
 }
 
 #root {
   width: 100%;
   height: 100%;
+}
+
+/*
+ * Numbers get the mono. Anything the user reads as a measurement — coordinates, frame
+ * indices, framerates, twips — belongs in a face where the digits are the same width and
+ * a decimal point stays put. Opt in with `class="num"`, or by using `font-mono`.
+ */
+.num,
+input[type="number"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * Panel titles and the few other all-caps labels. Uppercase at 11px needs tracking to stay
+ * readable, and it needs to be quiet enough that it never competes with the content under
+ * it — this is a label on an instrument, not a heading in a document.
+ */
+.rail-label {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-content-subtle);
+}
+
+@layer components {
+  /*
+   * Every numeric field in the Inspector and the tool settings. `.numeric` is WickInput's
+   * own marker for "this holds a number", so the mono arrives wherever a number does
+   * without a single call site changing. In `components` rather than unlayered, so a
+   * utility class on any individual field still wins.
+   */
+  .wick-input.numeric {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    /* A monospace digit is wider than a proportional one, and these fields were sized
+       against the old face — at 12px "270.46" clipped to "270.4…". 11px with the tracking
+       pulled in fits six digits and a point in the same well. */
+    font-size: 11px;
+    letter-spacing: -0.03em;
+  }
+}
+
+/*
+ * The platform paints an unstyled control in its own blue, which is the one colour in this
+ * interface that belongs to nobody — not the accent, not the selection, not a warning.
+ *
+ * A checkbox is a decision, so it takes the accent. A slider is not: it is a value being
+ * read as much as set, it is often at maximum, and a full-width red bar across a panel is
+ * the accent spent on nothing. Sliders take the selection blue.
+ */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+}
+
+input[type="range"] {
+  accent-color: var(--color-selected);
 }
 
 /*
@@ -229,4 +362,16 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 1px;
+}
+
+/*
+ * Except a dialog container. react-modal moves focus onto it when the dialog opens and it
+ * carries tabindex="-1", so the rule above fires on it and every dialog opens already
+ * outlined — which reads as a selected element rather than as a dialog. Has to live here
+ * rather than beside the modal's own styles: those are in `@layer legacy` and the rule
+ * above is unlayered, so a layered override never wins.
+ */
+[class*='modal-body']:focus,
+[class*='modal-body']:focus-visible {
+  outline: none;
 }

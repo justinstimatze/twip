@@ -33,7 +33,7 @@ Wick.GUIElement.BreadcrumbsButton = class extends Wick.GUIElement.Button {
         var ctx = this.ctx;
 
         // Button label settings
-        ctx.font = "14px Nunito Sans";
+        ctx.font = "13px " + Wick.GUIElement.UI_FONT_FAMILY;
         var textContent = this.model.identifier || 'Clip';
         var textWidth = ctx.measureText(textContent).width;
         var textX = Wick.GUIElement.BREADCRUMBS_PADDING;

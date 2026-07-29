@@ -18,24 +18,12 @@
  */
 
 import React, { Component } from 'react';
+import { PanelHeader } from '@/ui/panel';
 
 class InspectorTitle extends Component {
-
-  renderSelectionType = () => {
-    return (
-      <div className="ml-2 inline-flex h-[80%] items-center text-xl font-bold text-content-muted">
-        {this.props.title}
-      </div>
-    )
-  }
-  render() {
-    return(
-      <div className="flex h-9 items-center px-panel-pad whitespace-nowrap">
-        <div className="inline-block text-[22px] text-content">Inspector</div>
-        {this.props.type && this.props.title && this.renderSelectionType()}
-      </div>
-    )
+  render () {
+    return <PanelHeader label="Inspector" context={this.props.type ? this.props.title : null} />;
   }
 }
 
-export default InspectorTitle
+export default InspectorTitle;

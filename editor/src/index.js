@@ -24,6 +24,12 @@ import Editor from './Editor/Editor';
 import * as serviceWorker from './serviceWorker';
 import initializeDefaultFileHandlers from './files/filehandler';
 import installTauriFileHandlers from './files/tauri-filehandler';
+import { themeTimeline } from './theme';
+
+// The canvas timeline paints from statics on Wick.GUIElement, so it has to be told the
+// palette before anything draws. index.html loads wickengine.js from a plain script tag,
+// which means window.Wick already exists by the time this module evaluates.
+themeTimeline(window.Wick);
 
 // Creates file handlers in the window.
 initializeDefaultFileHandlers();

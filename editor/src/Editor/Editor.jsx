@@ -1022,7 +1022,7 @@ class Editor extends EditorCore {
             createAssets={this.createAssets}
             importProjectAsWickFile={this.importProjectAsWickFile}
             onRef={ref => this.canvasComponent = ref}
-            canvasBGColor="#303030"
+            canvasBGColor="var(--color-surface)"
           />
         </ResizeSensor>
       </ViewOnly>

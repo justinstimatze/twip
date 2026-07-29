@@ -1,6 +1,6 @@
 @import 'Editor/_wickbrand.scss';
 
-$outliner-title-height: 36px;
+$outliner-title-height: 28px; // matches --spacing-panel-title, which PanelHeader uses
 
 $outliner-padding: 10px;
 $outliner-row-height: 24px;
@@ -16,11 +16,11 @@ $dropdown-animation-duration: 75ms;
 
 $tab-spacing: 5px;
 $tab-radius: 3px;
-$tab-font-size: 20px;
+$tab-font-size: 13px;
 
-$indentation: 25px;
+$indentation: 20px;
 
-$outliner-break-size: calc(#{$editor-outline-padding} * .5);
+$outliner-break-size: $editor-outline-padding;
 
 .outliner {
   background-color: $editor-primary;
@@ -29,7 +29,7 @@ $outliner-break-size: calc(#{$editor-outline-padding} * .5);
   overflow: auto;
   box-sizing: border-box;
   border-right: $editor-outline-padding solid $editor-primary-outline;
-  font-family: 'Nunito Sans';
+  font-family: var(--font-ui);
   overflow: hidden;
 }
 .popout-outliner {

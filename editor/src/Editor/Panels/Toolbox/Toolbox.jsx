@@ -36,13 +36,13 @@ const TOOL_ROW = 'flex h-full flex-row items-center';
 const COLOR_WELL = 'flex size-[25.5px] min-w-[25.5px] cursor-pointer items-center overflow-hidden';
 
 /* The medium toolbox is two half-height rows with a rule between them. */
-const MEDIUM_ROW = 'flex h-1/2 w-full flex-row items-center border-b-[3px] border-surface-sunken last:border-b-0';
+const MEDIUM_ROW = 'flex h-1/2 w-full flex-row items-center border-b border-line last:border-b-0';
 
 /*
  * The outline is on the bottom and left only: the toolbox meets the menu bar above it and
  * the window edge on the right, and a border on either would double up.
  */
-const TOOL_BOX = 'flex h-full w-full overflow-hidden border-b-4 border-l-4 border-surface-sunken bg-surface pr-1 pl-[2px]';
+const TOOL_BOX = 'flex h-full w-full overflow-hidden border-b border-l border-line bg-surface-sunken pr-1 pl-[2px]';
 
 class Toolbox extends Component {
   constructor(props) {
@@ -151,6 +151,10 @@ class Toolbox extends Component {
   renderCanvasActions = () => {
     return (
       <div className="ml-auto flex h-full flex-row items-center">
+        {/* The document actions are a different kind of thing from the tools to their left —
+            they act on the selection rather than choosing a mode — so they get the same rule
+            that separates every other group in this row. */}
+        <ToolboxBreak/>
         <div className="flex flex-row items-center justify-center">
 
           <div id="more-canvas-actions-popover-button">

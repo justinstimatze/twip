@@ -1,56 +1,124 @@
+/*
+ * The loading screen, which is the first thing anyone sees and so is the first statement of
+ * what this is. It is a frame ruler with a playhead running across it: the two objects twip
+ * is about, doing the one thing that makes a progress indicator honest — time passing.
+ *
+ * Deliberately not a logo on a coloured field. No webfont either; this paints before the
+ * bundle's stylesheet has necessarily arrived, so everything here is geometry and a system
+ * stack, and it looks the same whether or not Archivo has loaded yet.
+ *
+ * Values are duplicated from src/index.css rather than shared, because this file is served
+ * from public/ and linked directly out of index.html — it is outside the build.
+ */
+
 #preloader {
-  background-color: #1EE29A;
+  background-color: #110f0e;
   width: 100%;
   height: 100%;
   position: absolute;
   z-index: 1000000000;
-  top: 0px;
-  left: 0px;
-  transition: all 0.5s ease 0s;
+  top: 0;
+  left: 0;
+  transition: opacity 0.35s ease 0s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
 }
 
-.animated {
-    animation-iteration-count: infinite;
+.preloader-ruler {
+  position: relative;
+  width: 240px;
+  height: 40px;
+  border-bottom: 1px solid #44403c;
 }
 
-.flashy {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    margin-left: -50px;
-    margin-top: -50px;
-    width: 100px;
-    height: 100px;
-    animation: float .6s ease-in-out infinite alternate;
+/*
+ * The ticks. Twelve frames across, with every fourth one full height — the same read as a
+ * timeline's number line, where the eye counts by the tall marks and measures by the short
+ * ones.
+ */
+.preloader-ruler::before,
+.preloader-ruler::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
-.flashy-shadow {
-    position: absolute;
-    top: calc(50% + 70px);
-    left: 50%;
-    margin-left: -45px;
-    margin-top: -22.5px;
-    width: 90px;
-    height: 45px;
-    animation: pulse .6s ease-in-out infinite alternate;
+.preloader-ruler::before {
+  height: 10px;
+  background: repeating-linear-gradient(
+    to right,
+    #44403c 0 1px,
+    transparent 1px 20px
+  );
 }
 
-.text {
-    position: absolute;
-    top: calc(50% + 100px);
-    left: 50%;
-    margin-left: -100px;
-    width: 200px;
-    height: 30px;
-    animation: pulse 1.2s ease-in-out infinite alternate;
+.preloader-ruler::after {
+  height: 18px;
+  background: repeating-linear-gradient(
+    to right,
+    #67625d 0 1px,
+    transparent 1px 80px
+  );
 }
 
-@keyframes float {
-    0% {top: 48%;}
-    100% {top:50%;}
+/* The playhead: a flag with a stem, in the one hot colour the whole app has. */
+.preloader-playhead {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  height: 40px;
+  background: #ef4a2f;
+  animation: preloader-scrub 1.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-@keyframes pulse {
-    0% {transform: scale3d(.9, .9, .9);}
-    100% { transform: scale3d(1, 1, 1); }
+.preloader-playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -5px;
+  width: 12px;
+  height: 12px;
+  background: #ef4a2f;
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
+}
+
+.preloader-wordmark {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #817c77;
+  /* The tracking pushes the last letter right; pull the block back so it reads centred. */
+  text-indent: 0.34em;
+}
+
+@keyframes preloader-scrub {
+  0% { left: 0; }
+  50% { left: calc(100% - 2px); }
+  100% { left: 0; }
+}
+
+/*
+ * Reduced motion still needs to say "working". The playhead parks at the first frame and the
+ * wordmark breathes instead — no travel, no sweep, nothing that moves across the field.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .preloader-playhead {
+    animation: none;
+  }
+  .preloader-wordmark {
+    animation: preloader-breathe 1.8s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes preloader-breathe {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
 }

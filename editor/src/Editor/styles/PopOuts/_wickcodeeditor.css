@@ -42,7 +42,7 @@
     background-color: var(--wick-primary);
     border: none; 
     border-radius: 30px;
-    font-family: 'Nunito';
+    font-family: var(--font-ui);
     font-size: 30px;
     display: flex;
     align-items: center;

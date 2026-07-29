@@ -17,132 +17,165 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Define Color Scheme
+/*
+ * ============================================================================
+ * twip's palette, wearing Wick's variable names.
+ * ============================================================================
+ *
+ * Every name below is inherited and every value is twip's. That combination is the point:
+ * 40 stylesheets `@import` this file, so re-pointing the values here retheme the whole
+ * un-migrated half of the editor in one move, without touching 40 files that are going to
+ * be deleted anyway as they migrate to Tailwind.
+ *
+ * `src/index.css` is the authority — it holds the generated OKLCH ramp, the reasoning, and
+ * the measured contrast ratios. This file mirrors those hex values for sass's benefit
+ * (sass colour functions like darken() need a real colour, not a var()). When the two
+ * disagree, index.css is right and this is stale.
+ *
+ * Some names now lie about their colour: $wick-green is red, $focus-orange is blue. They
+ * are kept rather than renamed because renaming them is a 40-file diff that says nothing,
+ * and the file they point at says what they actually are. They die with their stylesheets.
+ *
+ *   ash    #110F0E .. #F6F3F0   warm neutral, OKLCH hue 70, chroma < 0.010
+ *   flare  #EF4A2F              the accent, and the playhead
+ *   ice    #64B6DF              selection and focus
+ *   ochre  #F2B54A              warnings and script markers
+ *   sage   #8BC8A0              the quiet positive
+ */
 
-// Spring 2019 color scheme
-$editor-primary: #303030;
-$editor-primary-text: white; //#AFAFAF;
+$editor-primary: #24211F;              // ash-850 — panel bodies
+$editor-primary-text: #E7E4E0;         // ash-100 — warm white; pure #fff glares on ash
 $editor-primary-property-text: $editor-primary-text;
-$editor-primary-outline: #191919;
+$editor-primary-outline: #373330;      // ash-750 — the hairline that separates everything
 
-$editor-text-input-background: #4F4F4F;
-$editor-text-input-text: #000000;
+$editor-text-input-background: #1B1917; // ash-900 — inputs are recessed, not raised
+$editor-text-input-text: #E7E4E0;
 
-$editor-menubar-project-text: #FFFFFF; //#DADADA;
-$editor-menubar-option-text: #E0E0E0; //#BABABA;
+$editor-menubar-project-text: #E7E4E0;
+$editor-menubar-option-text: #B9B5B0;   // ash-300
 
-$editor-secondary: #3B3B3B;
-$editor-secondary-text: #BDBDBD; //#797979;
+$editor-secondary: #2C2A26;             // ash-800 — rows and controls on a panel
+$editor-secondary-text: #B9B5B0;
 
-$editor-tertiary: #4A4A4A;
+$editor-tertiary: #373330;              // ash-750 — hover
 
-$editor-modal-dark: #1E1E1E;
-$editor-modal-gray: #383434; //#3D3B3B;
-$editor-modal-gray-secondary: #525252;
+$editor-modal-dark: #110F0E;            // ash-950
+$editor-modal-gray: #24211F;
+$editor-modal-gray-secondary: #2C2A26;
 
-$editor-modal-text-white: #FFFFFF;
-$editor-modal-text-gray: #E6E6E6;
-$editor-modal-text-dark: #a6a6a6;
-$editor-modal-text-highlight: #1EE29A;
+$editor-modal-text-white: #E7E4E0;
+$editor-modal-text-gray: #D2CFCA;
+$editor-modal-text-dark: #9C9792;
+$editor-modal-text-highlight: #FD765D;  // flare-400
 
-$editor-green-highlight: #1EE29A;
-$editor-green-highlight-dark: #19C284;
+$editor-green-highlight: #EF4A2F;       // flare-500 — the accent slot
+$editor-green-highlight-dark: #D0351B;
 
-$editor-canvas-border: #6A6A6A;
+$editor-canvas-border: #44403C;         // ash-700 — the stage's own edge against the void
 
-$editor-outline-padding: 4px;
-$editor-input-border-width: 3px;
-$editor-panel-padding: 10px;
+// Every panel's edge. Was 4px, which is a gutter rather than a border — it read as space
+// between floating slabs. 1px makes the same seven panels butt together with a hairline
+// between them, which is what makes the chrome look like one instrument.
+$editor-outline-padding: 1px;
+$editor-input-border-width: 1px;        // was 3px; a hairline outlines, it doesn't frame
+$editor-panel-padding: 8px;
 
-$editor-popout-primary: #292927;
-$editor-popout-secondary: #353434;
-$editor-popout-tertiary: #3F3D3D;
+$editor-popout-primary: #1B1917;
+$editor-popout-secondary: #24211F;
+$editor-popout-tertiary: #2C2A26;
 
-$editor-popout-primary-text: #FFFFFF;
-$editor-popout-secondary-text: #B1B1B1;
-$editor-popout-tertiary-text: #919191;
+$editor-popout-primary-text: #E7E4E0;
+$editor-popout-secondary-text: #B9B5B0;
+$editor-popout-tertiary-text: #9C9792;
 
 // Default palette
-$heather-grey: #F5F5F5;
-$heather-grey-light: #F9F9F9;
-$heather-grey-dark: #EAEAEA;
-$heather-grey-text: black;
+$heather-grey: #F6F3F0;                 // ash-50
+$heather-grey-light: #FBFAF8;
+$heather-grey-dark: #E7E4E0;
+$heather-grey-text: #110F0E;
 
-$wick-green: #1EE29A;
-$wick-green-light: #29F1A3;
-$wick-green-dark: #01C094;
-$wick-green-text: $editor-primary;
+// The accent. Named green, is flare.
+$wick-green: #EF4A2F;
+$wick-green-light: #FD765D;
+$wick-green-dark: #D0351B;
+$wick-green-text: #110F0E;
 
-$sleepy-sky: #B4ECE6;
-$sleepy-sky-light: #D3F8F4;
-$sleepy-sky-dark: #8DDED6;
-$sleepy-sky-text: black;
+// Tooltips. Were a pale mint chip; now a dark chip with a hairline, so a tooltip reads as
+// part of the same instrument rather than a sticky note left on it.
+$sleepy-sky: #110F0E;
+$sleepy-sky-light: #1B1917;
+$sleepy-sky-dark: #000000;
+$sleepy-sky-text: #E7E4E0;
 
-$wick-active-blue: #00ADEF;
-$wick-active-blue-dark: #00709c;
-$wick-active-blue-light: #00B9FF;
-$wick-active-blue-text: $editor-primary;
+$wick-active-blue: #64B6DF;             // ice-400 — selection
+$wick-active-blue-dark: #2F9ECF;
+$wick-active-blue-light: #92CDED;
+$wick-active-blue-text: #110F0E;
 
-$deep-cereulian: #101DA5;
-$deep-cereulian-light: #2636E1;
-$deep-cereulian-dark: #010A6F;
-$deep-cereulian-text: white;
+$deep-cereulian: #007FAC;
+$deep-cereulian-light: #2F9ECF;
+$deep-cereulian-dark: #005876;
+$deep-cereulian-text: #F6F3F0;
 
-$old-navy: #08105B;
-$old-navy-light: #182387;
-$old-navy-dark: #000640;
-$old-navy-text: white;
+$old-navy: #14303D;
+$old-navy-light: #1D4353;
+$old-navy-dark: #0C1D26;
+$old-navy-text: #F6F3F0;
 
-$magenta: #CB00E4;
-$magenta-light: #E233F7;
-$magenta-dark: #B800CF;
-$magenta-text: white;
+// Spotlight — for calling attention to one control. Ochre, so it is neither the accent
+// (which means "act") nor the selection (which means "the system chose this").
+$magenta: #F2B54A;
+$magenta-light: #F7CB7C;
+$magenta-dark: #E89719;
+$magenta-text: #110F0E;
 
-$flame: #F66A37;
-$flame-light: #FF7848;
-$flame-dark: #E6460E;
-$flame-text: black;
+$flame: #EF4A2F;
+$flame-light: #FD765D;
+$flame-dark: #D0351B;
+$flame-text: #110F0E;
 
-$wick-red: #F86868; //#FD384C;
-$wick-red-light: #FF8C8C; //#FF5372;
-$wick-red-dark: #E61E07;
-$wick-red-text: black;
+$wick-red: #FD765D;
+$wick-red-light: #FF9D89;
+$wick-red-dark: #D0351B;
+$wick-red-text: #110F0E;
 
-$wick-yellow: #FFC835;
-$wick-yellow-light: #FFE243;
-$wick-yellow-dark: #E9AA02;
-$wick-yellow-text: black;
+$wick-yellow: #F2B54A;                  // ochre-400
+$wick-yellow-light: #F7CB7C;
+$wick-yellow-dark: #E89719;
+$wick-yellow-text: #110F0E;
 
-$wick-gray: #4F4F4F;
-$wick-gray-light: #575757;//#5D5D5D;
-$wick-gray-dark: #424242;
-$wick-gray-text: #ffffff;//#848484;
-$wick-gray-text-light: #b6b6b6;
+$wick-gray: #2C2A26;
+$wick-gray-light: #373330;
+$wick-gray-dark: #24211F;
+$wick-gray-text: #E7E4E0;
+$wick-gray-text-light: #B9B5B0;         // 7.85:1 on $wick-gray
 
-$wick-cool-blue: #89919C;
-$wick-cool-blue-light: #AFD6FF;
-$wick-cool-blue-dark:#5C5F65;
-$wick-cool-blue-text: #353434;
+$wick-cool-blue: #817C77;               // ash-500
+$wick-cool-blue-light: #92CDED;
+$wick-cool-blue-dark: #534F4A;
+$wick-cool-blue-text: #110F0E;
 
-$wick-error-red: #E27663;
-$wick-error-red-light: #FF7867;
-$wick-error-red-dark: #8D564D;
-$wick-error-red-text: #FF7867;
+// Destructive. Deeper and heavier than the accent, which is how it stays distinguishable
+// from it — an Export button and a Delete button must not be the same red.
+$wick-error-red: #A62914;               // flare-700
+$wick-error-red-light: #D0351B;
+$wick-error-red-dark: #7A1D0E;
+$wick-error-red-text: #FD765D;          // 6.04:1 as text on ash-850
 
 // interface palette
-$interface-primary: #464646; // most background colors
-$interface-primary-text: #FFFFFF; // most text
+$interface-primary: #24211F;            // most background colors
+$interface-primary-text: #E7E4E0;       // most text
 
-$interface-secondary: #535353; // interface title headers, some backgrounds
-$interface-secondary-text: #ADADAD; // some text
+$interface-secondary: #1B1917;          // title headers — a rail *under* its panel
+$interface-secondary-text: #9C9792;     // ash-400 — 5.11:1 on the header
 
-$interface-tertiary: #919191; // search bars
-$interface-tertiary-text: #626262; // search text
+$interface-tertiary: #1B1917;           // search bars, now recessed rather than white
+$interface-tertiary-text: #9C9792;      // 5.11:1
 
-$interface-quaternary: #C4C4C4; // interface background highlights
+$interface-quaternary: #373330;         // interface background highlights
 
-$interface-input-background: #FFFFFF;
-$interface-input-text: #535353;
+$interface-input-background: #1B1917;
+$interface-input-text: #E7E4E0;
 
 $interface-selection: $wick-green-dark;
 $interface-hover: $wick-green;
@@ -152,36 +185,38 @@ $interface-tooltip: $sleepy-sky;
 $interface-tooltip-dark: $sleepy-sky-dark;
 $interface-tooltip-light: $sleepy-sky-light;
 
-$interface-tooltip-text: #222222;
+$interface-tooltip-text: #E7E4E0;
 
 $interface-spotlight: $magenta;
 $interface-spotlight-dark: $magenta-dark;
 $interface-spotlight-light: $magenta-light;
 
-$interface-spotlight-text: #FFFFFF;
+$interface-spotlight-text: #110F0E;
 
 
-$interface-warning: $flame;
-$interface-warning-dark: $flame-dark;
-$interface-warning-light: $flame-light;
+$interface-warning: $wick-yellow;
+$interface-warning-dark: $wick-yellow-dark;
+$interface-warning-light: $wick-yellow-light;
 
-$interface-warning-text: #FFFFFF;
+$interface-warning-text: #110F0E;       // ochre needs dark text, not white
 
-$interface-menu-bar-background: black;
+$interface-menu-bar-background: #110F0E;
 
-$focus-orange: #FF7867;
+// Focus. Ice, not orange: the accent is warm, so a cold ring can never be misread as
+// selection or as an error. The old value was byte-identical to the error colour.
+$focus-orange: #92CDED;
 
 
 // mobile container colors
-$mobile-panel-background: #191919;
-$timeline-red: #FA8A87;
-$inspector-teal: #4FF7DE;
-$code-pink: #FA73FA;
-$asset-green: #BAFA98;
+$mobile-panel-background: #110F0E;
+$timeline-red: #EF4A2F;
+$inspector-teal: #64B6DF;
+$code-pink: #F2B54A;
+$asset-green: #8BC8A0;
 
-$inspector-tab-background: #262626;
-$inspector-tab-background-selected: #303030;
-$inspector-tab-underline: #484747;
+$inspector-tab-background: #1B1917;
+$inspector-tab-background-selected: #24211F;
+$inspector-tab-underline: #373330;
 
 /*
  * Rules moved to _globals.scss — this file is imported by 40 stylesheets and sass inlines
@@ -190,9 +225,9 @@ $inspector-tab-underline: #484747;
 
 // define interface element properties
 $interface-roundness-primary: 2px;
-$interface-roundness-secondary: 4px;
-$interface-input-roundness: 5px;
+$interface-roundness-secondary: 3px;
+$interface-input-roundness: 3px;
 
-$docked-title-height: 26px;
-$docked-margin: 6px;
+$docked-title-height: 28px;
+$docked-margin: 0px;                    // panels butt together; the hairline is the seam
 

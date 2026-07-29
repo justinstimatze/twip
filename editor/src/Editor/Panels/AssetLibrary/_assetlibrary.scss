@@ -17,93 +17,24 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/*
+ * What is left after the panel moved onto the shared shell in ui/panel.jsx. Everything else
+ * that was here — the 20px title in a 200px box, the 4px outline borders, the rounded inner
+ * body on a lighter surface than the panel around it, the two fixed-size button wells — is
+ * Tailwind on the component now. The filter input stays because it styles a WickInput from
+ * the outside by id, which a utility class on the wrapper cannot reach.
+ */
 @import 'Editor/_wickbrand.scss';
-
-$upload-button-height: 25px;
-$filter-height: 40px;
-
-.asset-library {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background-color: $editor-primary;
-  border-right: $editor-outline-padding solid $editor-primary-outline;
-  border-bottom: $editor-outline-padding solid $editor-primary-outline;
-  margin-bottom: 10px;
-  padding-left: $editor-panel-padding;
-  padding-right: $editor-panel-padding;
-  display: flex;
-  flex-direction: column;
-}
-
-.asset-library-title-container {
-  display: flex;
-  align-items: center;
-  margin-top: $docked-margin;
-}
-
-.asset-library-title-text {
-  color: #FFFFFF; //$editor-primary-property-text;
-  font-size: 20px;
-  display: inline-flex;
-  align-items: center;
-  width: 200px;
-}
-
-.btn-asset-builtin {
-  width: $upload-button-height;
-  height: $upload-button-height;
-}
-
-.btn-asset-upload {
-  width: $upload-button-height;
-  height: $upload-button-height;
-  margin-right: 5px;
-}
-
-.asset-library-body {
-  height: 100%;
-  background-color: $editor-tertiary;
-  margin-top: $docked-margin;
-  margin-bottom: $editor-panel-padding;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.asset-library-filter {
-  top: 0;
-  width: 100%;
-  height: $filter-height;
-  max-height: $filter-height;
-  background-color: $editor-secondary;
-  display: flex;
-  align-items: center;
-}
-
-.asset-library-filter-icon {
-  height: calc(#{$filter-height} * .5);
-  width: calc(#{$filter-height} * .5);
-  margin-left: 4px;
-  margin-right: 4px;
-}
-
-.asset-library-asset-container {
-  height: 100%;
-  overflow: hidden;
-}
-
-.asset-library-asset-container:hover {
-  overflow-y: auto;
-}
 
 #asset-library-filter-input {
   background: transparent;
   border: none;
-  color: #CFCFCF; //$editor-primary-property-text;
+  color: $editor-primary-text;
+  font-size: 12px;
+  height: 100%;
+  padding-left: 4px;
 }
 
 #asset-library-filter-input::placeholder {
-  color: #CFCFCF; //$editor-primary-property-text;
+  color: $editor-modal-text-dark;
 }

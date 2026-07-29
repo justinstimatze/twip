@@ -23,6 +23,7 @@ import Asset from './Asset/Asset';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 import WickInput from 'Editor/Util/WickInput/WickInput';
 import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
+import { PanelHeader, PanelEmpty } from '@/ui/panel';
 
 import './_assetlibrary.scss';
 
@@ -93,11 +94,11 @@ class AssetLibrary extends Component {
 
   renderTitle = () => {
     return (
-      <div className="asset-library-title-container">
-        <div className="asset-library-title-text">
-          Asset Library
-        </div>
-        <div className="btn-asset-upload">
+      <PanelHeader
+        label="Assets"
+        context={this.props.assets.length ? String(this.props.assets.length) : null}
+      >
+        <div className="h-5 w-5">
           <ActionButton
             color="upload"
             action={this.openBuiltinAssetLibrary}
@@ -105,7 +106,7 @@ class AssetLibrary extends Component {
             icon="add"
             tooltip="Add Builtin Asset" />
         </div>
-        <div className="btn-asset-builtin">
+        <div className="h-5 w-5">
           <ActionButton
             color="upload"
             action={this.openFileDialog}
@@ -113,19 +114,20 @@ class AssetLibrary extends Component {
             icon="upload"
             tooltip="Upload Assets" />
         </div>
-      </div>
+      </PanelHeader>
     )
   }
 
   render() {
     let filteredAssets = this.filterArray(this.props.assets);
     let sortedFilteredAssets = this.sortAssets(filteredAssets);
+    let filtering = this.state.filterText.length > 0;
     return(
-      <div className="docked-pane asset-library" aria-label="Asset Library">
+      <div className="asset-library docked-pane flex h-full w-full flex-col overflow-hidden border-r border-b border-line bg-surface" aria-label="Asset Library">
         {this.renderTitle()}
-        <div className="asset-library-body">
-          <div className="asset-library-filter">
-            <div className="asset-library-filter-icon">
+        <div className="asset-library-body flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="asset-library-filter flex h-7 shrink-0 items-center border-b border-line bg-surface-sunken">
+            <div className="asset-library-filter-icon ml-1.5 h-3.5 w-3.5 shrink-0 opacity-60">
               <ToolIcon name="search" />
             </div>
             <WickInput
@@ -136,8 +138,16 @@ class AssetLibrary extends Component {
               onChange={this.updateFilter}
               value={this.state.filterText}/>
           </div>
-          <div className="asset-library-asset-container">
-            {sortedFilteredAssets.map(this.makeNode)}
+          <div className="asset-library-asset-container min-h-0 flex-1 overflow-hidden hover:overflow-y-auto">
+            {sortedFilteredAssets.length === 0
+              ? (
+                <PanelEmpty>
+                  {filtering
+                    ? `No asset matches "${this.state.filterText}".`
+                    : 'Drop images or sounds here, or use + to add one.'}
+                </PanelEmpty>
+              )
+              : sortedFilteredAssets.map(this.makeNode)}
           </div>
         </div>
       </div>

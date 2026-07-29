@@ -27,7 +27,9 @@ export function Progress ({ value = 0, done = false, striped = false, animated =
       <div
         className={cn(
           'h-full transition-[width] duration-150 ease-linear',
-          done ? 'bg-accent' : 'bg-wick-yellow-dark',
+          // Ice while it runs, sage when it lands. Both cold-to-quiet on purpose: the accent
+          // means "you act", and a progress bar is the machine working, not an invitation.
+          done ? 'bg-sage-400' : 'bg-ice-500',
           striped && 'progress-stripes',
           animated && 'progress-stripes-animated',
         )}

@@ -31,9 +31,9 @@ class ScriptWindowRow extends Component {
   /* Mouse/keyboard/lifecycle scripts each get their own bar colour, the same three the
      code editor tabs use. Blue is the fallback for a script in no known group. */
   static BAR = {
-    blue: 'bg-[#05b8ff]',
-    green: 'bg-wick-green-light',
-    yellow: 'bg-wick-yellow-light',
+    blue: 'bg-ice-400',
+    green: 'bg-sage-400',
+    yellow: 'bg-ochre-400',
   }
 
   getColorBar = () => {
