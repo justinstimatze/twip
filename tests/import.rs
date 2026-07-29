@@ -178,6 +178,138 @@ fn a_hole_survives_as_one_path() {
     );
 }
 
+/// A shape comes back where it was *placed*, not where it was defined.
+///
+/// No fixture can catch this. twip authors every contour in stage coordinates and places it
+/// with an identity translate, so its own output round-trips perfectly whether or not
+/// placement matrices are applied at all. Real Flash does the opposite — one shape defined
+/// about its own origin, positioned by a matrix, often reused — and ignoring the matrix piles
+/// the whole movie into the top-left corner. Ruffle's logo animation is what showed it: 22
+/// shapes, all stacked at (0,0), and every test here green.
+#[test]
+fn places_shapes_by_their_matrix() {
+    use swf::{Fixed16, Matrix, PlaceObject, PlaceObjectAction, Twips};
+
+    let sq = |v: f64| Twips::from_pixels(v);
+    // A 10x10 square defined about the origin, so its own coordinates say nothing about
+    // where it belongs.
+    let shape = unit_square(1, -5.0);
+    let place = PlaceObject {
+        version: 2,
+        action: PlaceObjectAction::Place(1),
+        depth: 1,
+        matrix: Some(Matrix {
+            a: Fixed16::from_f64(2.0),
+            b: Fixed16::ZERO,
+            c: Fixed16::ZERO,
+            d: Fixed16::from_f64(2.0),
+            tx: sq(300.0),
+            ty: sq(200.0),
+        }),
+        color_transform: None,
+        ratio: None,
+        name: None,
+        clip_depth: None,
+        class_name: None,
+        filters: None,
+        background_color: None,
+        blend_mode: None,
+        clip_actions: None,
+        has_image: false,
+        is_bitmap_cached: None,
+        is_visible: None,
+        amf_data: None,
+    };
+
+    let bytes = swf_with(vec![
+        swf::Tag::DefineShape(Box::new(shape)),
+        swf::Tag::PlaceObject(Box::new(place)),
+        swf::Tag::ShowFrame,
+    ]);
+
+    let shapes = twip::import::shapes_from_swf(&bytes).expect("import");
+    assert_eq!(shapes.len(), 1, "one ring");
+    let pts = &shapes[0].points;
+
+    // Defined on [-5, 5], scaled 2x and moved to (300, 200) → [290, 310] x [190, 210].
+    let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().cloned().unzip();
+    let near = |got: f64, want: f64, what: &str| {
+        assert!(
+            (got - want).abs() < 0.1,
+            "{what}: got {got:.2}, want {want:.2} — the placement matrix is being ignored"
+        );
+    };
+    near(xs.iter().cloned().fold(f64::MAX, f64::min), 290.0, "left");
+    near(xs.iter().cloned().fold(f64::MIN, f64::max), 310.0, "right");
+    near(ys.iter().cloned().fold(f64::MAX, f64::min), 190.0, "top");
+    near(ys.iter().cloned().fold(f64::MIN, f64::max), 210.0, "bottom");
+}
+
+/// A square of side 10 with its corner at `origin`, as a `DefineShape4`.
+fn unit_square(id: u16, origin: f64) -> swf::Shape {
+    use swf::{PointDelta, Rectangle, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, Twips};
+    let sq = |v: f64| Twips::from_pixels(v);
+    let bounds = Rectangle {
+        x_min: sq(origin),
+        x_max: sq(origin + 10.0),
+        y_min: sq(origin),
+        y_max: sq(origin + 10.0),
+    };
+    swf::Shape {
+        version: 4,
+        id,
+        shape_bounds: bounds,
+        edge_bounds: bounds,
+        flags: ShapeFlag::HAS_SCALING_STROKES,
+        styles: ShapeStyles {
+            fill_styles: vec![swf::FillStyle::Color(swf::Color::from_rgb(0x00ff00, 255))],
+            line_styles: vec![],
+        },
+        shape: vec![
+            ShapeRecord::StyleChange(Box::new(StyleChangeData {
+                move_to: Some(swf::Point::new(sq(origin), sq(origin))),
+                fill_style_0: None,
+                fill_style_1: Some(1),
+                line_style: None,
+                new_styles: None,
+            })),
+            ShapeRecord::StraightEdge {
+                delta: PointDelta::new(sq(10.0), sq(0.0)),
+            },
+            ShapeRecord::StraightEdge {
+                delta: PointDelta::new(sq(0.0), sq(10.0)),
+            },
+            ShapeRecord::StraightEdge {
+                delta: PointDelta::new(sq(-10.0), sq(0.0)),
+            },
+            ShapeRecord::StraightEdge {
+                delta: PointDelta::new(sq(0.0), sq(-10.0)),
+            },
+        ],
+    }
+}
+
+/// Wrap tags in a 600x400 SWF.
+fn swf_with(tags: Vec<swf::Tag>) -> Vec<u8> {
+    use swf::{Fixed8, Header, Rectangle, Twips};
+    let sq = |v: f64| Twips::from_pixels(v);
+    let header = Header {
+        compression: swf::Compression::None,
+        version: 8,
+        stage_size: Rectangle {
+            x_min: sq(0.0),
+            x_max: sq(600.0),
+            y_min: sq(0.0),
+            y_max: sq(400.0),
+        },
+        frame_rate: Fixed8::from_f64(12.0),
+        num_frames: 1,
+    };
+    let mut bytes = Vec::new();
+    swf::write_swf(&header, &tags, &mut bytes).expect("write");
+    bytes
+}
+
 /// A curve arrives as a curve. The fixtures are all straight-edged, so this builds the one
 /// case that is not: without the quadratic sampler, a `CurvedEdge` contributes a single
 /// straight segment and the arc silently flattens to its chord.

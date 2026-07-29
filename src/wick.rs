@@ -113,6 +113,7 @@ pub struct Stroke {
 }
 
 /// paper.js `strokeCap`. `Butt` (the paper.js default) is SWF's "no cap".
+#[derive(Clone, Copy)]
 pub enum StrokeCap {
     Butt,
     Round,
@@ -120,6 +121,7 @@ pub enum StrokeCap {
 }
 
 /// paper.js `strokeJoin`.
+#[derive(Clone, Copy)]
 pub enum StrokeJoin {
     Miter,
     Round,
