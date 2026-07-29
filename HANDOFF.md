@@ -673,10 +673,15 @@ ALSO OPEN for a public release, in the order they'd bite:
    * `Cargo.toml:13` takes `swf` as a git dep, and crates.io rejects git deps — so
      `cargo install twip` is blocked by construction, `publish = false` notwithstanding.
    * No tags, no releases, no packaging workflow. All three workflows are checks.
-   * `EditorCore.jsx:1486` still turns a failed project load into a silent blank project,
-     with the `// if (!project) return;` guard commented out one line above. The autosave
-     DELETE bug from the 2026-07-24 diagnosis is fixed (`:1754` deletes `autosaveList[0].uuid`);
-     this half is not.
+   * **DONE 2026-07-28 — a failed load no longer looks like a blank project.** The
+     `// if (!project) return;` that sat commented out above `setupNewProject`'s
+     `project || new Wick.Project()` is replaced by a comment explaining what the fallback is
+     for: "New Project" calls with no argument on purpose, so the fallback is correct there
+     and the guard belongs in the callers that are LOADING something. Audited all four call
+     sites — import already checked, autosave was fixed earlier today, "New Project" passes
+     nothing deliberately, and `loadProjectFromURL` did not check and now does. That last one
+     was the live hole: a URL serving anything unreadable produced an empty canvas
+     indistinguishable from opening an empty project.
    * `HANDOFF.md` is linked from the README and is a session transcript — 16 "Justin"
      references and `~/Documents/wick-editor` at lines 600, 638, 654. The public-release
      checklist wants that swept before anyone outside reads it.

@@ -1481,7 +1481,14 @@ class EditorCore extends Component {
    * @param {Wick.Project} project - the project to load.
    */
   setupNewProject = (project) => {
-    // if (!project) return;
+    /*
+     * Called with nothing on purpose by "New Project", which is what the blank fallback
+     * below is for. Callers that are LOADING a document must check for null themselves
+     * before getting here: handing this a failed load produces an empty canvas that is
+     * indistinguishable from a successful load of an empty project, which is what "I
+     * clicked Load and nothing happened" turned out to be. A `if (!project) return;` here
+     * sat commented out for years, which suppressed the symptom in both directions.
+     */
     this.resetEditorForLoad();
     this.project = project || new window.Wick.Project();
     this.project.selection.clear();
@@ -1543,6 +1550,13 @@ class EditorCore extends Component {
         .then(resp => resp.blob())
         .then(blob => {
           window.Wick.WickFile.fromWickFile(blob, loadedProject => {
+            // fromWickFile hands back nothing for a file it cannot read, and
+            // setupNewProject would turn that into a blank canvas that looks like a
+            // successful load of an empty project.
+            if (!loadedProject) {
+              this.toast('Could not open that project — the file is not readable as a .wick.', 'error');
+              return;
+            }
             this.setupNewProject(loadedProject);
           }, 'blob');
         })
