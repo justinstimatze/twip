@@ -1,6 +1,6 @@
-### This code of conduct is based directly on the [P5.js code of conduct](https://github.com/processing/p5.js/blob/master/CODE_OF_CONDUCT.md).
+### This code of conduct is based directly on the [P5.js code of conduct](https://github.com/processing/p5.js/blob/master/CODE_OF_CONDUCT.md), by way of the [Wick Editor](https://github.com/Wicklets/wick-editor) fork this editor is built on.
 
-## Wick Editor Code of Conduct
+## twip Code of Conduct
 
 * **Be mindful of your language.** Any of the following behavior is unacceptable: 
   * Offensive comments related to gender identity and expression, sexual orientation, race, ethnicity, language, neuro-type, size, ability, class, religion, culture, subculture, political opinion, age, skill level, occupation, or background
@@ -18,9 +18,9 @@
 * **Be open minded.** Embrace new people and new ideas. Our community is continually evolving and we welcome positive change.
 
 ## Reporting
-If you believe someone is violating the code of conduct, we ask that you report it by emailing [contact@wickeditor.com](mailto:contact@wickeditor.com). Please include your username and a description of the incident, and we will get back to you ASAP.
+If you believe someone is violating the code of conduct, please report it by emailing [justin@justinstimatze.com](mailto:justin@justinstimatze.com). Include a description of the incident and, if there is one, the account involved.
 
-Sometimes, participants violating the Code of Conduct are unaware that their behavior is harmful, and an open conversation clears things up to move forward. However, if a participant continues with the behavior, the Wick Editor team may take any action they deem appropriate, up to and including expulsion from all Wick Editor spaces and identification of the participant as a harasser to other Wick Editor members or the general public.
+Sometimes, participants violating the Code of Conduct are unaware that their behavior is harmful, and an open conversation clears things up to move forward. However, if a participant continues with the behavior, any action deemed appropriate may follow, up to and including expulsion from all twip spaces and identification of the participant as a harasser to other participants or the general public.
 
 ---
 This statement is licensed under a [Creative Commons license](https://creativecommons.org/licenses/by-sa/4.0/). Please feel free to share and remix with attribution.
