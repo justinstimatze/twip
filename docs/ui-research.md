@@ -117,9 +117,9 @@ desktop layout *and* a mobile-degradation seed, on aging React.
 
 ## Part 3 — synthesis and recommendations for twip
 
-The tension, verbatim from the user: *"how to walk the line between 'familiar/retro enough for
-people that used to use Flash that would find this nostalgic like me' and 'entirely new users that
-have no patience for outdated interface conventions'."*
+The tension this has to resolve: familiar enough to be nostalgic for people who used Flash,
+without the outdated interface conventions that would cost the patience of anyone arriving
+without that memory.
 
 ### Keep (retro *and* still ergonomic)
 Bottom full-width timeline; left tool palette; layer-rows / frame-columns grid; centered stage with
