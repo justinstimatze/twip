@@ -35,6 +35,9 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/editor.yml'
+  # A site you cannot redeploy without inventing a commit is a site that goes stale. The
+  # deploy job below accepts a dispatch on main for exactly that.
+  workflow_dispatch:
 
 concurrency:
   group: editor-${{ github.workflow }}-${{ github.ref }}
@@ -183,7 +186,7 @@ jobs:
       # candidate to ship, and a failing one stops the job here. `path` is workspace-relative
       # — the `working-directory` default above applies to `run`, not to action inputs.
       - name: Package the site
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: editor/build
@@ -201,7 +204,7 @@ jobs:
   deploy:
     needs: editor
     if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
       && github.repository_visibility != 'private'
     runs-on: ubuntu-latest
     permissions:
