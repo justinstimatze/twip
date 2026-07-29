@@ -24,6 +24,10 @@ concurrency:
 jobs:
   deb:
     runs-on: ubuntu-latest
+    # `gh release create` writes to the repository, and this repo's default workflow token is
+    # read-only. Without this the whole build runs and then 403s on its last step.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +45,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: editor/src-tauri
+
+      # `cargo tauri` is not a runner builtin and nothing else here installs it. Pinned to the
+      # version that has actually bundled this tree, on editor.yml's wasm-bindgen reasoning: an
+      # unpinned install breaks the job the day the next CLI release lands, for no reason
+      # connected to any change here.
+      #
+      # RUSTFLAGS empty because .cargo/config.toml adds `-fuse-ld=mold` for any x86_64 linux and
+      # config discovery walks up from the cwd — an install run from the repo root inherits it
+      # onto a runner with no mold. Its `-D warnings` would also apply to the CLI's own source.
+      - name: Install the tauri CLI
+        env:
+          RUSTFLAGS: ''
+        run: cargo install tauri-cli --locked --version 2.11.4
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
