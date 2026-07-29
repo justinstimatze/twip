@@ -45,7 +45,8 @@ fn compile(name: &str) -> Vec<u8> {
 fn recovers_the_geometry_it_was_given() {
     for name in ["test1.wick", "multi-layer.wick", "brush-donut.wick"] {
         let swf = compile(name);
-        let shapes = twip::import::shapes_from_swf(&swf).expect("import");
+        let shapes =
+            twip::import::shapes_from_swf(&swf, twip::import::At::WholeMovie).expect("import");
 
         assert!(!shapes.is_empty(), "{name}: recovered no shapes at all");
 
@@ -96,7 +97,7 @@ fn recovers_the_geometry_it_was_given() {
 #[test]
 fn recovers_fill_colors() {
     let swf = compile("test1.wick");
-    let shapes = twip::import::shapes_from_swf(&swf).expect("import");
+    let shapes = twip::import::shapes_from_swf(&swf, twip::import::At::WholeMovie).expect("import");
 
     let doc_bytes = std::fs::read(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -129,8 +130,9 @@ fn recovers_fill_colors() {
 #[test]
 fn writes_one_svg_path_per_shape() {
     let swf = compile("multi-layer.wick");
-    let svg = twip::import::swf_to_svg(&swf).expect("svg");
-    let groups = twip::import::shape_groups_from_swf(&swf).expect("import");
+    let svg = twip::import::swf_to_svg(&swf, twip::import::At::WholeMovie).expect("svg");
+    let groups =
+        twip::import::shape_groups_from_swf(&swf, twip::import::At::WholeMovie).expect("import");
 
     assert!(svg.starts_with("<svg "), "not an svg document: {:.40}", svg);
     assert!(svg.trim_end().ends_with("</svg>"), "svg is not closed");
@@ -155,14 +157,15 @@ fn writes_one_svg_path_per_shape() {
 #[test]
 fn a_hole_survives_as_one_path() {
     let swf = compile("brush-donut.wick");
-    let groups = twip::import::shape_groups_from_swf(&swf).expect("import");
+    let groups =
+        twip::import::shape_groups_from_swf(&swf, twip::import::At::WholeMovie).expect("import");
 
     let holed = groups
         .iter()
         .find(|rings| rings.len() > 1)
         .expect("the donut should recover as one shape holding more than one ring");
 
-    let svg = twip::import::swf_to_svg(&swf).expect("svg");
+    let svg = twip::import::swf_to_svg(&swf, twip::import::At::WholeMovie).expect("svg");
     let path = svg
         .lines()
         .find(|l| l.matches('M').count() > 1)
@@ -227,7 +230,8 @@ fn places_shapes_by_their_matrix() {
         swf::Tag::ShowFrame,
     ]);
 
-    let shapes = twip::import::shapes_from_swf(&bytes).expect("import");
+    let shapes =
+        twip::import::shapes_from_swf(&bytes, twip::import::At::WholeMovie).expect("import");
     assert_eq!(shapes.len(), 1, "one ring");
     let pts = &shapes[0].points;
 
@@ -310,6 +314,97 @@ fn swf_with(tags: Vec<swf::Tag>) -> Vec<u8> {
     bytes
 }
 
+/// `--frame N` shows that frame, and only that frame.
+///
+/// Two squares placed on different frames, one of them removed before the second appears —
+/// so no single frame holds both, and the whole-movie walk is the only way to see them
+/// together. That is the distinction the flag exists to draw, and a movie where every frame
+/// looks the same would pass either way.
+#[test]
+fn a_frame_shows_what_is_on_stage_then() {
+    use swf::{Fixed16, Matrix, PlaceObject, PlaceObjectAction, RemoveObject, Twips};
+    use twip::import::At;
+
+    let sq = |v: f64| Twips::from_pixels(v);
+    let at = |id: u16, depth: u16, x: f64| {
+        swf::Tag::PlaceObject(Box::new(PlaceObject {
+            version: 2,
+            action: PlaceObjectAction::Place(id),
+            depth,
+            matrix: Some(Matrix {
+                a: Fixed16::ONE,
+                b: Fixed16::ZERO,
+                c: Fixed16::ZERO,
+                d: Fixed16::ONE,
+                tx: sq(x),
+                ty: sq(100.0),
+            }),
+            color_transform: None,
+            ratio: None,
+            name: None,
+            clip_depth: None,
+            class_name: None,
+            filters: None,
+            background_color: None,
+            blend_mode: None,
+            clip_actions: None,
+            has_image: false,
+            is_bitmap_cached: None,
+            is_visible: None,
+            amf_data: None,
+        }))
+    };
+
+    let bytes = swf_with(vec![
+        swf::Tag::DefineShape(Box::new(unit_square(1, 0.0))),
+        swf::Tag::DefineShape(Box::new(unit_square(2, 0.0))),
+        at(1, 1, 100.0),
+        swf::Tag::ShowFrame, // frame 1: the first square
+        swf::Tag::RemoveObject(RemoveObject {
+            depth: 1,
+            character_id: None,
+        }),
+        at(2, 1, 400.0),
+        swf::Tag::ShowFrame, // frame 2: the second, in the first one's place
+    ]);
+
+    let count = |when| {
+        twip::import::shape_groups_from_swf(&bytes, when)
+            .expect("import")
+            .len()
+    };
+    assert_eq!(
+        count(At::WholeMovie),
+        2,
+        "the movie draws two squares in all"
+    );
+    assert_eq!(count(At::Frame(1)), 1, "frame 1 holds one of them");
+    assert_eq!(count(At::Frame(2)), 1, "frame 2 holds the other");
+
+    // Which one, not just how many: same depth, same size, different place.
+    let x_of = |when| {
+        let groups = twip::import::shape_groups_from_swf(&bytes, when).expect("import");
+        groups[0][0].points[0].0
+    };
+    assert!(
+        (x_of(At::Frame(1)) - 100.0).abs() < 0.1,
+        "frame 1 should show the square at x=100, got {}",
+        x_of(At::Frame(1))
+    );
+    assert!(
+        (x_of(At::Frame(2)) - 400.0).abs() < 0.1,
+        "frame 2 should show the square at x=400, got {}",
+        x_of(At::Frame(2))
+    );
+
+    // Past the end is the last frame, not an empty stage.
+    assert_eq!(
+        count(At::Frame(99)),
+        1,
+        "a frame past the end holds the last"
+    );
+}
+
 /// A curve arrives as a curve. The fixtures are all straight-edged, so this builds the one
 /// case that is not: without the quadratic sampler, a `CurvedEdge` contributes a single
 /// straight segment and the arc silently flattens to its chord.
@@ -377,7 +472,8 @@ fn samples_curved_edges() {
     )
     .expect("write");
 
-    let shapes = twip::import::shapes_from_swf(&bytes).expect("import");
+    let shapes =
+        twip::import::shapes_from_swf(&bytes, twip::import::At::WholeMovie).expect("import");
     assert_eq!(shapes.len(), 1, "one ring");
     let points = &shapes[0].points;
     assert!(

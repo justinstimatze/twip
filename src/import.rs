@@ -18,10 +18,13 @@
 //! and none of the fixtures can tell the difference. Ruffle's logo animation can: without the
 //! matrices its 22 shapes all land in the top-left corner.
 //!
-//! The whole timeline is walked, not just the first frame, because an animation introduces
-//! most of its drawings after frame 1 — the same logo has four shapes on screen when it
-//! opens. Each character is taken once per depth it occupies, at the first matrix seen there,
-//! so a tween contributes one copy at its starting position rather than one per frame.
+//! The whole timeline is walked by default, not just the first frame, because an animation
+//! introduces most of its drawings after frame 1 — the same logo has four shapes on screen
+//! when it opens. Each character is taken once per depth it occupies, at the first matrix
+//! seen there, so a tween contributes one copy at its starting position rather than one per
+//! frame. `At::Frame` asks for a single moment instead, which is what a movie showing
+//! different things at different times wants: gnash's `matrix_test` puts one square through
+//! 78 transforms, and everything-at-once arrives as a starburst.
 //!
 //! **Where this is approximate, and it is worth knowing before trusting it.** An SWF shape
 //! is an edge stream with a fill on each side of every edge — `fill_style_0` to the left,
@@ -267,33 +270,56 @@ struct Library<'a> {
     root: Vec<swf::Tag<'a>>,
 }
 
-/// Every character a tag list ever places, as (id, matrix), each one once.
+/// Which moment of a movie to recover.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum At {
+    /// Everything the movie ever places, each thing once.
+    ///
+    /// What you want from an animation, which introduces most of its drawings after frame 1 —
+    /// Ruffle's logo has 22 shapes and four of them on screen when it opens. What you do not
+    /// want from a movie that shows different things at different times: gnash's `matrix_test`
+    /// puts one square through 78 transforms, and all 78 arrive at once as a starburst.
+    WholeMovie,
+    /// Only what is on stage at this frame, 1-based, as a player would show it.
+    ///
+    /// Applied to every timeline, so a sprite with fewer frames than this shows its last
+    /// state rather than disappearing.
+    Frame(u16),
+}
+
+/// Every character a tag list places, as (id, matrix).
 ///
-/// The whole timeline rather than the first frame, because the job is recovering *art* and
-/// an animation introduces most of its drawings after frame 1. Ruffle's own logo is the case
-/// that settled it: 22 shapes in the file, four of them on screen when it opens.
-///
-/// Keyed by depth and id together, so a character placed at two depths comes back twice —
-/// it is two things on the stage — while a tween re-placing one character across a hundred
-/// frames still comes back once. The matrix kept is the first seen for that pair, which for
-/// a tween is where it starts rather than where it ends.
-fn placements(tags: &[swf::Tag]) -> Vec<(u16, Affine)> {
+/// Under `WholeMovie`, keyed by depth and id together: a character placed at two depths comes
+/// back twice, because it is two things on the stage, while a tween re-placing one character
+/// across a hundred frames still comes back once. The matrix kept is then the first seen for
+/// that pair, which for a tween is where it starts rather than where it ends.
+fn placements(tags: &[swf::Tag], at: At) -> Vec<(u16, Affine)> {
     let mut seen: std::collections::BTreeMap<(u16, u16), Affine> = Default::default();
-    let mut live: std::collections::BTreeMap<u16, u16> = Default::default();
+    // depth -> (id, matrix), which under `Frame` is the display list as a player holds it.
+    let mut live: std::collections::BTreeMap<u16, (u16, Affine)> = Default::default();
+    let mut frame: u16 = 1;
+
     for tag in tags {
         match tag {
+            swf::Tag::ShowFrame => {
+                if matches!(at, At::Frame(want) if frame >= want) {
+                    break;
+                }
+                frame = frame.saturating_add(1);
+            }
             swf::Tag::PlaceObject(po) => {
                 let matrix = po.matrix.as_ref().map(Affine::from_swf);
                 match po.action {
                     swf::PlaceObjectAction::Place(id) | swf::PlaceObjectAction::Replace(id) => {
-                        live.insert(po.depth, id);
-                        seen.entry((po.depth, id))
-                            .or_insert_with(|| matrix.unwrap_or(Affine::IDENTITY));
+                        let m = matrix.unwrap_or(Affine::IDENTITY);
+                        live.insert(po.depth, (id, m));
+                        seen.entry((po.depth, id)).or_insert(m);
                     }
                     swf::PlaceObjectAction::Modify => {
                         // A Modify names no character; it edits whatever holds that depth.
-                        if let (Some(&id), Some(m)) = (live.get(&po.depth), matrix) {
-                            seen.entry((po.depth, id)).or_insert(m);
+                        if let (Some(entry), Some(m)) = (live.get_mut(&po.depth), matrix) {
+                            entry.1 = m;
+                            seen.entry((po.depth, entry.0)).or_insert(m);
                         }
                     }
                 }
@@ -304,17 +330,28 @@ fn placements(tags: &[swf::Tag]) -> Vec<(u16, Affine)> {
             _ => {}
         }
     }
-    seen.into_iter().map(|((_, id), m)| (id, m)).collect()
+    match at {
+        At::WholeMovie => seen.into_iter().map(|((_, id), m)| (id, m)).collect(),
+        // What a player would have on screen, in depth order.
+        At::Frame(_) => live.into_values().collect(),
+    }
 }
 
 /// Walk a display list, following sprites, and hand back every shape in stage coordinates.
-fn draw(library: &Library, tags: &[swf::Tag], at: Affine, depth: u32, out: &mut Vec<Vec<Contour>>) {
+fn draw(
+    library: &Library,
+    tags: &[swf::Tag],
+    when: At,
+    at: Affine,
+    depth: u32,
+    out: &mut Vec<Vec<Contour>>,
+) {
     // Sprites can reference each other; a cap is cheaper than cycle detection and no real
     // document nests anywhere near this deep.
     if depth > 8 {
         return;
     }
-    for (id, matrix) in placements(tags) {
+    for (id, matrix) in placements(tags, when) {
         let here = matrix.then(at);
         match library.characters.get(&id) {
             Some(Character::Shape(rings)) => {
@@ -340,13 +377,13 @@ fn draw(library: &Library, tags: &[swf::Tag], at: Affine, depth: u32, out: &mut 
                     out.push(placed);
                 }
             }
-            Some(Character::Sprite(inner)) => draw(library, inner, here, depth + 1, out),
+            Some(Character::Sprite(inner)) => draw(library, inner, when, here, depth + 1, out),
             None => {}
         }
     }
 }
 
-pub fn shape_groups_from_swf(swf_bytes: &[u8]) -> Result<Vec<Vec<Contour>>> {
+pub fn shape_groups_from_swf(swf_bytes: &[u8], at: At) -> Result<Vec<Vec<Contour>>> {
     let buf = swf::decompress_swf(swf_bytes).context("decompress swf")?;
 
     // Walk the tag stream and parse only the shapes, rather than asking for the whole file
@@ -437,7 +474,7 @@ pub fn shape_groups_from_swf(swf_bytes: &[u8]) -> Result<Vec<Vec<Contour>>> {
     }
 
     let mut out = Vec::new();
-    draw(&library, &library.root, Affine::IDENTITY, 0, &mut out);
+    draw(&library, &library.root, at, Affine::IDENTITY, 0, &mut out);
 
     // A file whose display list places nothing — or whose placements all failed to parse —
     // still has its drawings, and handing back an empty SVG when the shapes are right there
@@ -454,8 +491,8 @@ pub fn shape_groups_from_swf(swf_bytes: &[u8]) -> Result<Vec<Vec<Contour>>> {
 
 /// Every ring in an SWF, in the order its shapes were defined, with the grouping dropped.
 /// For counting and measuring; use `shape_groups_from_swf` to draw them.
-pub fn shapes_from_swf(swf_bytes: &[u8]) -> Result<Vec<Contour>> {
-    Ok(shape_groups_from_swf(swf_bytes)?
+pub fn shapes_from_swf(swf_bytes: &[u8], at: At) -> Result<Vec<Contour>> {
+    Ok(shape_groups_from_swf(swf_bytes, at)?
         .into_iter()
         .flatten()
         .collect())
@@ -531,8 +568,8 @@ pub fn contours_to_svg(groups: &[Vec<Contour>], width: f64, height: f64) -> Stri
 }
 
 /// `.swf` bytes in, SVG text out.
-pub fn swf_to_svg(swf_bytes: &[u8]) -> Result<String> {
+pub fn swf_to_svg(swf_bytes: &[u8], at: At) -> Result<String> {
     let (width, height) = stage_size(swf_bytes)?;
-    let groups = shape_groups_from_swf(swf_bytes)?;
+    let groups = shape_groups_from_swf(swf_bytes, at)?;
     Ok(contours_to_svg(&groups, width, height))
 }

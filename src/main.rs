@@ -3,9 +3,17 @@
 use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    // Dispatch before parsing options, so a subcommand's flags reach it. Parsing first meant
+    // this loop rejected `--frame` as unknown before `import` ever ran.
+    if args.first().is_some_and(|a| a == "import") {
+        return import(&args[1..]);
+    }
+
     let mut opts = twip::Options::default();
     let mut positional: Vec<String> = Vec::new();
-    for arg in std::env::args().skip(1) {
+    for arg in args {
         match arg.as_str() {
             "--no-upsample" => opts.upsample = false,
             // A mistyped flag has to be loud. Falling through to the positional list would
@@ -15,20 +23,15 @@ fn main() -> Result<()> {
         }
     }
 
-    let Some(first) = positional.first() else {
+    let Some(input) = positional.first() else {
         println!(
             "twip {} — usage:\n  \
-             twip [--no-upsample] <in.wick> [out.swf]   compile\n  \
-             twip import <in.swf> [out.svg]             recover the artwork",
+             twip [--no-upsample] <in.wick> [out.swf]    compile\n  \
+             twip import [--frame N] <in.swf> [out.svg]  recover the artwork",
             twip::version()
         );
         return Ok(());
     };
-
-    if first == "import" {
-        return import(&positional[1..]);
-    }
-    let input = first;
     let output = positional
         .get(1)
         .cloned()
@@ -50,30 +53,61 @@ fn main() -> Result<()> {
 /// between a useful tool and a disappointing one; leaving it to be discovered is worse than
 /// a line of output.
 fn import(args: &[String]) -> Result<()> {
-    let Some(input) = args.first() else {
-        println!("usage: twip import <in.swf> [out.svg]");
+    // `--frame N` picks one moment; without it every drawing the movie ever places comes
+    // back at once, which is what you want from an animation and not from a movie that
+    // shows different things at different times.
+    let mut at = twip::import::At::WholeMovie;
+    let mut positional: Vec<&String> = Vec::new();
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--frame" => {
+                let n = rest
+                    .next()
+                    .context("--frame needs a frame number")?
+                    .parse::<u16>()
+                    .context("--frame takes a whole frame number, 1 or greater")?;
+                if n == 0 {
+                    anyhow::bail!("frames are numbered from 1");
+                }
+                at = twip::import::At::Frame(n);
+            }
+            other if other.starts_with("--") => anyhow::bail!("unknown option {other}"),
+            _ => positional.push(arg),
+        }
+    }
+
+    let Some(input) = positional.first() else {
+        println!("usage: twip import [--frame N] <in.swf> [out.svg]");
         return Ok(());
     };
-    let output = args
+    let output = positional
         .get(1)
-        .cloned()
+        .map(|s| s.to_string())
         .unwrap_or_else(|| "out.svg".to_string());
 
     let swf_bytes = std::fs::read(input).with_context(|| format!("read {input}"))?;
-    let groups =
-        twip::import::shape_groups_from_swf(&swf_bytes).with_context(|| format!("read {input}"))?;
+    let groups = twip::import::shape_groups_from_swf(&swf_bytes, at)
+        .with_context(|| format!("read {input}"))?;
     let (width, height) = twip::import::stage_size(&swf_bytes)?;
     let svg = twip::import::contours_to_svg(&groups, width, height);
     std::fs::write(&output, &svg).with_context(|| format!("write {output}"))?;
 
     let rings: usize = groups.iter().map(Vec::len).sum();
+    let when = match at {
+        twip::import::At::WholeMovie => "every frame".to_string(),
+        twip::import::At::Frame(n) => format!("frame {n}"),
+    };
     println!(
-        "recovered {} shapes ({rings} rings) from {} -> {}",
+        "recovered {} shapes ({rings} rings) from {when} of {} -> {}",
         groups.len(),
         input,
         output
     );
     println!("artwork only — timing, tweens, layers and scripts are not recovered.");
+    if at == twip::import::At::WholeMovie {
+        println!("everything the movie ever draws, at once. --frame N for one moment instead.");
+    }
     println!("open it by dragging {output} onto the editor canvas.");
     Ok(())
 }

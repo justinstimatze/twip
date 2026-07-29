@@ -23,6 +23,7 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 cargo run --bin twip -- fixtures/test1.wick out.swf      # from a clone
 cargo run --bin twip -- --no-upsample in.wick out.swf    # one movie frame per document frame
 cargo run --bin twip -- import old.swf art.svg           # recover the artwork from an SWF
+cargo run --bin twip -- import --frame 3 old.swf art.svg # ...as it looked at one frame
 cargo install --git https://github.com/justinstimatze/twip
 ```
 
@@ -32,10 +33,15 @@ keys, easing, layers and scripts do not come back and are not guessed at — a t
 per frame by the time it reaches the file, and inferring the curve back out of those matrices
 produces a confident wrong answer rather than no answer.
 
+By default you get every drawing the movie ever places, at once, which is what an animation
+wants — Ruffle's logo introduces 18 of its 22 shapes after frame 1. `--frame N` gives you one
+moment as a player would show it, which is what a movie that changes over time wants instead.
+
 It reads real Flash, not just twip's own output: across ruffle's regression corpus of 4,898
-SWFs, 4,891 open and the seven that don't are deliberately malformed. For gradients, bitmaps,
-text and fonts — which twip has no reader for — decompile with
-[FFDec](https://github.com/jindrapetrik/jpexs-decompiler) first.
+SWFs, 4,891 open and the seven that don't are deliberately malformed. Late AS3 content often
+has nothing to recover — it draws through the graphics API at runtime, so there are no shapes
+in the file. For gradients, bitmaps, text and fonts, which twip has no reader for, decompile
+with [FFDec](https://github.com/jindrapetrik/jpexs-decompiler) first.
 
 There is no crates.io release. The compiler depends on ruffle's `swf` crate pinned to one
 revision, crates.io rejects git dependencies, and the published `swf` 0.2.2 is an
