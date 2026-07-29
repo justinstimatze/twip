@@ -70,7 +70,8 @@ Wick.Project = class extends Wick.Base {
         this._keysLastDown = [];
         this._currentKey = null;
 
-        this._tickIntervalID = null;
+        this._tickRafID = null;
+        this._tickAccumulatorMS = 0;
 
         this._hideCursor = false;
         this._muted = false;
@@ -1543,7 +1544,7 @@ Wick.Project = class extends Wick.Base {
         this._playing = true;
         this.view.paper.view.autoUpdate = false;
 
-        if (this._tickIntervalID) {
+        if (this._tickRafID) {
             this.stop();
         }
 
@@ -1553,28 +1554,70 @@ Wick.Project = class extends Wick.Base {
 
         this.selection.clear();
 
-        // Start tick loop
-        this._tickIntervalID = setInterval(() => {
-            args.onBeforeTick();
+        /*
+         * Start the tick loop: fixed-step, driven by requestAnimationFrame.
+         *
+         * This was setInterval(1000 / framerate), and a timer cannot land on a display
+         * refresh. At 24fps it asks for 41.67ms while the screen updates every 16.67ms, so
+         * each tick is shown at the next refresh after it — 50ms, 50ms, 33ms — and the preview
+         * judders against a Ruffle export of the same movie, which does align. The timer also
+         * drifts under load, since the browser clamps and coalesces it, and it keeps firing in
+         * a hidden tab, running scripts and sounds for a preview nobody is watching. rAF
+         * stops on its own when the tab is hidden and resumes where it left off.
+         *
+         * The accumulator is what keeps the *rate* honest, and it is the part worth not
+         * simplifying away. Leftover time carries into the next frame rather than being
+         * rounded off, so 24fps on a 60Hz display alternates two and three refreshes per tick
+         * and averages exactly 24 — where rounding each step to a whole refresh would pin it
+         * to 20 or 30.
+         */
+        this._tickAccumulatorMS = 0;
+        var lastTimeMS = null;
 
-            this.tools.interact.determineMouseTargets();
-            // console.time('tick');
-            var error = this.tick();
-            // console.timeEnd('tick');
+        var loop = (nowMS) => {
+            // Queue the next frame first, so stop() during a tick cancels this one.
+            this._tickRafID = window.requestAnimationFrame(loop);
 
-            // console.time('update');
-            this.view.paper.view.update();
-            // console.timeEnd('update');
+            var stepMS = 1000 / this.framerate;
+            if (lastTimeMS === null) lastTimeMS = nowMS;
 
-            if(error) {
-                this.stop();
-                return;
+            /*
+             * Cap the catch-up. A slow script, a long GC pause or a tab returning from the
+             * background hands back a delta worth many frames, and replaying every one of them
+             * makes the movie lurch — worse, it can spiral, because the extra ticks cost the
+             * time that widens the next delta. Four frames of debt rides out a hiccup and is
+             * little enough that it stays a hiccup.
+             */
+            this._tickAccumulatorMS += Math.min(nowMS - lastTimeMS, stepMS * 4);
+            lastTimeMS = nowMS;
+
+            var ticked = false;
+            while (this._tickAccumulatorMS >= stepMS && this._playing) {
+                this._tickAccumulatorMS -= stepMS;
+                ticked = true;
+
+                args.onBeforeTick();
+
+                this.tools.interact.determineMouseTargets();
+                var error = this.tick();
+
+                if(error) {
+                    this.stop();
+                    return;
+                }
+
+                args.onAfterTick();
+
+                // onAfterTick is where callers stop playback and where a script can change the
+                // framerate, so re-read the step rather than trusting the one we entered with.
+                stepMS = 1000 / this.framerate;
             }
 
-            // console.time('afterTick');
-            args.onAfterTick();
-            // console.timeEnd('afterTick');
-        }, 1000 / this.framerate);
+            // Paint once per displayed frame, however many ticks went into it.
+            if (ticked) this.view.paper.view.update();
+        };
+
+        this._tickRafID = window.requestAnimationFrame(loop);
     }
 
     /**
@@ -1633,8 +1676,9 @@ Wick.Project = class extends Wick.Base {
 
         this.stopAllSounds();
 
-        clearInterval(this._tickIntervalID);
-        this._tickIntervalID = null;
+        window.cancelAnimationFrame(this._tickRafID);
+        this._tickRafID = null;
+        this._tickAccumulatorMS = 0;
 
         // Loading the snapshot to restore project state also moves the playhead back to where it was originally.
         // We actually don't want this, preview play should actually move the playhead after it's stopped.
