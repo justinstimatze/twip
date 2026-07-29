@@ -1,6 +1,6 @@
 # twip — HANDOFF
 
-A modern Flash recreation, personal nostalgia project (Justin's, explicitly not a product).
+A modern Flash recreation. A personal nostalgia project, explicitly not a product.
 Draw vector shapes on a timeline, tween them, press export, get an honest-to-god .swf that
 Ruffle plays. Design converged 2026-07-23 across one long session; plan pressure-tested by a
 5-expert adversarial panel (all verdicts sound-with-changes, zero fatal). Raw panel output
@@ -49,7 +49,7 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
   context in Chrome; verify file-picker APIs before promising save/open there).
 - **The editor is a first-class goal, not "Phase 4 maybe never"** — it IS the nostalgic
   experience ("Flash that just works"), which is the point of the project. It is our polished
-  FORK of the live Wick editor, NOT a fresh reimplementation: Justin was a Flash beginner and
+  FORK of the live Wick editor, NOT a fresh reimplementation: the author was a Flash beginner and
   cannot QA a vibe-coded creative tool, so reusing the battle-tested UI removes that risk
   entirely (a fresh rebuild reintroduces it). Integration seam for the Export button: prefer a
   **Tauri desktop shell** loading the existing React UI and shelling out to the twip CLI —
@@ -103,7 +103,7 @@ compiler, and the file format. Everything else (CLI, editor, importer) is a thin
 - **Apache Royale** alive (AS3→ABC/SWF + JS backends) — only relevant if full AS3 scripting
   is ever wanted (doubtful; general JS→AVM1 compilation is a permanent non-goal).
 - License: GPLv3 is NOT forced if no Wick code is vendored (swf crate is MIT/Apache-2.0).
-  Justin is fine with GPLv3; it's a choice, decide at repo creation.
+  GPLv3 is acceptable here; it's a choice, decided at repo creation.
 
 ## Wick semantics the compiler must honor (panel-verified, file:line in panel-findings.json)
 
@@ -192,7 +192,7 @@ AA noise is blind to easing errors. Three layers instead:
 Items 1–8, 10, 11 below are DONE, and so is the compiler risk they were ordered by: the
 parser has now seen real multi-frame, tweened, nested, scripted, and skewed `.wick` data.
 What's left is item 9's editor backlog plus a few things the last few commits made newly
-possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
+possible. Order set 2026-07-24 (Tauri explicitly deferred).
 
 1. **DONE 2026-07-24 — `golden.yml` is GREEN** (run `30132465564`, 8m7s, all 7 fixtures
    `0 outliers, max diff 0`). Written while twip had no remote, which stopped being true at
@@ -217,7 +217,7 @@ possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
    handing react-reflex a `false` child to measure; unwrapping it while removing the
    small-screen fork removed the error. Chrome-verified 2026-07-24: cold reload gives 8 console
    messages and ZERO errors.
-   **SWF IS THE PRIMARY EXPORT** (Justin, 2026-07-24: "swf export is probably the main export
+   **SWF IS THE PRIMARY EXPORT** (decided 2026-07-24: "swf export is probably the main export
    people will want... if they're using this project. but it's hidden on a secondary tab"). It
    was first filed under Interactive alongside ZIP and HTML, which was wrong twice over: it
    buried the one export twip exists for, and three cards in a 450px modal squeezed every row
@@ -237,7 +237,7 @@ possible. Order set by Justin 2026-07-24 (Tauri explicitly deferred).
    cannot be triggered headlessly; what IS settled is that the sprite still alternates A-B-A-B
    across frames 0–3, ruling out a clip action mis-attached so it fires at load. That pressing
    stops it remains browser-only.
-NEW, FOUND 2026-07-24, UNRANKED (Justin's call where it goes) — **autosave prompts every
+NEW, FOUND 2026-07-24, UNRANKED (unplaced in the order) — **autosave prompts every
 launch and Load restores nothing.** Not from the export work; inherited. Diagnosis so far,
 from reading the code plus a localforage dump in the browser:
    * Saving WORKS and runs continuously — the probed entry was 78s old, `objectsData` present.
@@ -438,7 +438,7 @@ from reading the code plus a localforage dump in the browser:
    be a *consequence* of the redesign: after phases 0–1 remove ~18 libs, the blockers are
    react-dnd, react-ace, console-feed, react-hotkeys, react-color, react-sizeme,
    react-spinners, react-reflex.
-   **DECIDED 2026-07-24 (Justin, "let's just do the rewrite with 2026 sota"): Phase 2 is a
+   **DECIDED 2026-07-24 ("let's just do the rewrite with 2026 sota"): Phase 2 is a
    full DOM rewrite of `engine/src/gui/`.** Not on a11y grounds — the canvas already clears
    WCAG 2.5.8 hit targets (`GUIElement.js:207` cells are 38×42), already has a density model
    (`GRID_SMALL/NORMAL/LARGE_CELL_*`, switched only by `IS_MOBILE` today), already themes
@@ -452,7 +452,7 @@ from reading the code plus a localforage dump in the browser:
    changed with the decision: 1a (shell/tokens/primitives) → 2 (timeline) → 1b (remaining
    panels), so the hardest component validates the design system while there is room to
    change it.
-   **MOBILE STAYS IN SCOPE** (Justin, 2026-07-24: "can we still support mobile in other
+   **MOBILE STAYS IN SCOPE** (decided 2026-07-24: "can we still support mobile in other
    modern ways?"). What Phase 0 deletes is the parallel `Mobile*` component tree — 2,861
    lines that are a *fork of the Inspector* (`MobileInspectorRowTypes/` mirrors the desktop
    input types one for one), switched by `react-device-detect` with `renderSize` threaded as
@@ -585,7 +585,7 @@ hardcoded `frame_rate: Fixed8::from_f64(24.0)` and `wick.rs` never parsed `frame
 so is any default project (`engine/src/base/Project.js:39`), so everything exported at exactly
 double speed — every frame individually correct, the movie wrong. `motion-tween.wick` is 24
 frames: two seconds of animation delivered in one.
-Found by Justin animating in the installed desktop build and noticing the Ruffle playback ran
+Found by animating in the installed desktop build and noticing the Ruffle playback ran
 "about twice as fast" as the editor preview. Worth dwelling on why nothing else caught it. The
 structural oracle asserts tags, depths and per-frame matrices and never looked at the header.
 The golden PNGs render a *specific frame* through `--skipframes`, and the raster at frame N does
@@ -607,7 +607,7 @@ them, flipping a sign, or dropping rotation entirely left every existing asserti
 describes: a, b, c, d, tx, ty and the cxform per frame, with expected values computed from the
 fixture's two keys rather than tabulated. Mutation-checked three ways — b sign-flipped so it
 equals c, rotation dropped, scale off by 0.1% — each fails it.
-**Three mid-span goldens added too, at Justin's call** — `motion-tween-f6/f12/f18`, blessed on
+**Three mid-span goldens added too, on request** — `motion-tween-f6/f12/f18`, blessed on
 lavapipe and eyeballed: growing (scale 1.33 -> 1.72 -> 2.11), travelling lower-left to upper-right,
 fading (0.85 -> 0.67 -> 0.48), rotating 39 -> 86 -> 133 degrees. Frame 12 is the one worth keeping
 if they are ever trimmed, since 86 degrees maps a square almost back onto itself and is exactly
@@ -682,10 +682,20 @@ ALSO OPEN for a public release, in the order they'd bite:
      nothing deliberately, and `loadProjectFromURL` did not check and now does. That last one
      was the live hole: a URL serving anything unreadable produced an empty canvas
      indistinguishable from opening an empty project.
-   * `HANDOFF.md` is linked from the README and is a session transcript — 16 "Justin"
-     references and `~/Documents/wick-editor` at lines 600, 638, 654. The public-release
-     checklist wants that swept before anyone outside reads it.
-   * `README-create-react-app.md` is 2,567 lines documenting a build system this repo left.
+   * **DONE 2026-07-28 — swept.** `HANDOFF.md` is linked from the README and read as a session
+     transcript: seventeen personal-name references, quoted chat, and a `~/Documents/wick-editor`
+     path in four places left over from before the monorepo vendor. Attributions are
+     author-voice now and the paths describe the standalone worktree without naming a home
+     directory. The decisions and their dates survive — a reader needs to know a call was made
+     and when, just not who said what to whom.
+     Also gone: `editor/build-ios/`, 180K of upstream's old iOS WebView wrapper, dead here since
+     mobile would go through Tauri 2, referenced by nothing but `.gitignore`, and carrying a
+     *third party's* home path (`/Users/bogo/Desktop/WebViewExample-master`) plus a binary Xcode
+     user-state file. And `README-create-react-app.md`, 2,567 lines documenting a build system
+     this repo left at the Vite migration.
+     The nine TODO/FIXME comments in `editor/src` are upstream's own and stay. That checklist
+     item is about twip's own WIP notes in committed prose; stripping another project's code
+     annotations would be worse than keeping them.
 6. **Nested-clip frame scripts + PRESS handlers.** The deferred lifetime wall (item 10):
    compiling scripts inside a sprite body would force the whole `defs` pipeline off
    `'static`. Collected and warned today. No fixture demands it yet.
@@ -733,7 +743,7 @@ from the menu, draw a rectangle, press **SWF** — Ruffle plays it. That is `toW
 `invoke('compile_swf')` → `twip::compile_wick` → Ruffle, running out of `/usr/bin/twip` with no
 dev server and no bridge on :8752. The desktop half of "nobody but this box can export a SWF"
 is closed; the browser half is untouched.
-Justin drove it, because **synthetic input cannot reach the window on this box.** XTEST clicks
+A human drove it, because **synthetic input cannot reach the window on this box.** XTEST clicks
 at coordinates verified against a screenshot produced no UI change at all — the tool button
 never highlighted — even with the app launched under `GDK_BACKEND=x11` as an Xwayland client.
 Same family as the `resize_window` no-op already in `desktop-gui-gotchas`: under Wayland the
@@ -860,15 +870,15 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
    Tauri shell w/ in-process export, monorepo vendor, and the Vite+pnpm migration are all DONE.
    Open: export/preview split (Next-up #2), UI redesign (#4), rebrand (#5) — details in the
    MODERNIZATION BACKLOG at the end of this item.
-   - **Fork worktree**: `~/Documents/wick-editor`, copied from the read-only reference, `upstream`
+   - **Fork worktree**: a standalone wick-editor worktree, copied from the read-only reference, `upstream`
      = StickmanRed. Re-verified StickmanRed is the live fork (54 ahead / 0 behind Wicklets, 17★,
      pushed 2026-07-09; every other fork ★0 and staler); worktree at its current HEAD `b05793b`.
-   - **REPO-STRUCTURE DECISION CHANGED** (Justin, 2026-07-23): go MONOREPO — editor vendored under
+   - **REPO-STRUCTURE DECISION CHANGED** (2026-07-23): go MONOREPO — editor vendored under
      `twip/editor/`, Tauri wrapping both — superseding the old "two separate repos" stance. Reasons:
      (a) GitHub won't let a fork of a public repo be private, so "our private fork" is really a
      private mirror either way; twip is already private, so the editor riding in it is private for
      free. (b) Tauri wants the Rust + web frontend in one tree. COST accepted: the combined repo
-     becomes GPLv3-covered for distribution (Wick code is GPLv3); Justin is fine with GPLv3. The
+     becomes GPLv3-covered for distribution (Wick code is GPLv3), which is acceptable. The
      compiler crate can still be extracted MIT later if ever wanted. Worktree NOT yet relocated —
      vendoring method (plain copy vs git-subtree for upstream pulls) is a packaging-time call.
    - **Node-14 pinned + builds** — SUPERSEDED 2026-07-24 by the Vite+pnpm migration (`a0ed7f0`,
@@ -898,7 +908,7 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
      Ruffle plays, compile running IN-PROCESS (bridge stopped during the test, so it's unambiguous).
      * `src-tauri/` (Tauri 2, cli 2.11.4). `compile_swf` command wraps `twip::compile_wick` and
        returns the `.swf` as a raw byte `tauri::ipc::Response` (reaches JS as an ArrayBuffer).
-       `twip = { path = "../../twip" }` (correct while editor is at `~/Documents/wick-editor`; changes
+       `twip = { path = "../../twip" }` (correct while the editor lived in its own worktree; changes
        when vendored). `frontendDist` → `../build`; `withGlobalTauri: true` so `window.__TAURI__.core.invoke`
        exists without bundling `@tauri-apps/api` into the Node-14 webpack build. `capabilities/default.json`
        grants `core:default` (custom commands need no permission in Tauri 2). Icons generated by hand
@@ -914,7 +924,7 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
        Ruffle's wasm loaded fine over the `tauri://` asset protocol — no MIME workaround needed.
    - **MONOREPO VENDOR DONE (2026-07-23)**: editor snapshot-copied to `twip/editor/` (rsync, no `.git`
      history, no node_modules/build/target). Method = plain snapshot, NOT git-subtree (subtree imports
-     wick-editor's whole multi-year history into twip and bloats it). The standalone `~/Documents/wick-editor`
+     wick-editor's whole multi-year history into twip and bloats it). The standalone a standalone wick-editor worktree
      worktree stays as the upstream-tracking base (`upstream` = StickmanRed). Facts baked in:
      * `twip = { path = "../.." }` in `editor/src-tauri/Cargo.toml` (the twip crate root IS the repo root).
      * `twip/Cargo.toml` now has `[workspace] exclude = ["editor"]` so `cargo build` at the root stays the
@@ -928,7 +938,7 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
        (Removed the standalone `wick-editor/src-tauri/target`, 5.8G, when the disk hit 100%.)
    - **Committed** (in the standalone editor repo, no remote): SWF export path `a2752aa`, Tauri shell `18e5682`.
      Vendored copy committed into twip.
-   - **THE FROZEN CRA IS PROVISIONAL** (Justin, 2026-07-23: "never planned to freeze the editor, it's just
+   - **THE FROZEN CRA IS PROVISIONAL** (2026-07-23: "never planned to freeze the editor, it's just
      a quick test; we'll have to fork and modernize it"). The Node-14 / react-scripts-2 / webpack-4 / node-sass
      stack is scaffolding to get a working test loop, not the destination. MODERNIZATION BACKLOG:
      * **DONE 2026-07-24 (`a0ed7f0`) — migrated off CRA → Vite 6 + pnpm 10, Node 20+.** React stayed
@@ -1168,7 +1178,7 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
    upstream deployed editor — where fixtures are authored — already uses plain lerp, so "sane"
    matches the fixture source; the JS dump is only needed if we ever want bug-for-bug.
 2. **License: compiler crate `twip` = MIT** (ships zero Wick code); **editor fork = GPLv3**
-   (contains Wick code — fine, Justin's ok with it). Separate repos, so no conflict.
+   (contains Wick code, which is acceptable). Separate repos, so no conflict.
 3. **Ruffle rev pinned = `645449a5c602044471f045546a0a31af0df9cd69`** (ruffle-rs/ruffle master,
    2026-07-23). swf crate = git dep on this rev; build the exporter + preview player from the
    SAME rev; bump together.
@@ -1187,7 +1197,7 @@ ordered 2026-07-23 by the risk that the parser had only touched real data for 1a
 
 ## Tooling & strictness (lifted from sibling repos, 2026-07-23)
 
-Rust conventions taken from `camber` and `rtux` (Justin's other Rust projects); the TS baseline
+Rust conventions taken from `camber` and `rtux` (the author's other Rust projects); the TS baseline
 from `lucida`. The goal was ecosystem parity, not inventing new tooling — so no cargo-deny /
 cargo-machete / gitleaks (no Rust sibling uses them).
 
@@ -1218,7 +1228,7 @@ cargo-machete / gitleaks (no Rust sibling uses them).
 ## Still open (deferred, non-blocking)
 
 - **Leave-page confirm dialog is off in dev and under automation** (`Editor.jsx`, `949364d`).
-  Justin's call while the redesign is being tested; revisit when the testing loop settles.
+  A judgement call while the redesign is being tested; revisit when the testing loop settles.
   It is a flag, not a deletion — `localStorage['twip:leave-warning'] = 'on'` arms it in dev
   without a rebuild, `'off'` silences it in a production build. Decide then whether the
   default should stay "real users only" or go back to always-on.
