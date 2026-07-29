@@ -1142,6 +1142,23 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
         }
     }
 
+    // SWF stores the frame rate as a signed 8.8 fixed-point, so the format tops out at
+    // Fixed8::MAX and `from_f64` saturates above it rather than failing. Saturating quietly is
+    // the worst of the options here: the editor clamps a project's framerate at 9999
+    // (engine/src/base/Project.js), so 200 is reachable from the settings dialog, and it would
+    // preview at one speed and export at another with nothing said. Refusing is louder and
+    // lands everywhere — compile_wick's error reaches the CLI, the desktop shell and the
+    // browser's toast alike, while a wrong speed reaches none of them.
+    let ceiling = Fixed8::MAX.to_f64();
+    if doc.framerate > ceiling {
+        anyhow::bail!(
+            "framerate {} is above the {} fps an SWF header can hold (it is a signed 8.8 \
+             fixed-point); lower the project's framerate in its settings",
+            doc.framerate,
+            ceiling
+        );
+    }
+
     let header = Header {
         compression: Compression::None,
         version: 8,
@@ -1580,6 +1597,52 @@ mod tests {
                 parsed.header.frame_rate().to_f32()
             );
         }
+    }
+
+    /// A framerate the header cannot hold has to fail loudly, because the alternative is
+    /// silent: `Fixed8::from_f64` saturates, and the editor lets a project go to 9999. The
+    /// pair matters more than either half — 127 must still compile, or "refuse above the
+    /// ceiling" would be indistinguishable from "refuse anything unusual".
+    #[test]
+    fn framerate_above_the_header_ceiling_is_refused() {
+        use wick::{Contour, Document, Frame, Layer};
+
+        let doc = |rate: f64| Document {
+            width: 100.0,
+            height: 100.0,
+            framerate: rate,
+            layers: vec![Layer {
+                frames: vec![Frame {
+                    start: 1,
+                    end: 1,
+                    contours: vec![Contour {
+                        points: vec![(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)],
+                        holes: vec![],
+                        closed: true,
+                        fill: Some(swf::Color::from_rgb(0xff0000, 255)),
+                        stroke: None,
+                    }],
+                    clips: vec![],
+                    scripts: Vec::new(),
+                    tweens: vec![],
+                }],
+            }],
+        };
+
+        let ceiling = Fixed8::MAX.to_f64();
+        let err = compile_document(&doc(200.0)).expect_err("200 fps cannot be stored");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("200"), "the message must name the rate: {msg}");
+        assert!(
+            msg.contains(&format!("{ceiling}")),
+            "the message must name the ceiling: {msg}"
+        );
+
+        // Right at the ceiling still compiles, and round-trips to itself.
+        let swf = compile_document(&doc(ceiling)).expect("the ceiling itself is representable");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        assert_eq!(parsed.header.frame_rate().to_f64(), ceiling);
     }
 
     #[test]

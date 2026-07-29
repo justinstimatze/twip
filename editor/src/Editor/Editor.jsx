@@ -228,7 +228,7 @@ class Editor extends EditorCore {
   UNSAFE_componentWillMount = () => {
     document.title =  `twip ${this.editorVersion}`;
     // Initialize "live" engine state
-    this.project = new window.Wick.Project();
+    this.project = this.newProject();
     this.attachErrorHandlers();
     this.paper = window.paper;
 

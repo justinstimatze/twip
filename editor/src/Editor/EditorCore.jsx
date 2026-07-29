@@ -1517,6 +1517,27 @@ class EditorCore extends Component {
    * history, selection, and all other ability to retrieve your project.
    * @param {Wick.Project} project - the project to load.
    */
+  /**
+   * A blank project, at the framerate twip wants people to start from.
+   *
+   * Not done by changing the engine's constructor default (12, engine/src/base/Project.js:39),
+   * because that value does double duty: it is also what a .wick with no framerate field falls
+   * back to, so moving it would re-time documents that already exist rather than only changing
+   * what new ones start at. The compiler keeps the same 12 fallback for the same reason
+   * (src/wick.rs). This is the authoring default, which is a different question.
+   *
+   * 24 rather than 12 because 12 is what makes hand-drawn work read as a flipbook — it was
+   * Flash's own default, and it is why so much Flash looks choppy while the memorable stuff
+   * does not. 24 doubles the drawing cost of frame-by-frame instead of quintupling it, and sits
+   * far below the ~128 fps an SWF header can hold. Anyone can change it per project under the
+   * settings gear.
+   */
+  newProject = () => {
+    let project = new window.Wick.Project();
+    project.framerate = 24;
+    return project;
+  }
+
   setupNewProject = (project) => {
     /*
      * Called with nothing on purpose by "New Project", which is what the blank fallback
@@ -1527,7 +1548,7 @@ class EditorCore extends Component {
      * sat commented out for years, which suppressed the symptom in both directions.
      */
     this.resetEditorForLoad();
-    this.project = project || new window.Wick.Project();
+    this.project = project || this.newProject();
     this.project.selection.clear();
 
     // Attach error handling messages

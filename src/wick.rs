@@ -161,8 +161,14 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .get("height")
         .and_then(Value::as_f64)
         .unwrap_or(400.0);
-    // 12 is the engine's own default (engine/src/base/Project.js:39), so a project.json that
-    // omits the key means 12, not whatever the SWF spec would prefer.
+    // 12 is the engine's own constructor default (engine/src/base/Project.js:39), so a
+    // project.json that omits the key means 12, not whatever the SWF spec would prefer.
+    //
+    // This stays 12 even though the editor now starts NEW projects at 24
+    // (EditorCore.newProject). The two are different questions: 24 is what twip wants people
+    // to author at, while this is how to read a document that never said. Moving this to match
+    // would re-time every existing .wick that omits the field rather than only changing what
+    // new ones begin as.
     let framerate = project
         .get("framerate")
         .and_then(Value::as_f64)
