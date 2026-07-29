@@ -20,7 +20,7 @@ name: golden
 #
 # Verified 2026-07-24 before the first container run: `docker run ubuntu:26.04` installs
 # mesa-vulkan-drivers 26.0.3-1ubuntu1, the same version the dev box has, and re-rendering
-# all 7 fixtures there reproduced tests/goldens/ with ZERO differing channels — not
+# the fixtures there reproduced tests/goldens/ with ZERO differing channels — not
 # within tolerance, bit-identical. That is why the goldens are committed once and serve
 # both places.
 #

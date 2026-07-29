@@ -47,6 +47,8 @@ defaults:
 jobs:
   editor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -176,3 +178,44 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
+
+      # Last step on purpose: every check above has to pass before the bundle is even a
+      # candidate to ship, and a failing one stops the job here. `path` is workspace-relative
+      # — the `working-directory` default above applies to `run`, not to action inputs.
+      - name: Package the site
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: editor/build
+
+  # twip.ink. Deploys the same bundle the checks just ran against rather than rebuilding it,
+  # which is both ten minutes cheaper and the only version of this that cannot ship something
+  # unchecked. `public/CNAME` rides along in the artifact; the apex needs it on every deploy.
+  #
+  # The visibility check is release.yml's, applied to a second artifact. A minified bundle
+  # served to a browser is conveyed object code as much as the .deb is, and the editor is
+  # GPLv3 — so while the repository is private there is no corresponding source to point
+  # anyone at, and the site must not go up. Skips rather than fails: this runs on every push
+  # to main, and a red build on every commit would be noise around a fact that only changes
+  # once. It starts deploying by itself the first push after the repository goes public.
+  deploy:
+    needs: editor
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && github.repository_visibility != 'private'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # Not cancel-in-progress: a half-finished deploy is a broken site, so let one land before
+    # the next starts. This is a different group from the build's — cancelling a superseded
+    # build is fine, cancelling a live deploy is not.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -6,6 +6,10 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 
 ![The twip editor: a toolbox down the left, a stage holding three drawn shapes, an inspector and asset library on the right, and a frame timeline across the bottom.](docs/hero.png)
 
+It runs in a browser tab at **[twip.ink](https://twip.ink)** — the editor, the compiler built
+to wasm, and Ruffle, all in the page. No account, no upload, no server side: the `.wick` and
+the `.swf` are made in the tab and stay on your machine.
+
 ## How it works
 
 - **Two files, and only one of them is yours to keep.** You save a `.wick` document — a zip of paper.js paths and a timeline, the format the editor already spoke. Export compiles it to real SWF. The document is the source; the `.swf` is the artifact, and twip will build it again from the same input any time.
@@ -65,7 +69,7 @@ Export works three ways, and the editor picks whichever exists: an in-process Ru
 | [`editor/BUILD.md`](editor/BUILD.md) | building and running the editor, and the three export routes |
 | [`docs/wick-format.md`](docs/wick-format.md) | what a `.wick` file contains and what it takes to compile one — there is no spec, so this is it |
 | [`docs/testing.md`](docs/testing.md) | the five test layers, and why there is no editor-versus-player pixel diff |
-| [`docs/ui-research.md`](docs/ui-research.md), [`docs/ui-redesign-plan.md`](docs/ui-redesign-plan.md) | the survey of post-Flash tools the interface was designed against, and the plan it turned into |
+| [`docs/ui-research.md`](docs/ui-research.md) | the survey of post-Flash tools the interface was designed against |
 
 ## Rough edges
 

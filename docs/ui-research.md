@@ -221,4 +221,5 @@ Jitter: [interface tour](https://help.jitter.video/en/articles/12597029-a-quick-
 Figma: [smart animate](https://help.figma.com/hc/en-us/articles/360039818874-Smart-animate-layers-between-frames) ·
 [canvas a11y](https://www.figma.com/blog/building-accessibility-into-a-canvas-based-product/) ·
 [keyboard a11y](https://www.figma.com/blog/introducing-keyboard-accessibility-features/).
-Wick Editor: local clone `reference/wick-editor/src/Editor/`.
+Wick Editor: [`src/Editor/`](https://github.com/Wicklets/wick-editor/tree/master/src/Editor)
+upstream, before this fork touched it.

@@ -2399,9 +2399,9 @@ mod tests {
     #[allow(clippy::approx_constant)]
     #[test]
     fn easing_matches_tween_js() {
-        // Oracle values sampled from the Wick engine's own tween.js (`TWEEN.Easing`)
-        // via `reference/wick-editor/engine/lib/Tween.js` at t = 0, 0.25, 0.5, 0.75, 1.
-        // Regenerate with scratchpad/oracle.js if the vendored tween.js ever changes.
+        // Oracle values sampled from the Wick engine's own tween.js (`TWEEN.Easing`) at
+        // t = 0, 0.25, 0.5, 0.75, 1. That file is vendored at `editor/engine/lib/Tween.js`;
+        // regenerate by evaluating it and reading `TWEEN.Easing` at those same five t.
         let ts = [0.0f64, 0.25, 0.5, 0.75, 1.0];
         #[rustfmt::skip]
         let cases: &[(&str, [f64; 5])] = &[
