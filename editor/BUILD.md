@@ -187,6 +187,12 @@ each read the autosave list separately and each took the newest entry, and start
 autosave the blank canvas in between. Also checks that an untouched project no longer takes a
 slot at all, which is where the blanks came from.
 
+`tabs-check` narrows `window.allowedExportTypes` and clicks every tab in the export modal,
+because `TabbedInterface` pairs a tab to its body by position and the caller filters the names
+while gating the bodies inline. At full length the two lists align by luck, so the default
+install never showed the fault — only a platform passing a subset did, and what it showed was
+a panel rendering nothing while the tab bar looked correct.
+
 `framerate-check` is also as close to a desktop check as this box allows. The shell serves this same `build/`
 and shares every line of the path except the final Tauri invoke, and nothing here can inject
 input into a window — there is no `xdotool`, and XTEST does not reach another client's surface

@@ -98,6 +98,7 @@
     "wasm-check": "node dev/wasm-check.mjs",
     "framerate-check": "node dev/framerate-check.mjs",
     "autosave-check": "node dev/autosave-check.mjs",
+    "tabs-check": "node dev/tabs-check.mjs",
     "build-engine": "pnpm --dir engine build && cp -a engine/dist/. public/corelibs/wick-engine/",
     "test-engine": "pnpm --dir engine test",
     "smoke": "node dev/smoke.mjs",
