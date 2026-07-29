@@ -670,9 +670,20 @@ ALSO OPEN for a public release, in the order they'd bite:
      that; the desktop binary, which links `twip::compile_wick` into the same executable that
      serves the GPLv3 frontend, does not. The README now says so and points the reader at the
      licenses rather than at a paragraph written by someone who is not a lawyer.
-   * `Cargo.toml:13` takes `swf` as a git dep, and crates.io rejects git deps — so
-     `cargo install twip` is blocked by construction, `publish = false` notwithstanding.
-   * No tags, no releases, no packaging workflow. All three workflows are checks.
+   * **DECIDED 2026-07-28 — no crates.io release, and the reason is in `Cargo.toml`.** The
+     `swf` git dep is load-bearing: published `swf` 0.2.2 is an 18-month-stale package wearing
+     the same version number as the ruffle revision this needs. Publishing would mean vendoring
+     ruffle's swf crate (MIT/Apache-2.0, compatible) and owning the rebase forever. Not worth it
+     for a personal project — `cargo install --git` works and the README says so. This is a
+     decision not to publish rather than an unfixed blocker.
+   * **DONE 2026-07-28 — `.github/workflows/release.yml`** builds the deb on a runner and
+     uploads it as an artifact. `workflow_dispatch` only, and that is a licensing decision
+     rather than caution: the package carries a GPLv3 §6 offer naming this repository, so a
+     published artifact while the repo is private hands out GPLv3 code with no route to its
+     source. The publish step refuses outright if `github.repository_visibility` is `private`.
+     It also asserts the deb contains `/usr/share/doc/twip/copyright` and the GPL text, so the
+     `bundle.linux.deb.files` wiring cannot silently regress. Untested on a runner — it has
+     never been dispatched.
    * **DONE 2026-07-28 — a failed load no longer looks like a blank project.** The
      `// if (!project) return;` that sat commented out above `setupNewProject`'s
      `project || new Wick.Project()` is replaced by a comment explaining what the fallback is

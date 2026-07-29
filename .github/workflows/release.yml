@@ -1,0 +1,103 @@
+name: release
+
+# Manual only, and that is a licensing decision rather than caution about the build.
+#
+# The .deb bundles the GPLv3 editor, and its /usr/share/doc/twip/copyright carries a GPLv3
+# section 6 written offer naming this repository as the corresponding source. While the
+# repository is private that offer cannot be honoured, so a published artifact would put GPLv3
+# code in someone's hands with no route to the source it promises. Publish the repository
+# first; then this can move to `on: push: tags:` if a tag-triggered release is wanted.
+#
+# See LICENSING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create and release (e.g. v0.1.0). Leave blank to build without releasing.'
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # webkit2gtk and libsoup are wry's runtime; rfd reaches the file dialog through the
+      # xdg portal, which needs no build-time package. libwebkit2gtk-4.1 is the version
+      # tauri 2 links against — 4.0 is the one for tauri 1 and will not satisfy it.
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libsoup-3.0-dev build-essential
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: editor/src-tauri
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: editor/.nvmrc
+          cache: pnpm
+          cache-dependency-path: editor/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: editor
+        run: pnpm install --frozen-lockfile
+
+      # The shell embeds ../build at compile time, so the frontend has to exist first.
+      # Ruffle is gitignored and fetched, and without it the SWF preview 404s at runtime.
+      - name: Stage Ruffle and build the frontend
+        working-directory: editor
+        run: |
+          dev/fetch-ruffle.sh
+          pnpm build
+
+      - name: Build the .deb
+        working-directory: editor/src-tauri
+        # The repo's .cargo/config.toml sets -fuse-ld=mold for any x86_64 linux target, which
+        # matches a runner that has no mold. An env RUSTFLAGS overrides both config blocks
+        # wholesale — the same fix golden.yml carries, for the same reason.
+        env:
+          RUSTFLAGS: '-D warnings'
+        run: cargo tauri build --bundles deb
+
+      - name: Check the package carries its licences
+        working-directory: editor/src-tauri
+        run: |
+          DEB=$(ls target/release/bundle/deb/*.deb)
+          echo "built $DEB"
+          dpkg-deb -f "$DEB"
+          for f in usr/share/doc/twip/copyright usr/share/doc/twip/LICENSE.md; do
+            dpkg-deb -c "$DEB" | grep -q "$f" || { echo "MISSING $f — see LICENSING.md"; exit 1; }
+          done
+          echo "copyright and GPL text present"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twip-deb
+          path: editor/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+      - name: Publish a release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.repository_visibility }}" = "private" ]; then
+            echo "Refusing to publish: the repository is private, and the package ships a"
+            echo "GPLv3 section 6 offer naming it as the corresponding source. See LICENSING.md."
+            exit 1
+          fi
+          gh release create "${{ inputs.tag }}" \
+            editor/src-tauri/target/release/bundle/deb/*.deb \
+            --title "${{ inputs.tag }}" \
+            --notes "Desktop build. Corresponding source is this repository; see LICENSING.md."

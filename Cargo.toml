@@ -5,6 +5,13 @@ edition = "2024"
 license = "MIT"
 description = "A modern Flash: draw vector shapes on a timeline and export .swf that Ruffle plays. Compiler for .wick -> .swf."
 repository = "https://github.com/justinstimatze/twip"
+# Not publishable, and not by oversight. The `swf` dependency below is a git dep on one
+# ruffle revision, and crates.io rejects git dependencies outright — so `cargo publish` cannot
+# succeed while that dependency stands. The published `swf` 0.2.2 is an 18-month-stale decoy
+# wearing the same version number as ruffle master's, dozens of commits behind, and building
+# against it would silently lose the fixes the compiler relies on. Publishing would mean
+# vendoring ruffle's swf crate into this tree (MIT/Apache-2.0, so compatible) and owning the
+# rebase forever. `cargo install --git` works today and is the supported route.
 publish = false
 
 [dependencies]

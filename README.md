@@ -19,8 +19,14 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 | `scripts/`, `oracle/` | the Ruffle golden-PNG oracle, off by default behind a cargo feature |
 
 ```
-cargo run --bin twip -- fixtures/test1.wick out.swf
+cargo run --bin twip -- fixtures/test1.wick out.swf      # from a clone
+cargo install --git https://github.com/justinstimatze/twip
 ```
+
+There is no crates.io release. The compiler depends on ruffle's `swf` crate pinned to one
+revision, crates.io rejects git dependencies, and the published `swf` 0.2.2 is an
+18-month-stale package wearing the same version number as the one this needs. `--git` is the
+route.
 
 ## Status
 
