@@ -59,7 +59,12 @@ jobs:
           RUSTFLAGS: ''
         run: cargo install tauri-cli --locked --version 2.11.4
 
+      # There is no package.json at the repo root, so without this the action finds no
+      # `packageManager` field and refuses to pick a version. Same argument as editor.yml.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: editor/package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: editor/.nvmrc
