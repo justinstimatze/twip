@@ -35,6 +35,17 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "copyright": "Copyright (C) 2020 WICKLETS LLC; compiler (c) 2026 Justin Stimatze",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "COPYRIGHT",
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/doc/twip/copyright": "COPYRIGHT",
+          "/usr/share/doc/twip/LICENSE.md": "../LICENSE.md"
+        }
+      }
+    }
   }
 }

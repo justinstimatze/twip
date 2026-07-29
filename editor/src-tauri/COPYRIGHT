@@ -1,0 +1,40 @@
+twip — a modern Flash. Draw vector shapes on a timeline and export .swf that Ruffle plays.
+https://github.com/justinstimatze/twip
+
+This package is a combined work under two licenses and is distributed under the GNU General
+Public License version 3.
+
+  The editor
+    Copyright (C) 2020 WICKLETS LLC
+    A fork of the Wick Editor, https://github.com/Wicklets/wick-editor
+    Licensed under the GNU General Public License v3 or later.
+    Contributors are listed in CREDITS.md in the source repository.
+
+  The twip compiler
+    Copyright (c) 2026 Justin Stimatze
+    Licensed under the MIT License. It contains no Wick Editor code and is usable under
+    MIT on its own; it is linked into this binary, which is why the whole is GPLv3.
+
+  Bundled third-party libraries
+    Listed in the application under Editor Information -> Open Source Notices, generated
+    from the dependency lockfile.
+
+This program is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either version
+3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
+
+The full text of the GNU General Public License v3 is installed alongside this file as
+/usr/share/doc/twip/LICENSE.md, and on Debian systems is also at
+/usr/share/common-licenses/GPL-3. Otherwise see <https://www.gnu.org/licenses/>.
+
+WRITTEN OFFER / CORRESPONDING SOURCE (GPLv3 section 6)
+The complete corresponding source for this package, including the editor, the compiler and
+the build scripts that produced it, is at:
+
+    https://github.com/justinstimatze/twip
+
+Anyone receiving this binary is entitled to that source under the GPL.

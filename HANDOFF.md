@@ -645,6 +645,21 @@ stands alone. Tauri is the shorter one; that path was verified working in a nati
 2026-07-23 and only the config drifted.
 
 ALSO OPEN for a public release, in the order they'd bite:
+   * **DONE 2026-07-28 — licensing stated, and the package now carries it.** `LICENSE` stays
+     pristine MIT so GitHub keeps detecting it; `LICENSING.md` at the root says what covers
+     what, and the README links it. The substantive half was the package: the deb shipped
+     **no licence text at all**, which for a bundle containing GPLv3 code is the part with
+     teeth. `bundle.licenseFile` does not reach a deb (it serves the macOS and Windows
+     installers), and `bundle.deb` is rejected at that level — the field is
+     `bundle.linux.deb.files`, a map of destination-in-package to source-on-disk. The package
+     now installs `/usr/share/doc/twip/copyright` (attribution, the two licences, and a
+     GPLv3 §6 written offer pointing at the repo) and `/usr/share/doc/twip/LICENSE.md` (the
+     full GPL text, so "you should have received a copy" is literally true).
+     **ORDERING CONSTRAINT, and it binds:** §6 requires object code to be accompanied by
+     corresponding source or an offer for it. The offer names this repository, which is
+     private. So **the deb must not be given to anyone until the repo is public** — publish
+     first, then release. Handing it over before that puts GPLv3 code in someone's hands with
+     no route to the source.
    * The root `LICENSE` is MIT and the tree now contains GPLv3 code at `editor/`. The README
      states both licenses (2026-07-28), which makes the repo honest; whether `LICENSE` itself
      should change is undecided. The first wording said "distributing the two together means the
