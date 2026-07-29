@@ -14,7 +14,7 @@
         <!-- The Wick Engine build is injected here during the engine build step (see gulpfile.js) -->
         <script>
             /*Wick Engine https://github.com/Wicklets/wick-engine*/
-var WICK_ENGINE_BUILD_VERSION = "2026.7.28.18.21.55";
+var WICK_ENGINE_BUILD_VERSION = "2026.7.28.19.10.18";
 /*!
  * Paper.js v0.12.4 - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
@@ -51229,6 +51229,8 @@ Wick.Project = class extends Wick.Base {
      */
     this._tickAccumulatorMS = 0;
     var lastTimeMS = null;
+    var refreshMS = 1000 / 60; // seeded, then smoothed from the deltas actually seen
+
     var loop = nowMS => {
       // Queue the next frame first, so stop() during a tick cancels this one.
       this._tickRafID = window.requestAnimationFrame(loop);
@@ -51242,10 +51244,38 @@ Wick.Project = class extends Wick.Base {
        * time that widens the next delta. Four frames of debt rides out a hiccup and is
        * little enough that it stays a hiccup.
        */
-      this._tickAccumulatorMS += Math.min(nowMS - lastTimeMS, stepMS * 4);
+      var deltaMS = nowMS - lastTimeMS;
+      this._tickAccumulatorMS += Math.min(deltaMS, stepMS * 4);
       lastTimeMS = nowMS;
+
+      // Learn the display's refresh interval from the deltas rather than assuming 60Hz.
+      // Ignore the outliers a hidden tab or a stalled frame produces.
+      if (deltaMS > 1 && deltaMS < 50) refreshMS += (deltaMS - refreshMS) * 0.1;
+
+      /*
+       * Tick when the accumulator gets within half a refresh of the step, not only once
+       * it is past it.
+       *
+       * A frame can only ever be shown for a whole number of refreshes, so the step is
+       * almost never a multiple of one: at the 59.94Hz this was measured on, 12fps wants
+       * 4.995 refreshes and 30fps wants 1.998. Waiting for the accumulator to clear the
+       * step outright means ordinary jitter drops it on the wrong side of the boundary
+       * and the frame is held one refresh too long, then one too short — 30fps measured
+       * as ticks between 16.5ms and 50.1ms when every one of them should have been 33.3.
+       * An unsteady hold on a moving shape is what reads as a doubled edge.
+       *
+       * The tolerance is capped at a quarter of the step so it can never dominate a fast
+       * framerate and let several ticks through per refresh. Borrowing drives the
+       * accumulator negative, which is the point — the debt comes off the next frame, so
+       * the average rate is unchanged and only the cadence steadies.
+       *
+       * This cannot rescue every rate. 24fps needs 2.4975 refreshes and will always
+       * alternate two and three; the tolerance makes it alternate *predictably* rather
+       * than at random, which is as good as 24-on-60 gets.
+       */
+      var toleranceMS = Math.min(refreshMS / 2, stepMS / 4);
       var ticked = false;
-      while (this._tickAccumulatorMS >= stepMS && this._playing) {
+      while (this._tickAccumulatorMS >= stepMS - toleranceMS && this._playing) {
         this._tickAccumulatorMS -= stepMS;
         ticked = true;
         args.onBeforeTick();
