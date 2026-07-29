@@ -24,22 +24,36 @@ import DragDropTypes from 'Editor/DragDropTypes.js';
 
 import './_timeline.scss';
 
-import iconLock from 'resources/timeline-icons/locked.png';
-import iconUnlock from 'resources/timeline-icons/unlocked.png';
-import iconHidden from 'resources/timeline-icons/hidden.png';
-import iconShown from 'resources/timeline-icons/shown.png';
-import iconCopyForward from 'resources/timeline-icons/copyForward.png';
-import iconSplit from 'resources/timeline-icons/cut_frame.png';
-import iconLayerTween from 'resources/timeline-icons/layerTween.png';
-import iconDelete from 'resources/timeline-icons/delete.png';
-import iconSmallFrames from 'resources/timeline-icons/framesSmall.png';
-import iconNormalFrames from 'resources/timeline-icons/framesNormal.png';
-import iconLargeFrames from 'resources/timeline-icons/framesLarge.png';
-import iconFrameSizeMenu from 'resources/timeline-icons/frameSizeMenu.png';
-import iconGapFillMenuBlankFrames from 'resources/timeline-icons/gapFillMenuBlankFrames.png';
-import iconGapFillMenuExtendFrames from 'resources/timeline-icons/gapFillMenuExtendFrames.png';
-import iconGapFillBlankFrames from 'resources/timeline-icons/gapFillBlankFrames.png';
-import iconGapFillExtendFrames from 'resources/timeline-icons/gapFillExtendFrames.png';
+import { iconDataUri } from '@/ui/icon';
+
+/*
+ * The canvas timeline's sixteen buttons. They were the last PNGs in the tree, and they were
+ * PNGs because `gui/ActionButton.js` blits them with `ctx.drawImage`, which needs an <img>
+ * rather than a DOM node. An SVG data URI is an <img>, so they can come from the same set as
+ * everything else — and take the same colour, from the same token, instead of the one they
+ * were exported with in 2019.
+ *
+ * `getPropertyValue` at call time rather than module scope: this runs from componentDidUpdate,
+ * by which point the stylesheet has certainly landed.
+ */
+const TIMELINE_ICONS = {
+  hide_layer: 'shown',
+  show_layer: 'hidden',
+  lock_layer: 'unlock',
+  unlock_layer: 'lock',
+  copy_frame_forward: 'copyForward',
+  cut_frame: 'split',
+  delete_frame: 'delete',
+  add_tween: 'tween',
+  small_frames: 'frames-small',
+  normal_frames: 'frames-normal',
+  large_frames: 'frames-large',
+  frame_size_menu: 'frame-size-menu',
+  gap_fill_menu_blank_frames: 'gap-fill-blank',
+  gap_fill_menu_extend_frames: 'gap-fill-extend',
+  gap_fill_empty_frames: 'gap-fill-blank',
+  gap_fill_extend_frames: 'gap-fill-extend',
+};
 
 class Timeline extends Component {
   constructor (props) {
@@ -60,22 +74,11 @@ class Timeline extends Component {
     if(project !== this.currentAttachedProject) {
       // Import icons into the timeline GUI.
       let Icons = window.Wick.GUIElement.Icons;
-      Icons.loadIcon('hide_layer', iconShown);
-      Icons.loadIcon('show_layer', iconHidden);
-      Icons.loadIcon('lock_layer', iconUnlock);
-      Icons.loadIcon('unlock_layer', iconLock);
-      Icons.loadIcon('copy_frame_forward', iconCopyForward);
-      Icons.loadIcon('cut_frame', iconSplit);
-      Icons.loadIcon('delete_frame', iconDelete);
-      Icons.loadIcon('add_tween', iconLayerTween);
-      Icons.loadIcon('small_frames', iconSmallFrames);
-      Icons.loadIcon('normal_frames', iconNormalFrames);
-      Icons.loadIcon('large_frames', iconLargeFrames);
-      Icons.loadIcon('frame_size_menu', iconFrameSizeMenu);
-      Icons.loadIcon('gap_fill_menu_blank_frames', iconGapFillMenuBlankFrames);
-      Icons.loadIcon('gap_fill_menu_extend_frames', iconGapFillMenuExtendFrames);
-      Icons.loadIcon('gap_fill_empty_frames', iconGapFillBlankFrames);
-      Icons.loadIcon('gap_fill_extend_frames', iconGapFillExtendFrames);
+      const color = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-content-subtle').trim() || '#9c9792';
+      for (const [slot, name] of Object.entries(TIMELINE_ICONS)) {
+        Icons.loadIcon(slot, iconDataUri(name, { color }));
+      }
 
       if(this.currentAttachedProject) {
         this.currentAttachedProject.guiElement.onProjectModified = () => {};

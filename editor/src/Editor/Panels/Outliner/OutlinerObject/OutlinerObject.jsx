@@ -8,13 +8,7 @@ import DragDropTypes from 'Editor/DragDropTypes.js';
 import OutlinerDropdown from './OutlinerDropdown/OutlinerDropdown'
 import OutlinerWidget from '../OutlinerWidget/OutlinerWidget'
 
-import layerIcon from 'resources/object-icons/layer.svg';
-import frameIcon from 'resources/object-icons/frame.svg';
-import pathIcon from 'resources/object-icons/path.svg';
-import buttonIcon from 'resources/object-icons/button.svg';
-import clipIcon from 'resources/object-icons/clip.svg';
-import textIcon from 'resources/object-icons/text.svg';
-import imageIcon from 'resources/object-icons/image.svg';
+import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
 
 import layerImage from 'resources/object-icons/layer.png';
 import frameImage from 'resources/object-icons/frame.png';
@@ -24,13 +18,17 @@ import clipImage from 'resources/object-icons/clip.png';
 import textImage from 'resources/object-icons/text.png';
 import imageImage from 'resources/object-icons/image.png';
 
-import scriptIcon from 'resources/outliner-icons/script.svg';
-import soundIcon from 'resources/outliner-icons/sound.svg';
+// Row icons come from the shared set now; these seven names map onto it.
+let icons = {layer: 'layer-object', frame: 'frame', path: 'path-object', button: 'button-object',
+  clip: 'clip-object', text: 'text-object', image: 'image-object'};
 
-let icons = {layer: layerIcon, frame: frameIcon, path: pathIcon, button: buttonIcon, 
-  clip: clipIcon, text: textIcon, image: imageIcon};
-
-let images = {layer: layerImage, frame: frameImage, path: pathImage, button: buttonImage, 
+/*
+ * The drag previews stay raster. The HTML5 drag-and-drop API takes a real loaded <img> for
+ * setDragImage and will not accept an inline SVG node, and react-dnd's fallback — a snapshot
+ * of the drag source — is a blank rectangle here, because the source is the invisible
+ * selector button overlaying the row. Seven PNGs whose only job is to be a bitmap.
+ */
+let images = {layer: layerImage, frame: frameImage, path: pathImage, button: buttonImage,
   clip: clipImage, text: textImage, image: imageImage};
 import classNames from 'classnames';
 export const OutlinerObject = ({clearSelection, selectObjects, 
@@ -201,11 +199,7 @@ export const OutlinerObject = ({clearSelection, selectObjects,
     collapsed={collapsedUUIDs[data.uuid]}
     toggle={(e) => toggle(e, [], 'dropdown')}/>
 
-    <img
-    className="row-icon"
-    src={typeIcon}
-    alt={data.classname}
-    />
+    <ToolIcon className="row-icon" name={typeIcon} />
 
     {object_name && 
     <span className="outliner-name">
@@ -222,14 +216,13 @@ export const OutlinerObject = ({clearSelection, selectObjects,
       {(data.classname === 'Button' || data.classname === 'Clip') &&
         <OutlinerWidget key={Math.random()} onClick={() => {console.log("yangus"); setFocusObject(data)}} icon="edit-timeline" tooltip="Edit Timeline"/>
       }
-      {data.sound && 
-        <img className="outliner-sound-icon" src={soundIcon} alt="sound"/>}
-      {data.hasContentfulScripts && 
-        <input 
-        type="image" 
-        className="outliner-script-icon" 
-        src={scriptIcon} 
-        alt="script"
+      {data.sound &&
+        <ToolIcon className="outliner-sound-icon" name="sound" />}
+      {data.hasContentfulScripts &&
+        <button
+        type="button"
+        className="outliner-script-icon"
+        aria-label="edit script"
         onClick={() => {
           clearSelection();
           selectObjects([data]);
@@ -240,7 +233,7 @@ export const OutlinerObject = ({clearSelection, selectObjects,
             setActiveLayerIndex(data.parentLayer.index);
           }
           editScript(data.scripts[0].name);
-        }}/>}
+        }}><ToolIcon name="script" /></button>}
     </span>
     </div>
     

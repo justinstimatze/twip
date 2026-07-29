@@ -16,6 +16,22 @@ $outliner-dropdown-size: 15px;
   width: $outliner-dropdown-size;
   height: $outliner-dropdown-size;
   transition: background-color 150ms ease-in-out;
+  // A <button> now rather than an <input type="image">, so it needs the layout the browser
+  // gave the image for free.
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: $interface-roundness-primary;
+  color: $editor-secondary-text;
+  cursor: pointer;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
 }
 .outliner-dropdown-icon:hover {
   background-color: rgba(255,255,255,0.2);

@@ -106,6 +106,8 @@
     "smoke": "node dev/smoke.mjs",
     "interact": "node dev/interact.mjs",
     "visual": "node dev/visual.mjs",
+    "icons": "node dev/icon-sheet.mjs",
+    "icons:check": "node dev/icon-sheet.mjs --check",
     "notices": "node dev/gen-notices.mjs",
     "notices:check": "node dev/gen-notices.mjs --check",
     "fixture": "node dev/make-fixture.mjs"

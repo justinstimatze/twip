@@ -97,6 +97,11 @@ jobs:
       - name: Notices match the lockfile
         run: pnpm notices:check
 
+      # Every icon name the source asks for has a drawing. A missing one renders nothing —
+      # no error, no placeholder — so nothing else in this workflow would catch it.
+      - name: Every icon name resolves
+        run: pnpm icons:check
+
       # index.html loads /corelibs/ruffle/ruffle.js from a script tag and the directory is
       # gitignored, so without this the console check has a 404 in it. Before the build, not
       # after: vite copies public/ into build/ as it runs, and `preview` serves build/.

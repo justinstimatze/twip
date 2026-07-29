@@ -19,14 +19,26 @@
 
 @import 'Editor/_wickbrand.scss';
 
+/*
+ * Sized square rather than by intrinsic ratio. The old <img> icons were 236 files at whatever
+ * dimensions each was exported at, with their own transparent margins baked in, so `height:
+ * 100%` produced a row of icons that were nominally the same size and optically were not.
+ * These are all one 24x24 grid, so one rule holds for every one of them — and 80% of the
+ * button leaves the margin the old files were faking.
+ */
 .img-tool-icon {
-  height: 100%;
-  display: flex;
-  align-items: center;
+  /*
+   * `inline-block` because Tailwind's Preflight sets `svg { display: block }`, and every one
+   * of these replaced an <img>, which is inline. Left as block, an icon in a text row — the
+   * outliner's, the asset list's — takes a line to itself and pushes the label under it.
+   */
+  display: inline-block;
+  vertical-align: middle;
+  height: 80%;
+  width: auto;
+  aspect-ratio: 1;
+  flex: none;
   -webkit-user-drag: none;
-  -khtml-user-drag: none;
-  -moz-user-drag: none;
-  -o-user-drag: none;
   user-drag: none;
   pointer-events: none;
 }

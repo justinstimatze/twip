@@ -22,8 +22,7 @@ import React, { Component } from 'react';
 import './_editorsettings.scss';
 import WickInput from 'Editor/Util/WickInput/WickInput';
 
-import iconBackwards from 'resources/timeline-icons/backwards.svg';
-import iconForwards from 'resources/timeline-icons/forwards.svg';
+import { Icon } from '@/ui/icon';
 
 class EditorSettings extends Component {
   constructor () {
@@ -101,7 +100,7 @@ class EditorSettings extends Component {
               Outline Colors:
               <div className="editor-settings-color-containers-row">
                 <div className="editor-settings-color-container">
-                  <img className="forward-backward-icon" alt="B:" src={iconBackwards}/>
+                  <Icon className="forward-backward-icon" name="onion-backward" title="Backward onion skin" />
 
                   <WickInput
                   type="color"
@@ -117,7 +116,7 @@ class EditorSettings extends Component {
                 </div>
 
                 <div className="editor-settings-color-container">
-                  <img className="forward-backward-icon" alt="F:" src={iconForwards}/>
+                  <Icon className="forward-backward-icon" name="onion-forward" title="Forward onion skin" />
 
                   <WickInput
                   type="color"

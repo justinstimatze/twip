@@ -57,16 +57,24 @@ $outliner-break-size: $editor-outline-padding;
   flex-direction: column;
 }
 
+// These carried only a height when they were <img>, and got their width from the file's own
+// aspect ratio. An inline <svg> has no intrinsic size to fall back on, so both dimensions
+// have to be stated.
 .outliner-script-icon {
-  vertical-align: top;
-  margin-top: calc(#{$outliner-icon-spacing}/2);
+  vertical-align: middle;
+  width: $outliner-name-size;
   height: $outliner-name-size;
+  padding: 0;
+  border: none;
+  background: none;
+  color: $wick-yellow;
+  cursor: pointer;
 }
 
 .outliner-sound-icon {
-  vertical-align: top;
-  margin-top: 0;
-  height: 20px;
+  vertical-align: middle;
+  width: 16px;
+  height: 16px;
   margin-right: $outliner-icon-spacing;
 }
 
@@ -123,9 +131,12 @@ $outliner-break-size: $editor-outline-padding;
 .row-icon {
   position: relative;
   z-index: -1;
+  flex: none;
   width: $outliner-icon-width;
+  height: $outliner-icon-width;
   margin-left: $outliner-icon-spacing;
-  margin-bottom: 3px;
+  vertical-align: middle;
+  color: $editor-secondary-text;
 }
 
 @keyframes expand {

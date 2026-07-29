@@ -1,20 +1,20 @@
-'Upload' by Fahmi from the Noun Project, Edited by Luca Damasco | in tool-icons/upload.svg
-'Image' by Ben Iconator from the Noun Project, Edited by Luca Damasco | in tool-icons/image.svg
-'Layers' by K Ξ L L Ξ R from the Noun Project, Edited by Luca Damasco | in tool-icons/group.svg
-'Trash' by Trishul from the Noun Project, Edited by Luca Damasco | in tool-icons/delete.svg
-'duplicate' by Adrien Coquet from the Noun Project, Edited by Luca Damasco | in tool-icons/duplicate.svg
-'action' by Ganesh Ramakrishna  from the Noun Project, Edited by Luca Damasco | in tool-icons/actions.svg
-'Mirror' Vertically by Ben Davis from the Noun Project, Edited by Luca Damasco | in tool-icons/flipHorizontal.svg and tool-icons/flipVertical.svg
-'Bring to Front' by Ben Davis from the Noun Project, Edited by Luca Damasco | in tool-icons/ ... sendToBack.svg, sendBackwards.svg, bringToFront.svg, bringForwards.svg
-'timeline' by IconMark from the Noun Project, Edited by Luca Damasco | in tool-icons/ ... timeline.svg, symbol.svg
-'Leave' by Morten Halvorsen from the Noun Project, Edited by Luca Damasco | in tool-icons/ ... leaveUp.svg,
-'break' by Adrien Coquet from the Noun Project, Edited by Luca Damasco | in tool-icons/breakApart.svg,
-'Close' by Icon Depot from the Noun Project, Edited by Luca Damasco | in tool-icons/close.svg,
-'Undo' by Timothy Miller from the Noun Project, Edited by Luca Damasco | in tool-icons/ ... undo.svg, redo.svg
-'Raindrop Close Up' by Freepik from Flaticon, Edited by Zach Rispoli | in tool-icons/ brushpressure.png
-'Button' by Google from Flaticon, Edited by Zach Rispoli | in tool-icons/ brushpressure.png
-'Circle' by Ivan Kostriukov from the Noun Project | in tool-icons/property-icons/gapFillAmount.png
-'Upload' by Kiranshastry from Flaticon | in asset-library-icons/upload.svg
-'Settings Gears' by Freepik | in asset-library-icons/clip.svg
-'Music Player' by Smashicons | in public/builtinlibrary/icons/music.png
-'Sound Waves' by Darius Dan | in public/builtinlibrary/icons/sound.png
+Third-party artwork still shipped in this tree.
+
+The list this file used to hold covered Wick's icon set — Noun Project and Flaticon drawings
+edited by Luca Damasco and Zach Rispoli, across tool-icons/, toolbar-icons/,
+asset-library-icons/, interface/, inspector-icons/ and timeline-icons/. Those files were
+replaced by twip's own set in src/ui/icon.jsx and deleted, so their attributions no longer
+describe anything here. They remain in the git history, and in Wick Editor upstream.
+
+What is left:
+
+  logo-icons/mascot.svg, logo-icons/mascot-mark.svg
+      Wick Editor's mascot, by Wicklets LLC. Not twip's mark — see src/ui/mark.jsx for that.
+      It appears only in the credits panel (Modals/EditorInfo), which is where it belongs.
+
+  object-icons/*.png
+      Wick Editor's object glyphs, kept solely as drag-preview bitmaps: the HTML5 drag API
+      wants a loaded <img> and will not take an inline SVG. See OutlinerObject.jsx.
+
+  public/builtinlibrary/icons/music.png    'Music Player' by Smashicons
+  public/builtinlibrary/icons/sound.png    'Sound Waves' by Darius Dan

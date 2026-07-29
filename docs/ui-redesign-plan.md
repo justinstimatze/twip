@@ -614,14 +614,66 @@ suite 540 passed / 7 known. `visual.mjs` is not useful for a change of this size
 its 20 scenes fails by design when the palette moves — so it was re-blessed after rather than
 used as a gate.
 
+## The icon set, redrawn (2026-07-28)
+
+236 files in ten directories, drawn over several years at several sizes in several weights, 46
+of them PNG, every one rendered through `<img src>`. An `<img>` cannot inherit `currentColor`,
+which is the whole story: it is why the set carried `add` **and** `add-dark`, `upload` and
+`upload-dark`, `timeline` and `timeline-dark`, `settings` and `settings-white`, `delete` and
+`delete-black`, `create`/`create-white`, `load`/`load-white`, `breakApart`/`breakApart-dark`
+and three variants of one mark. Fourteen files existing because of a rendering choice.
+
+`src/ui/icon.jsx` replaces them with one family: 135 drawings on a 24×24 grid at 1.5px, round
+caps and joins, 2px margin, painted in `currentColor`, plus 31 aliases where the light/dark
+pairs collapsed. Hover, active and disabled states now come from the token layer instead of
+from a second file. Nothing is imported from an icon library — about forty of these are
+domain-specific (four brush modes, four cursor transform modes, two gradient modes, gap fill,
+frame density, layer tween, onion skin) and no general set has them, and drawing the general
+ones to match beats bolting on a family with a different weight and grid.
+
+`ToolIcon` keeps its `name` API, so none of the hundred-odd call sites changed. It was 187
+lines of imports above a 149-entry table; the table is the icon set now. One name stays on the
+old path deliberately: `mascot` is *Wick's* mascot and appears only in the credits, where
+redrawing someone else's character in twip's line weight would be a strange thing to do to an
+attribution.
+
+**The canvas timeline's sixteen buttons came too**, which was the part that looked impossible.
+`gui/ActionButton.js` and `LayerButton.js` blit their icons with `ctx.drawImage`, which needs a
+loaded `<img>` rather than a DOM node — so those were the last PNGs in the tree. An SVG data
+URI *is* an `<img>`, so `iconDataUri()` serializes the same drawing with a resolved colour from
+the same token, and the timeline's buttons are now part of the same family instead of sixteen
+2019 rasters. `renderToStaticMarkup` is the only new dependency and the bundle went **down**,
+2,100 kB → 2,066 kB, because 236 assets stopped being bundled. `build/assets` went from ~200
+files to 12.
+
+**Two silent bugs fell out.** The old ToolIcon answered an unknown name with a question-mark
+glyph, and `asset`, `svg` and `animated` were never in the table — so every asset that was not
+an image, sound, clip or button had been showing "unknown" in the library, and one editor
+action had been showing it in a menu. `pnpm icons:check` is the guard: it scans the source for
+icon names and fails on any that does not resolve. Mutation-checked by renaming `gear` to
+`cogwheel`, which it reports and exits 1 on. Its blind spot is named in the code — two call
+sites compute a name rather than writing one, and those are listed by hand.
+
+**And `pnpm icons` renders the whole set to a contact sheet**, twice, at 34px and at 16px with
+every third one on the accent. 135 drawings went in from a text editor; shipping them on the
+strength of "the build passed" would mean shipping whatever a mistyped arc flag produces, on
+controls nobody clicks often enough to notice. Looking at all of them at once is what caught
+that brush and pencil were the same thin diagonal at 20px, that `symbol` and `codeObject` were
+both a rounded square with a circle in it, that `spectrum` and the gradient tool were both a
+striped square, and that `size` and `scale` were both a pair of diagonal corner arrows.
+
+Deleting the old assets turned up one more thing worth doing properly:
+`src/resources/icon_attribution.txt` credited Noun Project and Flaticon artists for files that
+no longer exist, and named none of what remains. It says what is actually still here now.
+
 ### Still on the list
 
-The 46 icon assets that are PNG rather than SVG, including 33 in `mobile-inspector-icons/` and
-`mobile-container-icons/` that the Phase 0 prune orphaned and nothing imports. The toolbar's
-icon set is inconsistent in weight and metaphor and wants redrawing as one family at one stroke
-width. `TabbedInterface` underlines every tab, active or not, so the inactive ones read as
-links. And the Inspector's row geometry is still the inherited 30% label / 70% field, which is
-generous at 250px and wrong at 400.
+`TabbedInterface` underlines every tab, active or not, so the inactive ones read as links. The
+Inspector's row geometry is still the inherited 30% label / 70% field, which is generous at
+250px and wrong at 400. And seven PNGs survive in `object-icons/` as drag previews, because the
+HTML5 drag API takes a loaded `<img>` and will not accept an inline SVG — the same constraint
+the timeline had, but without a data-URI escape, since react-dnd's fallback here is a snapshot
+of an invisible overlay button.
 
 ## Phase 1 — the chrome, on Tailwind + shadcn
 
