@@ -625,26 +625,32 @@ fn ease(easing: &str, k: f64) -> f64 {
     }
 }
 
-/// Interpolate a tween track to the transform it holds at `frame_no`. Clamps to the
-/// first/last key outside the tween's span; within a segment, eases `t` then lerps,
-/// adding the segment's `full_rotations` whole turns to the rotation.
-fn interp_tween(keys: &[TweenKey], frame_no: u16) -> Transform {
+/// Interpolate a tween track to the transform it holds at document playhead `pos`.
+/// Clamps to the first/last key outside the tween's span; within a segment, eases `t`
+/// then lerps, adding the segment's `full_rotations` whole turns to the rotation.
+///
+/// `pos` is fractional rather than a frame index because the exported movie samples this
+/// curve more finely than the document draws it (see `upsample_factor`). A tween is a
+/// continuous function of the playhead; the document's framerate is only the rate the
+/// author chose to *draw* at, and there is no reason the export has to ask at the same
+/// points. Whole positions still land exactly where the integer version did.
+fn interp_tween(keys: &[TweenKey], pos: f64) -> Transform {
     let first = &keys[0];
     let last = &keys[keys.len() - 1];
-    if frame_no <= first.playhead_abs {
+    if pos <= f64::from(first.playhead_abs) {
         return first.transform;
     }
-    if frame_no >= last.playhead_abs {
+    if pos >= f64::from(last.playhead_abs) {
         return last.transform;
     }
     let i = keys
         .iter()
-        .rposition(|k| k.playhead_abs <= frame_no)
+        .rposition(|k| f64::from(k.playhead_abs) <= pos)
         .unwrap_or(0);
     let a = &keys[i];
     let b = &keys[i + 1];
     let span = f64::from(b.playhead_abs - a.playhead_abs);
-    let raw = f64::from(frame_no - a.playhead_abs) / span;
+    let raw = (pos - f64::from(a.playhead_abs)) / span;
     let t = ease(&a.easing, raw);
     let mut end = b.transform;
     end.rotation_deg += 360.0 * f64::from(a.full_rotations);
@@ -652,12 +658,12 @@ fn interp_tween(keys: &[TweenKey], frame_no: u16) -> Transform {
 }
 
 impl Item {
-    /// The placement this slot wants on `frame_no`.
-    fn resolve(&self, frame_no: u16) -> Placement {
+    /// The placement this slot wants at document playhead `pos`.
+    fn resolve(&self, pos: f64) -> Placement {
         match self {
             Item::Fixed(p) => p.clone(),
             Item::Tween { id, keys } => {
-                let t = interp_tween(keys, frame_no);
+                let t = interp_tween(keys, pos);
                 Placement {
                     id: *id,
                     matrix: t.matrix(),
@@ -857,6 +863,7 @@ fn compile_timeline(
     defs: &mut Vec<Tag<'static>>,
     frame_actions: &mut BTreeMap<u16, Vec<FrameCmd>>,
     clip_handlers: &mut BTreeMap<u16, Vec<FrameCmd>>,
+    upsample: u16,
 ) -> Vec<Tag<'static>> {
     let num_layers = layers.len();
 
@@ -902,12 +909,16 @@ fn compile_timeline(
                 // tag pipeline to hold borrowed tags — deferred. Collect + warn.
                 let mut nested_actions: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
                 let mut nested_handlers: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+                // The same factor as the root: a sprite's timeline advances one frame per
+                // movie frame, so a nested clip left at 1x would run at a fraction of the
+                // speed its document says once the root is upsampled.
                 let body = compile_timeline(
                     &clip.layers,
                     next_id,
                     defs,
                     &mut nested_actions,
                     &mut nested_handlers,
+                    upsample,
                 );
                 if !nested_actions.is_empty() || !nested_handlers.is_empty() {
                     eprintln!(
@@ -975,51 +986,90 @@ fn compile_timeline(
     let depth_base = |li: usize| -> u16 { (num_layers - li) as u16 * DEPTH_BAND };
 
     // Walk the playhead, emitting place/remove deltas against the display list.
+    //
+    // Each document frame becomes `upsample` movie frames. Which *drawing* is on screen is
+    // still chosen by the document frame — two hand-drawn cels have nothing to interpolate
+    // between them, so a cel simply holds for the whole group. What does move within the
+    // group is a tween, which gets asked for its transform at fractional playhead positions.
+    // That is the whole trick: authoring cadence and playback smoothness stop being the same
+    // number, so 12fps can mean "each drawing lasts a twelfth of a second" without also
+    // meaning "motion updates twelve times a second".
     let mut control: Vec<Tag<'static>> = Vec::new();
     let mut current: BTreeMap<u16, Placement> = BTreeMap::new(); // depth -> placement
+    let step = 1.0 / f64::from(upsample);
     for frame_no in 1..=total {
-        let mut desired: BTreeMap<u16, Placement> = BTreeMap::new();
-        for (li, layer) in layers.iter().enumerate() {
-            if let Some(fi) = layer
-                .frames
-                .iter()
-                .position(|fr| fr.start <= frame_no && frame_no <= fr.end)
-            {
-                let base = depth_base(li);
-                for (ci, item) in slots[li][fi].iter().enumerate() {
-                    desired.insert(base + ci as u16 + 1, item.resolve(frame_no));
-                }
-            }
-        }
-        // Remove characters whose depth is now empty or holds a different id.
-        for (&depth, cur) in &current {
-            if desired.get(&depth).map(|d| d.id) != Some(cur.id) {
-                control.push(Tag::RemoveObject(swf::RemoveObject {
-                    depth,
-                    character_id: None,
-                }));
-            }
-        }
-        // Place new characters, and Modify held ones whose transform changed this frame
-        // (a tween in motion). Removes above already cleared depths that changed id.
-        for (&depth, placement) in &desired {
-            match current.get(&depth) {
-                Some(cur) if cur.id == placement.id => {
-                    if cur != placement {
-                        control.push(place_placement(PlaceObjectAction::Modify, placement, depth));
+        for sub in 0..upsample {
+            let pos = f64::from(frame_no) + f64::from(sub) * step;
+            let mut desired: BTreeMap<u16, Placement> = BTreeMap::new();
+            for (li, layer) in layers.iter().enumerate() {
+                if let Some(fi) = layer
+                    .frames
+                    .iter()
+                    .position(|fr| fr.start <= frame_no && frame_no <= fr.end)
+                {
+                    let base = depth_base(li);
+                    for (ci, item) in slots[li][fi].iter().enumerate() {
+                        desired.insert(base + ci as u16 + 1, item.resolve(pos));
                     }
                 }
-                _ => control.push(place_placement(
-                    PlaceObjectAction::Place(placement.id),
-                    placement,
-                    depth,
-                )),
             }
+            // Remove characters whose depth is now empty or holds a different id.
+            for (&depth, cur) in &current {
+                if desired.get(&depth).map(|d| d.id) != Some(cur.id) {
+                    control.push(Tag::RemoveObject(swf::RemoveObject {
+                        depth,
+                        character_id: None,
+                    }));
+                }
+            }
+            // Place new characters, and Modify held ones whose transform changed this frame
+            // (a tween in motion). Removes above already cleared depths that changed id.
+            for (&depth, placement) in &desired {
+                match current.get(&depth) {
+                    Some(cur) if cur.id == placement.id => {
+                        if cur != placement {
+                            control.push(place_placement(
+                                PlaceObjectAction::Modify,
+                                placement,
+                                depth,
+                            ));
+                        }
+                    }
+                    _ => control.push(place_placement(
+                        PlaceObjectAction::Place(placement.id),
+                        placement,
+                        depth,
+                    )),
+                }
+            }
+            control.push(Tag::ShowFrame);
+            current = desired;
         }
-        control.push(Tag::ShowFrame);
-        current = desired;
     }
     control
+}
+
+/// How many movie frames to emit per document frame, so the export lands as close to
+/// `TARGET_PLAYBACK_FPS` as a whole multiple allows.
+///
+/// Whole multiples only, and that is a real limit rather than an implementation shortcut: a
+/// hand-drawn cel has to hold for a whole number of movie frames or some cels last longer
+/// than others. It means the rates that divide 60 — 12, 15, 20, 30, 60 — land exactly on it,
+/// while 24 goes to 48 and keeps its judder on a 60Hz display. 24 remains the rate to avoid.
+///
+/// Never exceeds the target: `floor`, not `round`, so 45fps stays 45 rather than climbing to
+/// 90 and asking a 60Hz display for frames it cannot show.
+fn upsample_factor(framerate: f64) -> u16 {
+    const TARGET_PLAYBACK_FPS: f64 = 60.0;
+    if !framerate.is_finite() || framerate <= 0.0 {
+        return 1;
+    }
+    let k = (TARGET_PLAYBACK_FPS / framerate).floor();
+    if !k.is_finite() || k < 1.0 {
+        return 1;
+    }
+    // Cap so framerate * k can never overflow the header's Fixed8 ceiling.
+    k.min(u16::MAX as f64) as u16
 }
 
 /// Rebuild a sprite's initial `PlaceObject` with a `PRESS` clip action carrying
@@ -1073,23 +1123,85 @@ fn place_with_clip_actions<'a>(po: PlaceObject<'static>, action_data: &'a [u8]) 
     }))
 }
 
+/// Compiler settings that belong to the person exporting rather than to the document.
+///
+/// Start from `Default` and override what you mean to change, so a knob added later arrives
+/// already set to the behaviour the caller had before it existed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// Resample each document frame into several movie frames (see `upsample_factor`).
+    ///
+    /// On by default because it is what makes a 12fps document play smoothly. Turn it off to
+    /// get one movie frame per document frame at exactly the document's rate — which is what
+    /// you want when the frame numbers have to line up with something outside twip, or when a
+    /// deliberately coarse look is the point.
+    pub upsample: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self { upsample: true }
+    }
+}
+
 /// Compile a parsed document into an SWF timeline (frame-by-frame, with nested clips).
 ///
 /// Recognized frame scripts become `DoAction` tags spliced before their keyframe's
 /// `ShowFrame`; recognized clip click scripts become `PRESS` clip actions on the
 /// sprite's initial `PlaceObject`.
 pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
+    compile_document_with(doc, &Options::default())
+}
+
+/// `compile_document` with the export settings spelled out.
+pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec<u8>> {
     let mut next_id: u16 = 1;
     let mut defs: Vec<Tag> = Vec::new();
     let mut frame_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
     let mut clip_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+    let upsample = if opts.upsample {
+        upsample_factor(doc.framerate)
+    } else {
+        1
+    };
     let control = compile_timeline(
         &doc.layers,
         &mut next_id,
         &mut defs,
         &mut frame_cmds,
         &mut clip_cmds,
+        upsample,
     );
+
+    // Frame numbers are document frames everywhere above and movie frames from here down, so
+    // this is the one place the two coordinate systems meet.
+    //
+    // Both the keys and the goto TARGETS have to move. A key says which movie frame gets the
+    // DoAction: document frame d is the first of its group, so (d-1)*k+1. A `GotoFrame`
+    // payload is already 0-based (see `parse_goto`), which makes its remap the tidier f*k —
+    // and forgetting it would be quiet rather than loud, sending `gotoAndPlay(10)` to a frame
+    // a fifth of the way into the movie with everything else still looking right.
+    if upsample > 1 {
+        let k = u32::from(upsample);
+        let shift = |f: u16| -> u16 { (u32::from(f) * k).min(u32::from(u16::MAX)) as u16 };
+        let retarget = |cmds: Vec<FrameCmd>| -> Vec<FrameCmd> {
+            cmds.into_iter()
+                .map(|c| match c {
+                    FrameCmd::GotoFrame(f) => FrameCmd::GotoFrame(shift(f)),
+                    FrameCmd::GotoAndPlay(f) => FrameCmd::GotoAndPlay(shift(f)),
+                    other => other,
+                })
+                .collect()
+        };
+        frame_cmds = frame_cmds
+            .into_iter()
+            .map(|(d, cmds)| (shift(d.saturating_sub(1)) + 1, retarget(cmds)))
+            .collect();
+        clip_cmds = clip_cmds
+            .into_iter()
+            .map(|(id, cmds)| (id, retarget(cmds)))
+            .collect();
+    }
 
     let total: u16 = control
         .iter()
@@ -1168,7 +1280,9 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
             y_min: Twips::ZERO,
             y_max: Twips::from_pixels(doc.height),
         },
-        frame_rate: Fixed8::from_f64(doc.framerate),
+        // The document's rate times the factor, so a 12fps document plays as a 60fps movie
+        // whose every fifth frame is the one the author drew.
+        frame_rate: Fixed8::from_f64(doc.framerate * f64::from(upsample)),
         num_frames: total.max(1),
     };
 
@@ -1179,12 +1293,51 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
 
 /// Compile the bytes of a `.wick` file into an SWF.
 pub fn compile_wick(wick_bytes: &[u8]) -> Result<Vec<u8>> {
-    compile_document(&wick::parse_wick(wick_bytes)?)
+    compile_wick_with(wick_bytes, &Options::default())
+}
+
+/// `compile_wick` with the export settings spelled out.
+pub fn compile_wick_with(wick_bytes: &[u8], opts: &Options) -> Result<Vec<u8>> {
+    compile_document_with(&wick::parse_wick(wick_bytes)?, opts)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Movie frames a document of `doc_frames` frames at `rate` compiles to.
+    ///
+    /// Every assertion about the emitted stream has to say which of the two coordinate
+    /// systems it means, since the compiler upsamples each document frame to
+    /// `upsample_factor(rate)` movie frames. Written as a product so the document-level
+    /// number — the one that matches what the fixture actually contains — stays readable.
+    fn movie(doc_frames: usize, rate: f64) -> usize {
+        doc_frames * upsample_factor(rate) as usize
+    }
+
+    /// Every committed fixture was authored at 12fps, which upsamples ×5 to 60.
+    const FIXTURE_FPS: f64 = 12.0;
+
+    /// The header rate a document at `rate` compiles to.
+    fn movie_fps(rate: f64) -> f32 {
+        (rate * f64::from(upsample_factor(rate))) as f32
+    }
+
+    /// Placements a tween spanning `doc_frames` document frames produces at `rate`.
+    ///
+    /// Deliberately not `movie()`. The span's last key sits on its last *document* frame, so
+    /// the movie frames after it resample the same clamped transform, and the compiler emits
+    /// no `PlaceObject` for a placement equal to the one already on screen. What's left is
+    /// one sample per step across the gaps, plus the one that starts them.
+    fn tween_samples(doc_frames: usize, rate: f64) -> usize {
+        (doc_frames - 1) * upsample_factor(rate) as usize + 1
+    }
+
+    /// Compile with upsampling off, for tests whose subject is something else and whose
+    /// assertions read better in document frames.
+    fn compile_flat(doc: &wick::Document) -> Result<Vec<u8>> {
+        compile_document_with(doc, &Options { upsample: false })
+    }
 
     /// Structural oracle: emit, parse back with the same crate, assert the tag shape.
     #[test]
@@ -1247,11 +1400,15 @@ mod tests {
 
         assert_eq!(shapes, 2, "black ellipse + green rectangle");
         assert_eq!(places, 2, "each shape placed once");
-        assert_eq!(show_frames, 1, "single static frame");
+        assert_eq!(
+            show_frames,
+            movie(1, FIXTURE_FPS),
+            "single static frame, upsampled"
+        );
         assert_eq!(
             parsed.header.frame_rate().to_f32(),
-            12.0,
-            "the fixture's own rate, not a hardcoded default"
+            movie_fps(FIXTURE_FPS),
+            "the fixture's own rate times the factor, not a hardcoded default"
         );
 
         // Both engine-authored paths carry strokeColor:[0,0,0] + strokeCap:"round"
@@ -1336,9 +1493,11 @@ mod tests {
         );
         assert_eq!(
             count(&|t| matches!(t, Tag::ShowFrame)),
-            12,
-            "playhead spans frames 1..=12"
+            movie(12, FIXTURE_FPS),
+            "playhead spans frames 1..=12, upsampled"
         );
+        // Still three, not thirty-six: a cel holds across its group of movie frames, and the
+        // compiler only places when the drawing on screen actually changes.
         assert_eq!(
             count(&|t| matches!(t, Tag::PlaceObject(_))),
             3,
@@ -1435,7 +1594,11 @@ mod tests {
             })
             .collect();
         assert_eq!(sprites.len(), 1, "the nested clip -> one DefineSprite");
-        assert_eq!(sprites[0].num_frames, 2, "clip's own 2-keyframe timeline");
+        assert_eq!(
+            sprites[0].num_frames as usize,
+            movie(2, FIXTURE_FPS),
+            "clip's own 2-keyframe timeline, upsampled with the root"
+        );
 
         // Both nested shapes hoist to the root as DefineShape.
         assert_eq!(
@@ -1449,7 +1612,11 @@ mod tests {
         );
 
         // The root is a single frame that places the sprite once, at the clip's (200, 150).
-        assert_eq!(parsed.header.num_frames(), 1, "root is one frame");
+        assert_eq!(
+            parsed.header.num_frames() as usize,
+            movie(1, FIXTURE_FPS),
+            "root is one document frame, upsampled"
+        );
         let root_places: Vec<&PlaceObject> = parsed
             .tags
             .iter()
@@ -1546,7 +1713,11 @@ mod tests {
             .iter()
             .filter(|t| matches!(t, Tag::ShowFrame))
             .count();
-        assert_eq!(show_frames, 5, "frames 1..=5 across two keyframes");
+        assert_eq!(
+            show_frames,
+            movie(5, 30.0),
+            "frames 1..=5 across two keyframes, upsampled"
+        );
         assert_eq!(
             header.num_frames() as usize,
             show_frames,
@@ -1590,11 +1761,14 @@ mod tests {
             let swf = compile_document(&doc).expect("compile");
             let buf = swf::decompress_swf(&swf[..]).expect("decompress");
             let parsed = swf::parse_swf(&buf).expect("parse");
-            // Fixed8 has 1/256 resolution, so 59.94 lands within a fraction of a frame.
+            // Fixed8 has 1/256 resolution, so 59.94 lands within a fraction of a frame. The
+            // rates here upsample by 5, 2, 2 and 1 respectively, so the factor is part of
+            // what's under test rather than a constant multiplier.
             assert!(
-                (parsed.header.frame_rate().to_f32() - rate as f32).abs() < 0.01,
-                "header carried {} for a document at {rate}",
-                parsed.header.frame_rate().to_f32()
+                (parsed.header.frame_rate().to_f32() - movie_fps(rate)).abs() < 0.01,
+                "header carried {} for a document at {rate}, expected {}",
+                parsed.header.frame_rate().to_f32(),
+                movie_fps(rate)
             );
         }
     }
@@ -1692,7 +1866,11 @@ mod tests {
             2,
             "two shapes"
         );
-        assert_eq!(count(&|t| matches!(t, Tag::ShowFrame)), 2, "two frames");
+        assert_eq!(
+            count(&|t| matches!(t, Tag::ShowFrame)),
+            movie(2, 12.0),
+            "two frames, upsampled"
+        );
         assert_eq!(
             count(&|t| matches!(t, Tag::PlaceObject(_))),
             2,
@@ -1924,16 +2102,22 @@ mod tests {
             .collect();
         assert_eq!(sprites.len(), 1, "one clip -> one DefineSprite");
         assert_eq!(
-            sprites[0].num_frames, 2,
-            "the sprite's own 2-keyframe timeline"
+            sprites[0].num_frames as usize,
+            movie(2, FIXTURE_FPS),
+            "the sprite's own 2-keyframe timeline, upsampled with the root"
         );
-        // The sprite body is the nested control stream: 2 shapes' worth of places + 2 ShowFrames.
+        // A sprite that kept its document-frame count would drift against a root running k
+        // times faster, so the nested control stream has to be resampled too.
         let inner_shows = sprites[0]
             .tags
             .iter()
             .filter(|t| matches!(t, Tag::ShowFrame))
             .count();
-        assert_eq!(inner_shows, 2, "sprite timeline shows two frames");
+        assert_eq!(
+            inner_shows,
+            movie(2, FIXTURE_FPS),
+            "sprite timeline shows two document frames' worth"
+        );
 
         // Definitions hoist to the root; both nested shapes are DefineShape at top level.
         assert_eq!(
@@ -1959,7 +2143,11 @@ mod tests {
         let m = root_places[0].matrix.expect("placement has a matrix");
         assert_eq!(m.tx.get(), Twips::from_pixels(100.0).get(), "clip x -> tx");
         assert_eq!(m.ty.get(), Twips::from_pixels(50.0).get(), "clip y -> ty");
-        assert_eq!(parsed.header.num_frames(), 1, "root timeline is one frame");
+        assert_eq!(
+            parsed.header.num_frames() as usize,
+            movie(1, FIXTURE_FPS),
+            "root timeline is one document frame"
+        );
     }
 
     /// Phase 1e parser: a real motion-tween `.wick` drawn via the Wick engine. One clip
@@ -1981,8 +2169,16 @@ mod tests {
         let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
 
         // The project's own settings, not the compiler's defaults.
-        assert_eq!(parsed.header.num_frames(), 24, "frames 1..=24");
-        assert_eq!(parsed.header.frame_rate().to_f32(), 12.0);
+        assert_eq!(
+            parsed.header.num_frames() as usize,
+            movie(24, FIXTURE_FPS),
+            "frames 1..=24, upsampled"
+        );
+        assert_eq!(
+            parsed.header.frame_rate().to_f32(),
+            (FIXTURE_FPS * f64::from(upsample_factor(FIXTURE_FPS))) as f32,
+            "12fps document plays as a 60fps movie"
+        );
         assert_eq!(
             parsed.header.stage_size().x_max,
             Twips::from_pixels(720.0),
@@ -2014,12 +2210,17 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(places.len(), 24, "one placement per frame across the span");
+        let n = tween_samples(24, FIXTURE_FPS);
+        assert_eq!(
+            places.len(),
+            n,
+            "one placement per movie frame across the span"
+        );
 
         // Endpoints come from the tween objects the engine wrote: x 269.3 -> 589.3.
         let tx = |i: usize| places[i].matrix.expect("placement has a matrix").tx;
         assert_eq!(tx(0), Twips::from_pixels(269.3), "first key's x");
-        assert_eq!(tx(23), Twips::from_pixels(589.3), "last key's x");
+        assert_eq!(tx(n - 1), Twips::from_pixels(589.3), "last key's x");
 
         // The first key eases out-bounce, so the path between the endpoints must not be the
         // straight line. This is the assertion that proves easingType survived the modern
@@ -2031,9 +2232,9 @@ mod tests {
         // midpoint under any easing at all and asserting on it proves nothing. Checked by
         // forcing `ease` to return k and confirming this fails.
         let (x0, x1) = (269.3_f64, 589.3_f64);
-        let worst = (0..24)
+        let worst = (0..n)
             .map(|i| {
-                let linear = x0 + (x1 - x0) * (i as f64) / 23.0;
+                let linear = x0 + (x1 - x0) * (i as f64) / (n - 1) as f64;
                 (tx(i).to_pixels() - linear).abs()
             })
             .fold(0.0_f64, f64::max);
@@ -2052,7 +2253,11 @@ mod tests {
         let parsed = swf::parse_swf(&buf).expect("parse");
         let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
 
-        assert_eq!(parsed.header.num_frames(), 24, "24-frame tween span");
+        assert_eq!(
+            parsed.header.num_frames() as usize,
+            movie(24, FIXTURE_FPS),
+            "24-frame tween span, upsampled"
+        );
         assert_eq!(
             count(&|t| matches!(t, Tag::DefineSprite(_))),
             1,
@@ -2063,17 +2268,21 @@ mod tests {
             1,
             "the clip's blue square, hoisted to the root"
         );
-        assert_eq!(count(&|t| matches!(t, Tag::ShowFrame)), 24, "24 frames");
+        assert_eq!(
+            count(&|t| matches!(t, Tag::ShowFrame)),
+            movie(24, FIXTURE_FPS),
+            "24 document frames' worth"
+        );
         assert_eq!(
             count(&|t| matches!(t, Tag::RemoveObject(_))),
             0,
             "same sprite held throughout — never removed"
         );
-        // One Place (frame 1) + a Modify every subsequent frame as the tween moves.
+        // One Place (frame 1) + a Modify every subsequent movie frame as the tween moves.
         assert_eq!(
             count(&|t| matches!(t, Tag::PlaceObject(_))),
-            24,
-            "place once, modify 23 times"
+            tween_samples(24, FIXTURE_FPS),
+            "place once, then modify per movie frame"
         );
 
         let places: Vec<&PlaceObject> = parsed
@@ -2126,9 +2335,14 @@ mod tests {
         // spot-checking a middle frame. Easing is 'none' here, so t is linear in the frame
         // index; the transform channels come from the fixture's two keys (x 90->460,
         // y 300->100, scale 1->2.5, rotation 0->180, opacity 1->0.3).
+        //
+        // The walk runs over movie frames, so four of every five values it checks are
+        // positions no document frame names. That is the point: it is the assertion that
+        // upsampling resamples the curve rather than holding each drawn frame k times.
         let lerp = |a: f64, b: f64, t: f64| a + (b - a) * t;
+        let last_i = (places.len() - 1) as f64;
         for (i, place) in places.iter().enumerate() {
-            let t = i as f64 / 23.0;
+            let t = i as f64 / last_i;
             let s = lerp(1.0, 2.5, t);
             let rot = lerp(0.0, 180.0, t).to_radians();
             let m = place.matrix.expect("every frame carries a matrix");
@@ -2168,8 +2382,9 @@ mod tests {
         // so the endpoint assertions above genuinely cannot see these terms.
         assert_eq!(places[0].matrix.unwrap().b, Fixed16::from_f64(0.0));
         assert!(last.matrix.unwrap().b.to_f64().abs() < 1e-4);
+        // Halfway is rotation 90 degrees, where sin is 1 and scale is 1.75.
         assert!(
-            places[11].matrix.unwrap().b.to_f64().abs() > 0.9,
+            places[places.len() / 2].matrix.unwrap().b.to_f64().abs() > 0.9,
             "mid-span b is large, which is what the ends hide"
         );
     }
@@ -2299,7 +2514,11 @@ mod tests {
         let buf = swf::decompress_swf(&swf[..]).expect("decompress");
         let parsed = swf::parse_swf(&buf).expect("parse");
 
-        assert_eq!(parsed.header.num_frames(), 5, "5-frame span");
+        assert_eq!(
+            parsed.header.num_frames() as usize,
+            movie(5, 12.0),
+            "5-frame span, upsampled"
+        );
         let count = |f: &dyn Fn(&Tag) -> bool| parsed.tags.iter().filter(|t| f(t)).count();
         assert_eq!(
             count(&|t| matches!(t, Tag::DefineSprite(_))),
@@ -2316,13 +2535,102 @@ mod tests {
                 _ => None,
             })
             .collect();
-        let expect: Vec<i32> = [0.0, 25.0, 50.0, 75.0, 100.0]
-            .iter()
-            .map(|&x| Twips::from_pixels(x).get())
-            .collect();
+        // 21 samples, not 5. The document names frames 1..=5; the movie carries four more
+        // between each named pair, and each has to land on the line the tween describes.
+        // That is the difference between resampling the curve and holding each drawn frame
+        // five times, and nothing else in the suite tells those two apart.
+        let n = tween_samples(5, 12.0);
         assert_eq!(
-            txs, expect,
-            "one Place + four Modify, linearly interpolated x"
+            txs.len(),
+            n,
+            "one sample per movie frame up to the last key"
+        );
+        assert_eq!(
+            txs[0],
+            Twips::from_pixels(0.0).get(),
+            "starts on the first key"
+        );
+        assert_eq!(
+            txs[n - 1],
+            Twips::from_pixels(100.0).get(),
+            "ends on the last key"
+        );
+        for (i, &got) in txs.iter().enumerate() {
+            // Within a twip: 1/20px against a 100px span, below what the format can express.
+            let want = Twips::from_pixels(100.0 * i as f64 / (n - 1) as f64).get();
+            assert!(
+                (got - want).abs() <= 1,
+                "movie frame {} x: got {got} twips, want {want}",
+                i + 1
+            );
+        }
+        // Holding a value across a document frame's worth of movie frames is the regression
+        // this exists to catch, and it would sit inside no tolerance this test could name.
+        assert!(
+            txs.windows(2).all(|w| w[1] > w[0]),
+            "every movie frame advances: {txs:?}"
+        );
+    }
+
+    /// A goto payload names a movie frame, so upsampling has to scale it. Nothing about the
+    /// rest of the output looks wrong when this is missed: `gotoAndStop(3)` simply lands a
+    /// fifth of the way to where it meant to.
+    #[test]
+    fn upsampling_retargets_goto_payloads() {
+        let swf = compile_document(&doc_with_frame_script("this.gotoAndStop(3);")).expect("c");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let bytes = parsed
+            .tags
+            .iter()
+            .find_map(|t| match t {
+                Tag::DoAction(b) => Some(*b),
+                _ => None,
+            })
+            .expect("a DoAction tag");
+        // Document frame 3 is 0-based 2; at ×5 the same instant is 0-based 10.
+        let k = i32::from(upsample_factor(FIXTURE_FPS));
+        assert_eq!(
+            decode_actions(bytes),
+            vec![Action::GotoFrame(GotoFrame {
+                frame: (2 * k) as u16
+            })],
+            "gotoAndStop(3) targets document frame 3's first movie frame"
+        );
+    }
+
+    /// The opt-out. Someone matching twip's output against frame numbers from outside it —
+    /// or after the coarse look on purpose — turns this off and gets exactly the document
+    /// they drew, one movie frame per document frame at the rate they set.
+    #[test]
+    fn upsampling_can_be_turned_off() {
+        let doc = doc_with_frame_script("this.gotoAndStop(3);");
+        let flat = {
+            let swf = compile_flat(&doc).expect("compile with upsampling off");
+            let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+            swf::parse_swf(&buf).expect("parse").header
+        };
+        assert_eq!(
+            flat.frame_rate().to_f32(),
+            FIXTURE_FPS as f32,
+            "the document's own rate, unscaled"
+        );
+
+        // Same document, same everything but the flag: this is what it opts out of.
+        let up = {
+            let swf = compile_document(&doc).expect("compile with upsampling on");
+            let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+            swf::parse_swf(&buf).expect("parse").header
+        };
+        let k = u32::from(upsample_factor(FIXTURE_FPS));
+        assert!(
+            k > 1,
+            "the fixture rate has to upsample or this proves nothing"
+        );
+        assert_eq!(
+            u32::from(up.num_frames()),
+            u32::from(flat.num_frames()) * k,
+            "upsampling is the only difference between the two"
         );
     }
 
@@ -2385,7 +2693,11 @@ mod tests {
             }],
         };
 
-        let swf = compile_document(&doc).expect("compile tween");
+        // Upsampling off: the subject here is what the easing function returns at t=0.5, and
+        // out-back is not monotonic, so on the upsampled stream two neighbouring samples can
+        // round to the same twip near the turn and shift every index after it. The document
+        // frames are where the overshoot is exactly nameable.
+        let swf = compile_flat(&doc).expect("compile tween");
         let buf = swf::decompress_swf(&swf[..]).expect("decompress");
         let parsed = swf::parse_swf(&buf).expect("parse");
 
@@ -2669,7 +2981,11 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(places.len(), 24, "one placement per frame of the span");
+        assert_eq!(
+            places.len(),
+            tween_samples(24, FIXTURE_FPS),
+            "one placement per movie frame of the span"
+        );
 
         // Frame 1: skew 0 -> an unskewed matrix.
         let first = places[0].matrix.unwrap();
@@ -2797,10 +3113,13 @@ mod tests {
         assert_eq!(decode_actions(bytes), vec![Action::Stop], "stop() -> Stop");
     }
 
+    /// What `gotoAndPlay(2)` parses to, with nothing between the source and the payload.
+    /// Upsampling scales that payload, which is its own mechanism and tested separately in
+    /// `upsampling_retargets_goto_payloads`.
     #[test]
     fn gotoandplay_emits_goto_and_play() {
         // gotoAndPlay(2): 1-indexed source -> 0-indexed GotoFrame{1}, then Play.
-        let swf = compile_document(&doc_with_frame_script("gotoAndPlay(2);")).expect("compile");
+        let swf = compile_flat(&doc_with_frame_script("gotoAndPlay(2);")).expect("compile");
         let buf = swf::decompress_swf(&swf[..]).expect("decompress");
         let parsed = swf::parse_swf(&buf).expect("parse");
 
@@ -2821,8 +3140,7 @@ mod tests {
 
     #[test]
     fn gotoandstop_emits_bare_gotoframe() {
-        let swf =
-            compile_document(&doc_with_frame_script("this.gotoAndStop(3);")).expect("compile");
+        let swf = compile_flat(&doc_with_frame_script("this.gotoAndStop(3);")).expect("compile");
         let buf = swf::decompress_swf(&swf[..]).expect("decompress");
         let parsed = swf::parse_swf(&buf).expect("parse");
         let bytes = parsed

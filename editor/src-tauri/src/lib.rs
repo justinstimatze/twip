@@ -8,9 +8,15 @@
 ///
 /// The frontend passes the .wick file as a byte array (Array.from(Uint8Array)); we
 /// return the .swf as a raw byte response, which reaches JS as an ArrayBuffer.
+///
+/// `upsample` is optional and defaults to on, matching the library default — the desktop
+/// shell should not be the one route that quietly compiles something different.
 #[tauri::command]
-fn compile_swf(wick: Vec<u8>) -> Result<tauri::ipc::Response, String> {
-    twip::compile_wick(&wick)
+fn compile_swf(wick: Vec<u8>, upsample: Option<bool>) -> Result<tauri::ipc::Response, String> {
+    let opts = twip::Options {
+        upsample: upsample.unwrap_or(true),
+    };
+    twip::compile_wick_with(&wick, &opts)
         .map(tauri::ipc::Response::new)
         .map_err(|e| format!("{:#}", e))
 }

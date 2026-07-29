@@ -1180,23 +1180,43 @@ class EditorCore extends Component {
    * and propagates; asking the bridge would only produce the same message a second time.
    */
   compileWickToSWF = (wickBytes) => {
+    const upsample = this.swfUpsampleEnabled();
+
     if (window.__TAURI__ && window.__TAURI__.core) {
-      return window.__TAURI__.core.invoke('compile_swf', {wick: Array.from(wickBytes)})
+      return window.__TAURI__.core.invoke('compile_swf', {wick: Array.from(wickBytes), upsample})
         .then(swf => new Blob(
           [swf instanceof ArrayBuffer ? swf : new Uint8Array(swf)],
           {type: 'application/x-shockwave-flash'}));
     }
 
     return this.loadTwipWasm().then(
-      compile => new Blob([compile(wickBytes)], {type: 'application/x-shockwave-flash'}),
-      () => this.compileWickViaBridge(wickBytes));
+      compile => new Blob([compile(wickBytes, upsample)], {type: 'application/x-shockwave-flash'}),
+      () => this.compileWickViaBridge(wickBytes, upsample));
+  }
+
+  /**
+   * Whether the compiler should resample each document frame up toward 60fps on export.
+   *
+   * On unless told otherwise. It is what lets a project drawn at 12 play back smoothly, and
+   * it is the reason to draw at 12 at all, so the default is the whole point. It is off for
+   * anyone whose frame numbers have to line up with something outside twip — a golden render,
+   * an external tool counting frames — or who wants the coarse look kept.
+   *
+   * Set `localStorage['twip:upsample'] = 'off'` (or 'on'), matching the `twip:leave-warning`
+   * escape hatch in Editor.jsx. Not a project property on purpose: it decides how this
+   * document is exported, not what the document is, and writing it into project.json would
+   * invent a field the upstream Wick editor does not know how to read.
+   */
+  swfUpsampleEnabled = () => {
+    return window.localStorage.getItem('twip:upsample') !== 'off';
   }
 
   /**
    * The pre-wasm route: hand the bytes to a local server running the twip binary.
    */
-  compileWickViaBridge = (wickBytes) => {
-    return fetch('http://localhost:8752/compile', {method: 'POST', body: new Blob([wickBytes])})
+  compileWickViaBridge = (wickBytes, upsample) => {
+    const url = 'http://localhost:8752/compile' + (upsample === false ? '?upsample=off' : '');
+    return fetch(url, {method: 'POST', body: new Blob([wickBytes])})
       .then(res => {
         if (!res.ok) return res.text().then(t => { throw new Error(t || ('HTTP ' + res.status)); });
         return res.blob();
@@ -1526,25 +1546,26 @@ class EditorCore extends Component {
    * what new ones start at. The compiler keeps the same 12 fallback for the same reason
    * (src/wick.rs). This is the authoring default, which is a different question.
    *
-   * 30 rather than 12 because 12 is what makes hand-drawn work read as a flipbook — it was
-   * Flash's own default, and it is why so much Flash looks choppy while the memorable stuff
-   * does not.
+   * 12 is what hand-drawn work wants: it was Flash's own default, it is a fifth of the
+   * drawing, and a cel held for five refreshes is not choppy — it is the flipbook look the
+   * whole thing is for. What used to make 12 a bad default was that the export played back at
+   * 12 too, and this went through 24 and then 30 chasing that. The compiler upsamples now, so
+   * a 12fps document exports as a 60fps movie whose every fifth frame is the one the author
+   * drew, and the tweens between them are resampled rather than repeated. 12 gets the
+   * flipbook and the smooth playback at once, which is why it can be the default again.
    *
-   * 30 rather than the 24 this first tried, and the reason is arithmetic rather than taste. A
-   * frame can only be shown for a whole number of display refreshes, and at the 60Hz nearly
-   * every viewer has, 24fps needs 2.4975 of them — so it alternates two and three forever,
-   * and that uneven hold is visible as a doubled edge on anything moving. Measured on this
-   * box, tick spacing at 24 ranges 33.0ms to 50.3ms no matter how carefully the clock is
-   * driven, while 30 holds 32.4 to 34.4. The same applies to Ruffle playing the exported SWF,
-   * which is why this is the setting that fixes it in both and no renderer change can.
+   * Whole multiples only, so what a rate divides into 60 matters more than its size. 12, 15,
+   * 20, 30 and 60 land on it exactly; 24 goes to 48, needs 1.2495 refreshes per frame at the
+   * 59.94Hz nearly every viewer runs, and keeps the doubled edge that sent this to 30 in the
+   * first place. 24 is still the rate to avoid.
    *
-   * 30 costs a quarter more drawing than 24 for the same seconds on screen, and sits far below
-   * the ~128 fps an SWF header can hold. Anyone can change it per project under the settings
-   * gear; 60 is also even on a 60Hz display, 24 is the one to avoid.
+   * The one place this shows is the editor canvas, which ticks at the document rate and so
+   * previews at 12 what exports at 60. The preview is coarser than the result, not the other
+   * way round, which is the direction to be wrong in.
    */
   newProject = () => {
     let project = new window.Wick.Project();
-    project.framerate = 30;
+    project.framerate = 12;
     return project;
   }
 

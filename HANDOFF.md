@@ -194,6 +194,42 @@ parser has now seen real multi-frame, tweened, nested, scripted, and skewed `.wi
 What's left is item 9's editor backlog plus a few things the last few commits made newly
 possible. Order set 2026-07-24 (Tauri explicitly deferred).
 
+0. **DONE 2026-07-28 — export upsampling, and 12fps is the authoring default again.** A tween
+   is a continuous function and a framerate is only a sampling rate, so the compiler samples
+   it as finely as the export can carry. `upsample_factor(rate)` is `floor(60 / rate)`; each
+   document frame becomes that many movie frames, the header rate is multiplied to match, and
+   `interp_tween` takes an `f64` playhead so the frames in between are re-evaluated rather
+   than repeated. A cel with no tween holds across its group — the compiler emits no
+   `PlaceObject` for a placement equal to the one on screen — so the flipbook look survives
+   and only continuous motion gets denser.
+
+   Whole multiples only, and that is a real constraint rather than a shortcut: a cel has to
+   hold for a whole number of movie frames or some last longer than others. 12, 15, 20, 30 and
+   60 divide 60 exactly; 24 goes to 48 and keeps its doubled edge. **24 is still the rate to
+   avoid.** With that in place `EditorCore.newProject` goes back to **12**, which is what sent
+   this whole thread through 24 and then 30 in the first place — 12 is a fifth of the drawing
+   and now costs nothing in playback.
+
+   Two coordinate systems meet in `compile_document`, and both the `frame_cmds` keys and the
+   goto **targets** have to move: a key becomes `(d-1)*k+1`, while a `GotoFrame` payload is
+   already 0-based so it remaps as `f*k`. Missing the second is quiet rather than loud —
+   `gotoAndPlay(10)` lands a fifth of the way in with everything else looking right — so
+   `upsampling_retargets_goto_payloads` exists for exactly that.
+
+   **Off switch**, since it changes what frame numbers mean: `twip::Options { upsample }`,
+   `--no-upsample` on the CLI, a second parameter on the wasm export, an argument on the Tauri
+   command, `?upsample=off` on the dev bridge, and `localStorage['twip:upsample'] = 'off'` in
+   the editor. An export setting, not a project property — it decides how a document compiles,
+   not what it is, and a twip-only field in `project.json` is a field upstream Wick cannot
+   read. `tests/golden.rs` compiles flat so its `skipframes` indices keep naming document
+   frames and the six committed PNGs stay valid.
+
+   Mutation-checked, four ways, each caught by only the tests that should catch it: sampling
+   at the document frame instead of the sub-frame (4 tests), dropping the goto retarget (1),
+   ignoring the flag (4), and leaving sprite timelines at the document rate (2). The one worth
+   naming is `tween_interpolates_clip_placement`, which asserts all 21 samples of a 5-frame
+   span lie on the line *and* that every one advances — a tolerance alone would not tell
+   resampling apart from holding each drawn frame five times.
 1. **DONE 2026-07-24 — `golden.yml` is GREEN** (run `30132465564`, 8m7s, all 7 fixtures
    `0 outliers, max diff 0`). Written while twip had no remote, which stopped being true at
    push `a0ed7f0`, so all seven goldens had been blessed on one developer box and validated

@@ -92,6 +92,23 @@ The fallback fires only when the wasm module cannot be loaded or instantiated. A
 *error* from a loaded module is the compiler's real answer about that document and
 propagates; asking the bridge would produce the same message twice.
 
+### Turning off upsampling
+
+By default the compiler resamples each document frame into as many movie frames as fit in
+60fps, so a project drawn at 12 exports as a 60fps movie. To export one movie frame per
+document frame instead:
+
+```
+localStorage['twip:upsample'] = 'off'     # in the editor's console; survives a reload
+twip --no-upsample in.wick out.swf        # the CLI equivalent
+```
+
+An export setting rather than a project property, deliberately: it decides how a document is
+compiled, not what the document is, and writing it into `project.json` would invent a field
+the upstream Wick editor cannot read. All three routes above honour it — the desktop shell
+takes it as a command argument, the wasm module as a second parameter, the bridge as
+`?upsample=off` — so the route in play never changes the bytes.
+
 ## Serving a build
 
 `pnpm build` emits `build/` with root-absolute asset paths (`/assets/…`); serve it from a domain

@@ -7,6 +7,7 @@ Tauri desktop shell makes the compile an in-process Rust call — do not grow it
 
     POST /compile   body = .wick bytes   -> 200 .swf bytes (application/x-shockwave-flash)
                                           -> 400 text/plain (compiler stderr) on failure
+                    ?upsample=off        -> compile with --no-upsample
     GET  /health    -> 200 "ok"
 
 Env:
@@ -20,6 +21,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 
 EDITOR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Release-binary locations, most-specific first:
@@ -74,9 +76,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if self.path != "/compile":
+        path, _, query = self.path.partition("?")
+        if path != "/compile":
             self.send_error(404)
             return
+        # ?upsample=off mirrors the editor's twip:upsample localStorage key, so this route
+        # exports the same bytes the other two do.
+        flags = []
+        if urllib.parse.parse_qs(query).get("upsample") == ["off"]:
+            flags.append("--no-upsample")
         length = int(self.headers.get("Content-Length", 0))
         wick = self.rfile.read(length)
         with tempfile.TemporaryDirectory() as d:
@@ -85,7 +93,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with open(inp, "wb") as f:
                 f.write(wick)
             proc = subprocess.run(
-                [TWIP_BIN, inp, out], capture_output=True, text=True
+                [TWIP_BIN, *flags, inp, out], capture_output=True, text=True
             )
             if proc.returncode != 0 or not os.path.exists(out):
                 msg = (proc.stderr or proc.stdout or "twip failed").encode()

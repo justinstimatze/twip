@@ -9,6 +9,7 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 - **One file format, and it's SWF.** Saving is compiling. The editor produces `.wick` documents (a zip of paper.js paths + a timeline); twip compiles those to real SWF that Ruffle renders.
 - **One truth renderer, and it's Ruffle.** Anything that plays — preview, test, export — is Ruffle rendering compiled SWF. No second renderer to disagree with the first.
 - **The editor is a fork of the [Wick Editor](https://github.com/Wicklets/wick-editor)**, vendored at [`editor/`](editor/). Reusing a battle-tested drawing and timeline UI, with a real SWF export and a Ruffle preview added. The one thing no Wick fork has is playable SWF out.
+- **Draw at 12fps, play back at 60.** New projects start at Flash's own 12, because a fifth as many drawings is the reason to hand-draw at all. The compiler resamples on export: each document frame becomes as many movie frames as fit in 60, and a tween is re-evaluated at each one rather than held. A cel still holds for its five frames — the flipbook look survives — while anything moving continuously gets every refresh the display has. `--no-upsample` turns it off.
 
 ## Layout
 
@@ -20,6 +21,7 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 
 ```
 cargo run --bin twip -- fixtures/test1.wick out.swf      # from a clone
+cargo run --bin twip -- --no-upsample in.wick out.swf    # one movie frame per document frame
 cargo install --git https://github.com/justinstimatze/twip
 ```
 

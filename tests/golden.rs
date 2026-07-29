@@ -144,7 +144,13 @@ fn render(case: &Case, out_dir: &Path) -> Result<PathBuf, String> {
 
     let wick = root.join(case.fixture);
     let bytes = std::fs::read(&wick).map_err(|e| format!("read {}: {e}", wick.display()))?;
-    let swf = twip::compile_wick(&bytes).map_err(|e| format!("compile {}: {e}", case.fixture))?;
+    // Upsampling off, so `skipframes` keeps meaning the document frame the case names. What
+    // these goldens watch is rasterization, and an interpolated sub-frame draws the same
+    // shapes the document frame around it does — the extra frames would only renumber
+    // everything and invalidate six committed PNGs to prove nothing new.
+    let opts = twip::Options { upsample: false };
+    let swf = twip::compile_wick_with(&bytes, &opts)
+        .map_err(|e| format!("compile {}: {e}", case.fixture))?;
 
     let swf_path = out_dir.join(format!("{}.swf", case.name));
     let png_path = out_dir.join(format!("{}.actual.png", case.name));

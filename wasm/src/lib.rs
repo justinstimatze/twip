@@ -16,12 +16,18 @@ pub fn start() {
 
 /// Compile serialized `.wick` bytes to `.swf` bytes.
 ///
-/// Reaches JS as `compile_wick(Uint8Array) -> Uint8Array`, throwing on a compile error with
-/// the compiler's own message. `{:#}` rather than `{}` so anyhow's context chain survives —
-/// "unsupported tween easing" alone does not say which frame.
+/// Reaches JS as `compile_wick(Uint8Array, upsample?) -> Uint8Array`, throwing on a compile
+/// error with the compiler's own message. `{:#}` rather than `{}` so anyhow's context chain
+/// survives — "unsupported tween easing" alone does not say which frame.
+///
+/// `upsample` is optional and defaults to true, so the JS side can keep calling this with one
+/// argument and get the same bytes it got before the knob existed.
 #[wasm_bindgen]
-pub fn compile_wick(wick: &[u8]) -> Result<Box<[u8]>, JsError> {
-    twip::compile_wick(wick)
+pub fn compile_wick(wick: &[u8], upsample: Option<bool>) -> Result<Box<[u8]>, JsError> {
+    let opts = twip::Options {
+        upsample: upsample.unwrap_or(true),
+    };
+    twip::compile_wick_with(wick, &opts)
         .map(Vec::into_boxed_slice)
         .map_err(|e| JsError::new(&format!("{e:#}")))
 }
