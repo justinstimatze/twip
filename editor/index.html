@@ -2,12 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="theme-color" content="#000000">
+    <!-- Matches --color-surface-void, so a mobile browser's own chrome joins the app
+         instead of framing it in black. dev/make-icons.mjs draws the icons on the same. -->
+    <meta name="theme-color" content="#110f0e">
+    <meta name="description" content="A modern Flash. Draw vector shapes on a timeline, tween them, and export a real .swf that Ruffle plays.">
     <link rel="manifest" href="/manifest.json">
 
-    <!-- Wick Editor Dependencies (global scripts, served from public/): -->
+    <!-- Global scripts, served from public/: -->
     <!-- Wick Engine -->
     <script src="/corelibs/wick-engine/wickengine.js"></script>
     <!-- GIF Import/Export -->

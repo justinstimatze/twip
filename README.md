@@ -4,9 +4,11 @@
 
 A personal nostalgia project — not a product. Flash is gone, its editor is abandonware, and the thing it did well — drawing and animating vectors and shipping them as a small file that just plays — has no clean modern replacement. twip is an attempt to get that feeling back without pretending Flash never had problems.
 
+![The twip editor: a toolbox down the left, a stage holding three drawn shapes, an inspector and asset library on the right, and a frame timeline across the bottom.](docs/hero.png)
+
 ## How it works
 
-- **One file format, and it's SWF.** Saving is compiling. The editor produces `.wick` documents (a zip of paper.js paths + a timeline); twip compiles those to real SWF that Ruffle renders.
+- **Two files, and only one of them is yours to keep.** You save a `.wick` document — a zip of paper.js paths and a timeline, the format the editor already spoke. Export compiles it to real SWF. The document is the source; the `.swf` is the artifact, and twip will build it again from the same input any time.
 - **One truth renderer, and it's Ruffle.** Anything that plays — preview, test, export — is Ruffle rendering compiled SWF. No second renderer to disagree with the first.
 - **The editor is a fork of the [Wick Editor](https://github.com/Wicklets/wick-editor)**, vendored at [`editor/`](editor/). Reusing a battle-tested drawing and timeline UI, with a real SWF export and a Ruffle preview added. The one thing no Wick fork has is playable SWF out.
 - **Draw at 12fps, play back at 60.** New projects start at Flash's own 12, because a fifth as many drawings is the reason to hand-draw at all. The compiler resamples on export: each document frame becomes as many movie frames as fit in 60, and a tween is re-evaluated at each one rather than held. A cel still holds for its five frames — the flipbook look survives — while anything moving continuously gets every refresh the display has. `--no-upsample` turns it off.
@@ -17,7 +19,7 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 |---|---|
 | `src/`, `tests/`, `fixtures/` | the compiler — a Rust crate and CLI that turn `.wick` into `.swf` |
 | `editor/` | the editor fork (its own README and BUILD.md) |
-| `scripts/`, `oracle/` | the Ruffle golden-PNG oracle, off by default behind a cargo feature |
+| `scripts/`, `docs/` | the golden-oracle setup script, and the notes worth keeping |
 
 ```
 cargo run --bin twip -- fixtures/test1.wick out.swf      # from a clone
@@ -54,7 +56,22 @@ The compiler handles what the fixtures exercise: filled and stroked paths, layer
 
 Five test layers back it: a structural oracle that parses the emitted SWF and asserts tags, depths and per-frame matrices; a round-trip oracle that replays the emitted display list over every fixture in both compile modes and checks it against the document's own frame numbers; golden PNGs rendered through Ruffle's own exporter on lavapipe; the editor's own browser checks; and a check that compiles a fixture in a real browser tab and requires the bytes to match the CLI's exactly. All of them run in CI.
 
-Export works three ways, and the editor picks whichever exists: an in-process Rust call under the desktop build, the same compiler as wasm in a plain browser tab, or a local dev bridge. See [`editor/BUILD.md`](editor/BUILD.md) for setup and [`HANDOFF.md`](HANDOFF.md) for the design, the verified `.wick` format notes, and the open work.
+Export works three ways, and the editor picks whichever exists: an in-process Rust call under the desktop build, the same compiler as wasm in a plain browser tab, or a local dev bridge.
+
+## Reading further
+
+| | |
+|---|---|
+| [`editor/BUILD.md`](editor/BUILD.md) | building and running the editor, and the three export routes |
+| [`docs/wick-format.md`](docs/wick-format.md) | what a `.wick` file contains and what it takes to compile one — there is no spec, so this is it |
+| [`docs/testing.md`](docs/testing.md) | the five test layers, and why there is no editor-versus-player pixel diff |
+| [`docs/ui-research.md`](docs/ui-research.md), [`docs/ui-redesign-plan.md`](docs/ui-redesign-plan.md) | the survey of post-Flash tools the interface was designed against, and the plan it turned into |
+
+## Rough edges
+
+Known, and worth saying before you find them. The interface is mid-redesign: `TabbedInterface` underlines every tab rather than the active one, so inactive tabs read as links, and the Inspector's rows still use the inherited 30/70 label-to-field split, which is generous at 250px and wrong at 400. `TabbedInterface` also pairs children to tabs by array index, so a host that offers a subset of the export types renders empty tab bodies.
+
+The compiler skips gradients, text, audio, filters and images rather than guessing at them — see Status above. Everything else the editor can draw, it compiles.
 
 ## Credit
 

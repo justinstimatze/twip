@@ -3,7 +3,7 @@
 //! Phase 0 (hello-square): no `.wick` parsing yet. This hand-builds a single
 //! red square that tweens across the stage, emits real SWF via the `swf` crate,
 //! and is structurally round-trip tested (parse the bytes back, assert the tag
-//! shape — the "structural oracle" layer from HANDOFF.md). Visual truth is
+//! shape — the "structural oracle" layer from docs/testing.md). Visual truth is
 //! Ruffle rendering the same bytes.
 
 pub mod import;
@@ -44,7 +44,7 @@ fn red_square() -> Shape {
         y_max: Twips::from_pixels(SIDE),
     };
     Shape {
-        version: 4, // DefineShape4: RGBA fills + nonzero winding flag (see HANDOFF.md)
+        version: 4, // DefineShape4: RGBA fills + nonzero winding flag (see docs/wick-format.md)
         id: SQUARE_ID,
         shape_bounds: bounds,
         edge_bounds: bounds,
@@ -699,7 +699,7 @@ fn place_placement(action: PlaceObjectAction, p: &Placement, depth: u16) -> Tag<
 }
 
 /// A recognized frame command — the small vocabulary of Wick frame-script JS that
-/// twip compiles to AVM1. General JS→AVM1 is a permanent non-goal (HANDOFF), so
+/// twip compiles to AVM1. General JS→AVM1 is a permanent non-goal (docs/wick-format.md), so
 /// anything outside this set is left uncompiled (see [`recognize_frame_actions`]).
 /// Frame numbers are already 0-indexed for SWF (Wick/Flash `gotoAnd*(n)` is 1-indexed).
 #[derive(Debug, Clone, PartialEq)]
@@ -742,7 +742,7 @@ fn recognize_frame_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
 }
 
 /// Clip click handlers: recognized commands in a clip's `mousepressed`/`mouseclick`
-/// scripts. Both map to a SWF `PRESS` clip event (tier-0 click; HANDOFF) — twip does
+/// scripts. Both map to a SWF `PRESS` clip event (docs/wick-format.md) — twip does
 /// not distinguish press from click for the recognized command set.
 fn recognize_clip_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
     recognize_actions(scripts, &["mousepressed", "mouseclick"])
@@ -2755,7 +2755,7 @@ mod tests {
     // agree exactly for well-behaved transforms; they diverge only where the fork's
     // round-trip is broken, and there twip is the correct one. These two tests pin
     // that intentional divergence so a future "match the fork" change can't silently
-    // reintroduce the bug. See HANDOFF "Tween semantics (DECIDED)"; the fork's
+    // reintroduce the bug. See docs/wick-format.md; the engine's
     // corruption is reproduced verbatim in scripts/oracle-tween.js.
 
     /// A horizontal-flip tween (scaleX 1 -> -1) passes through scaleX 0. The fork's

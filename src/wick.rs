@@ -3,7 +3,7 @@
 //!
 //! Scope: static shapes (fills and strokes) plus nested clips (recursive timelines).
 //! Curves are flattened to polylines; the format details were ground-truthed
-//! against a real save (see HANDOFF.md "Known gaps #1"): `objects` is a flat
+//! against a real save (see docs/wick-format.md): `objects` is a flat
 //! UUID-keyed map, parents reference children by UUID, and `Selection` objects
 //! are editor UI state to skip. The walk is root-down (project -> root Clip ->
 //! Timeline -> ...) so multiple timelines (one per clip) resolve correctly.

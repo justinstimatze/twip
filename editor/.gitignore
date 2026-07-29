@@ -10,8 +10,6 @@
 
 # production
 /build
-/build-ios/WebViewExample/local_html
-/build-electron
 /dist
 
 # misc
@@ -49,3 +47,4 @@ __pycache__/
 # differs between this box and a CI runner, so a committed PNG would fail there for
 # reasons unrelated to the change under test. Bless locally, compare locally.
 /dev/.visual
+/dev/.icons

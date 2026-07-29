@@ -33,8 +33,9 @@ Nothing here is endorsed by or affiliated with either. Bugs in this fork belong 
   Wick fork exports playable SWF; it is the reason this one exists.
 - Build system moved from Create React App / webpack 4 / Node 14 to Vite 6 + pnpm, so it
   builds on current Node.
-- React 19, with the UI moving panel by panel onto Tailwind v4 tokens and Radix primitives.
-  Two panels of twelve are across; the rest still run on the original SCSS.
+- React 19, on Tailwind v4 tokens and Radix primitives, wearing an identity of its own rather
+  than Wick's — a generated palette, its own typefaces, and an icon set drawn for it. Several
+  panels still run on the original SCSS, re-pointed at the new tokens rather than rewritten.
 - A desktop shell (Tauri 2) that links the compiler in-process rather than shelling out.
 
 ## Building

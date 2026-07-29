@@ -860,7 +860,7 @@ below it rather than shrink, view-only below 768px.
 
 ## Folded in rather than swept twice
 
-HANDOFF says to fold the leftover tooling and the rebrand into this pass. Where each lands:
+The leftover tooling and the rebrand fold into this pass rather than getting their own. Where each lands:
 
 **TypeScript** — at the Phase 1 boundary. New components in TS, `allowJs` on, no big-bang
 conversion of 19k lines that are being deleted anyway.
@@ -881,7 +881,7 @@ Canvas as drop targets), `react-ace@6` and `console-feed@3` (both only in
 `react-color`, `react-sizeme`, `react-spinners`, `react-reflex`. Each has a maintained
 replacement. Do the upgrade when that list is the only thing left, not before.
 
-**Rebrand / attribution** (HANDOFF item 5, a hard gate on any sharing) touches the same
+**Rebrand / attribution** (a hard gate on any sharing) touches the same
 files Phase 0 and Phase 1 touch. `Modals/SupportUs` (376 lines, Patreon link + patron
 names) and the "support us" button in `MenuBar.jsx` get deleted during the modal pass;
 patron names in `Modals/WelcomeMessage` go when that modal is rebuilt; `OpenSourceNotices`

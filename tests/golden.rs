@@ -1,6 +1,6 @@
 //! Ruffle golden-PNG oracle. Renders each fixture's twip-compiled SWF through
 //! ruffle's `exporter` under lavapipe (deterministic software Vulkan) and compares
-//! the result to a committed golden PNG. This is test layer 2 from HANDOFF's oracle
+//! the result to a committed golden PNG. This is test layer 3 from docs/testing.md's oracle
 //! design — it catches *rendering* regressions the structural oracle can't see
 //! (planarized fills, winding, layer order) without the AA-noise blindness of a
 //! cross-renderer diff.
@@ -41,8 +41,9 @@ struct Case {
 }
 
 /// The visually-deterministic fixtures. Opacity compositing is excluded from strict
-/// pixel comparison by design (paper.js-vs-SWF diverges — HANDOFF), as is the x/y/scale
-/// motion of motion-tween, which the structural oracle pins far tighter than pixels can.
+/// pixel comparison by design (paper.js-vs-SWF diverges — see docs/wick-format.md), as is
+/// the x/y/scale motion of motion-tween, which the structural oracle pins far tighter than
+/// pixels can.
 /// `skew-tween` frame 24 is the exception: a matrix that transposes or sign-flips its
 /// skew term still parses as a valid matrix, so shape is the only thing that catches it.
 ///
@@ -60,8 +61,9 @@ struct Case {
 /// rotation. Frame 12 is the one to keep if these ever need trimming; it sits closest to
 /// 90 degrees, where sin and cos swap roles and both endpoints are blind.
 ///
-/// Opacity is deterministic here despite HANDOFF excluding it: the divergence recorded there
-/// is paper.js-vs-SWF, and these compare Ruffle against Ruffle on one backend.
+/// Opacity is deterministic here despite docs/testing.md excluding it: the divergence
+/// recorded in docs/wick-format.md is paper.js-vs-SWF, and these compare Ruffle against
+/// Ruffle on one backend.
 const CASES: &[Case] = &[
     Case {
         name: "test1",
