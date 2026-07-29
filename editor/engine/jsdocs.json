@@ -7,8 +7,7 @@
         "exclude": [
             "src/export/project.html" ,
             "src/export/zip/index.html",
-            "src/export/zip/preloadjs.min.js",
-            "src/export/zip/wickengine.js"
+            "src/export/zip/preloadjs.min.js"
         ]
     },
     "sourceType": "module",
