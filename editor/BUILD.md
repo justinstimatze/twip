@@ -180,7 +180,14 @@ things in three places have to agree for a document drawn at 12 to play back smo
 authoring default is one line that a tidying pass would happily edit back to 30 with nothing
 else noticing. Serve a build (`pnpm preview`) and point `SMOKE_URL` at it.
 
-It is also as close to a desktop check as this box allows. The shell serves this same `build/`
+`autosave-check` seeds the restore prompt's worst case and requires it to survive: an
+autosave holding real work, then a blank one stamped newer, and Load has to bring back the
+work. Seeded rather than timed, because the bug it pins was a race — the prompt and the click
+each read the autosave list separately and each took the newest entry, and startup would
+autosave the blank canvas in between. Also checks that an untouched project no longer takes a
+slot at all, which is where the blanks came from.
+
+`framerate-check` is also as close to a desktop check as this box allows. The shell serves this same `build/`
 and shares every line of the path except the final Tauri invoke, and nothing here can inject
 input into a window — there is no `xdotool`, and XTEST does not reach another client's surface
 under this compositor — so the shell's own buttons cannot be pressed programmatically at all.

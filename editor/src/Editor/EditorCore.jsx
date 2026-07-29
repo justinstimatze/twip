@@ -1757,6 +1757,14 @@ class EditorCore extends Component {
     if (!this.project) return;
     if (this.state.previewPlaying) return;
     if (this.state.activeModalName !== null) return;
+    /*
+     * An empty project is not worth a slot. Startup calls projectDidChange for the blank
+     * canvas it hands you, `_lastAutosave` begins at 0 so the very first request writes
+     * immediately, and the result is one blank autosave per launch, each newer than the
+     * work it buries. This is the half of the restore bug that produces the junk; pinning
+     * the offered uuid below is the half that stops the junk being loaded.
+     */
+    if (!this.projectHasContent(this.project)) return;
 
     window.Wick.AutoSave.save(this.project, () => {
       callback();
@@ -1768,12 +1776,12 @@ class EditorCore extends Component {
    * Does nothing if not autosaved project is stored.
    */
   loadAutosavedProject = (callback) => {
-    window.Wick.AutoSave.getAutosavesList(autosaveList => {
-      if(!autosaveList[0]) {
+    this.resolveOfferedAutosave(uuid => {
+      if(!uuid) {
         callback();
       } else {
         this.showWaitOverlay();
-        window.Wick.AutoSave.load(autosaveList[0].uuid, project => {
+        window.Wick.AutoSave.load(uuid, project => {
           // setupNewProject falls back to `new Wick.Project()` when handed nothing, so a
           // failed load is otherwise indistinguishable from a blank canvas — say so
           // rather than let it look like the click did nothing.
@@ -1785,11 +1793,40 @@ class EditorCore extends Component {
           }
           this.setupNewProject(project);
           this.hideWaitOverlay();
+          this._offeredAutosaveUUID = null;
           callback();
         });
       }
     });
   }
+
+  /**
+   * The autosave the prompt on screen is about.
+   *
+   * Not `autosaveList[0]` read a second time, which is what this used to be and is where
+   * the restore bug lived. The prompt and the click are seconds apart, and the list is
+   * mutable in between: startup autosaves the blank canvas it hands you, that write lands
+   * with a newer `lastModified` than the work being offered, and the click then restores
+   * the blank one. The load succeeds, the project is real, the canvas is empty, and
+   * nothing anywhere reports a failure — which is exactly how it looked.
+   *
+   * `doesAutoSavedProjectExist` pins the uuid it validated. The list read here is only for
+   * a caller that reached this without a prompt.
+   */
+  resolveOfferedAutosave = (callback) => {
+    if (this._offeredAutosaveUUID) {
+      callback(this._offeredAutosaveUUID);
+      return;
+    }
+    window.Wick.AutoSave.getAutosavesList(autosaveList => {
+      callback(autosaveList[0] && autosaveList[0].uuid);
+    });
+  }
+
+  /**
+   * The uuid `doesAutoSavedProjectExist` last found worth offering, or null.
+   */
+  _offeredAutosaveUUID = null;
 
   /**
    * Does this autosave hold anything worth offering to restore?
@@ -1807,7 +1844,25 @@ class EditorCore extends Component {
    */
   autosaveHasContent = (autosaveData) => {
     if (!autosaveData || !autosaveData.objectsData) return false;
-    let classnames = autosaveData.objectsData.map(object => object.classname);
+    return this.classnamesHaveContent(autosaveData.objectsData.map(object => object.classname));
+  }
+
+  /**
+   * The same question asked of a live project, so nothing writes a blank autosave in the
+   * first place. `getChildrenRecursive` is what `ObjectCache.getActiveObjects` walks, so
+   * this sees the object list the autosave would have serialized.
+   * @param {Wick.Project} project
+   * @returns {boolean}
+   */
+  projectHasContent = (project) => {
+    if (!project) return false;
+    return this.classnamesHaveContent(project.getChildrenRecursive().map(o => o.classname));
+  }
+
+  /**
+   * Whether a list of serialized classnames is more than an untouched project's skeleton.
+   */
+  classnamesHaveContent = (classnames) => {
     let skeleton = ['Project', 'Selection', 'Clip', 'Timeline', 'Layer', 'Frame'];
     // Anything not part of the empty-project skeleton is the user's.
     if (classnames.some(name => skeleton.indexOf(name) === -1)) return true;
@@ -1822,19 +1877,45 @@ class EditorCore extends Component {
    * the blank project it hands you at startup, so an untouched session writes an empty
    * autosave that the next launch then offers to restore. Answering the prompt appeared
    * to do nothing because there was genuinely nothing in it.
+   *
+   * Then it checked only `autosaveList[0]`, which is the same assumption from the other
+   * side: a blank sitting at the head of the list hid every piece of real work under it,
+   * and one blank per launch is exactly what the old `autoSaveProject` wrote. Nothing
+   * autosaves a blank now, but the lists that already collected them still exist, so this
+   * walks down until it finds work rather than judging the newest entry alone.
+   *
+   * Sorted newest-first, deduplicated because the engine appends a fresh list entry on
+   * every save of the same project.
    * @param  {Function} callback a callback which receives a boolean.
    */
   doesAutoSavedProjectExist = (callback) => {
     window.Wick.AutoSave.getAutosavesList(autosaveList => {
-      if (!autosaveList[0]) {
-        callback(false);
-        return;
-      }
-      // getAutosavesList sorts newest-first and loadAutosavedProject only ever offers
-      // [0], so [0] is the one the prompt is about.
-      window.Wick.AutoSave.readAutosaveData(autosaveList[0].uuid, autosaveData => {
-        callback(this.autosaveHasContent(autosaveData));
+      let seen = new Set();
+      let queue = autosaveList.map(item => item.uuid).filter(uuid => {
+        if (!uuid || seen.has(uuid)) return false;
+        seen.add(uuid);
+        return true;
       });
+
+      let step = () => {
+        let uuid = queue.shift();
+        if (!uuid) {
+          this._offeredAutosaveUUID = null;
+          callback(false);
+          return;
+        }
+        window.Wick.AutoSave.readAutosaveData(uuid, autosaveData => {
+          if (!this.autosaveHasContent(autosaveData)) {
+            step();
+            return;
+          }
+          // Pin what the prompt is about. Load and Delete act on this uuid rather than on
+          // whatever heads the list by the time they run.
+          this._offeredAutosaveUUID = uuid;
+          callback(true);
+        });
+      };
+      step();
     });
   }
 
@@ -1849,12 +1930,13 @@ class EditorCore extends Component {
    * save of the same project.
    */
   clearAutoSavedProject = (callback) => {
-    window.Wick.AutoSave.getAutosavesList(autosaveList => {
-      if (!autosaveList[0]) {
+    this.resolveOfferedAutosave(uuid => {
+      if (!uuid) {
         callback();
         return;
       }
-      window.Wick.AutoSave.delete(autosaveList[0].uuid, () => {
+      window.Wick.AutoSave.delete(uuid, () => {
+        this._offeredAutosaveUUID = null;
         callback();
       });
     });
