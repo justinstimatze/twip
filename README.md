@@ -22,8 +22,17 @@ A personal nostalgia project — not a product. Flash is gone, its editor is aba
 ```
 cargo run --bin twip -- fixtures/test1.wick out.swf      # from a clone
 cargo run --bin twip -- --no-upsample in.wick out.swf    # one movie frame per document frame
+cargo run --bin twip -- import old.swf art.svg           # recover the artwork from an SWF
 cargo install --git https://github.com/justinstimatze/twip
 ```
+
+`import` goes the other way, and only part of the way: it recovers **artwork**, as an SVG you
+drag onto the editor canvas. Shapes and their fills survive compilation exactly, so they come
+back exactly. Timing, tween keys, easing, layers and scripts do not, and are not guessed at —
+a tween is a matrix per frame by the time it reaches the file, and inferring the curve back
+out of those matrices produces a confident wrong answer rather than no answer. To open old
+Flash that twip did not write, decompile with [FFDec](https://github.com/jindrapetrik/jpexs-decompiler)
+first; it handles the formats twip has no reader for.
 
 There is no crates.io release. The compiler depends on ruffle's `swf` crate pinned to one
 revision, crates.io rejects git dependencies, and the published `swf` 0.2.2 is an

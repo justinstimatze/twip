@@ -6,6 +6,7 @@
 //! shape — the "structural oracle" layer from HANDOFF.md). Visual truth is
 //! Ruffle rendering the same bytes.
 
+pub mod import;
 pub mod wick;
 
 use anyhow::Result;
