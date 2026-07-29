@@ -173,6 +173,18 @@ divergence between two backends built from one source is the whole risk. It goes
 that *chooses* a route also fails; with no bridge running, a fallback surfaces as an error
 instead of a pass. Needs `pnpm wasm`, `pnpm build` and a release `twip` binary first.
 
+`framerate-check` presses the same export button through `compileProjectToSWFBlob` and reads
+the header off the result: a new project has to start at 12fps, that project has to export at
+60, and `twip:upsample=off` has to bring it back to 12 with a fifth of the frames. Three
+things in three places have to agree for a document drawn at 12 to play back smoothly, and the
+authoring default is one line that a tidying pass would happily edit back to 30 with nothing
+else noticing. Serve a build (`pnpm preview`) and point `SMOKE_URL` at it.
+
+It is also as close to a desktop check as this box allows. The shell serves this same `build/`
+and shares every line of the path except the final Tauri invoke, and nothing here can inject
+input into a window — there is no `xdotool`, and XTEST does not reach another client's surface
+under this compositor — so the shell's own buttons cannot be pressed programmatically at all.
+
 `visual` is the only one that measures geometry, and it is the check to reach for before and
 after any CSS change. The others do not: the Toolbox migration shipped three regressions —
 numeric fields rendered at 111px instead of 40 — with `smoke`, `interact` and the engine
