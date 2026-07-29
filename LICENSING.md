@@ -10,6 +10,11 @@ tree — hence this file.
 `fixtures/`, `scripts/` — is **MIT**, © 2026 Justin Stimatze. See [`LICENSE`](LICENSE). It
 contains no Wick Editor code and can be taken and used under MIT on its own.
 
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) is the one exception at the root, and it is not
+code: it is adapted from the p5.js code of conduct under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), which is the license it
+keeps. The attribution line at the top of that file is what the license asks for.
+
 **`editor/`** is a fork of the [Wick Editor](https://github.com/Wicklets/wick-editor),
 © 2020 Wicklets LLC, and is **GPLv3**. See [`editor/LICENSE.md`](editor/LICENSE.md), the
 per-file copyright headers, and [`editor/CREDITS.md`](editor/CREDITS.md). It stays GPLv3;
