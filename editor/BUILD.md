@@ -52,11 +52,33 @@ a local checkout and a CI run play the same player. `--force` restages regardles
 The golden-PNG test oracle pins a specific Ruffle *revision* for rendering comparisons; the
 preview player does not need to match it.
 
-## SWF export in dev (the twip bridge)
+## SWF export: three routes
 
 The **SWF** button turns the editor's `.wick` document into a playable `.swf` via the `twip`
-compiler. The browser can't shell out, so the dev path POSTs the `.wick` to a throwaway local
-bridge that runs the CLI and hands back the `.swf`:
+compiler. `EditorCore.compileWickToSWF` picks whichever route exists, in this order.
+
+**1. The desktop shell.** Under Tauri the compile is an in-process Rust call —
+`invoke('compile_swf', …)` into `src-tauri/src/lib.rs`. Nothing to set up; it is linked in.
+
+**2. The browser, in the tab.** The same compiler built for `wasm32-unknown-unknown`:
+
+```
+rustup target add wasm32-unknown-unknown     # once
+cargo install wasm-bindgen-cli --locked      # once
+pnpm wasm                                    # ~20s, writes src/wasm-pkg/
+```
+
+`dev/build-wasm.sh` builds `wasm/` (a cdylib shell over `twip::compile_wick`) and runs
+`wasm-bindgen --target web`. The output is gitignored generated code, ~480KB of wasm, ~199KB
+over the wire. It is a *lazy* import: nothing loads until the first export, so the cost falls
+on the session that uses it.
+
+`vite.config.mjs` resolves `virtual:twip-wasm` to that package when it is on disk and to a
+stub that names this command when it is not — so `pnpm build` still works on a checkout with
+no Rust toolchain, and generating the package while a dev server is running needs a restart.
+
+**3. The dev bridge**, if the wasm package was never built. The browser can't shell out, so
+this POSTs the `.wick` to a throwaway local server that runs the CLI:
 
 ```
 cargo build --release --bin twip     # once, from the twip crate root (the parent dir)
@@ -64,9 +86,11 @@ python3 dev/twip_bridge.py           # serves on http://127.0.0.1:8752
 ```
 
 The bridge locates the release binary itself — vendored layout `../target/release/twip` first,
-then a sibling `../twip/target/release/twip` — or set `TWIP_BIN` to override. The desktop target
-links the compiler as an in-process Rust call instead (`invoke('compile_swf', …)` under a Tauri 2
-shell); see the twip HANDOFF for the integration decisions.
+then a sibling `../twip/target/release/twip` — or set `TWIP_BIN` to override.
+
+The fallback fires only when the wasm module cannot be loaded or instantiated. A compile
+*error* from a loaded module is the compiler's real answer about that document and
+propagates; asking the bridge would produce the same message twice.
 
 ## Serving a build
 
@@ -119,8 +143,18 @@ pnpm test-engine      # the engine's 547-case mocha suite, headless
 pnpm build
 pnpm smoke --sweep    # load the page at every breakpoint, read the console
 pnpm interact         # click through the popovers, tooltips, code editor, view-only mode
+pnpm wasm-check       # the browser compiles a fixture; bytes must match the CLI's
 pnpm visual           # screenshot 20 scenes and diff against a blessed baseline
 ```
+
+`wasm-check` is the only one that presses the button twip exists for. It hands
+`fixtures/editor-tween.wick` to `compileWickToSWF` in a real page and requires the result to
+equal `target/release/twip`'s output byte for byte. Weaker assertions — starts with `CWS`, is
+more than 200 bytes — stay green for a compiler that has quietly diverged, and quiet
+divergence between two backends built from one source is the whole risk. It goes through
+`compileWickToSWF` rather than importing the wasm module directly, so a mistake in the branch
+that *chooses* a route also fails; with no bridge running, a fallback surfaces as an error
+instead of a pass. Needs `pnpm wasm`, `pnpm build` and a release `twip` binary first.
 
 `visual` is the only one that measures geometry, and it is the check to reach for before and
 after any CSS change. The others do not: the Toolbox migration shipped three regressions —

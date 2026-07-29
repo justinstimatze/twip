@@ -34,10 +34,11 @@ image = { version = "0.25", optional = true, default-features = false, features 
 golden = ["dep:image"]
 
 # editor/ is the vendored wick-editor fork (its own Tauri cargo project that depends on
-# this crate by path); oracle/ is the gitignored ruffle clone the golden oracle builds.
-# Exclude both so `cargo build` here stays the compiler, not the app or the oracle.
+# this crate by path); wasm/ is the wasm-bindgen shell the browser build loads; oracle/ is
+# the gitignored ruffle clone the golden oracle builds. Exclude all three so `cargo build`
+# here stays the compiler, not the app, the browser shell, or the oracle.
 [workspace]
-exclude = ["editor", "oracle"]
+exclude = ["editor", "wasm", "oracle"]
 
 # Cut debuginfo from full to line-tables-only for the everyday build/test loop.
 # Keeps file:line in panic backtraces (all this crate's asserts need) while

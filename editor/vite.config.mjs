@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
 
 /*
  * Put the un-migrated stylesheets in a cascade layer so Tailwind utilities can win.
@@ -34,10 +35,46 @@ function legacyCssLayer () {
   }
 }
 
+/*
+ * Resolve `virtual:twip-wasm` to the generated wasm bindings, or to a stub that says how to
+ * generate them.
+ *
+ * `dev/build-wasm.sh` writes src/wasm-pkg/, which is gitignored — so on a fresh clone the
+ * module the editor imports does not exist, and a bare `import('./wasm-pkg/twip_wasm.js')`
+ * would fail the *build*, not just the button. Going through a virtual module moves that
+ * from a build error to a runtime one with a fix in it, which keeps `pnpm build` working for
+ * anyone who wants the UI without the Rust toolchain. They get the dev-bridge path, exactly
+ * as before this existed.
+ *
+ * existsSync runs when the module is first loaded, so generating the package during a
+ * running dev server needs a restart to be picked up.
+ */
+function twipWasm () {
+  const ID = 'virtual:twip-wasm'
+  const RESOLVED = '\0' + ID
+  const entry = fileURLToPath(new URL('./src/wasm-pkg/twip_wasm.js', import.meta.url))
+  const missing =
+    'the in-page twip compiler is not built — run `pnpm wasm` (needs Rust, ' +
+    'the wasm32-unknown-unknown target, and wasm-bindgen-cli)'
+  return {
+    name: 'twip:wasm',
+    resolveId (id) { return id === ID ? RESOLVED : null },
+    load (id) {
+      if (id !== RESOLVED) return null
+      if (existsSync(entry)) {
+        return `export { default as init, compile_wick } from ${JSON.stringify(entry)}\n`
+             + `export const available = true\n`
+      }
+      const err = `() => { throw new Error(${JSON.stringify(missing)}) }`
+      return `export const available = false\nexport const init = ${err}\nexport const compile_wick = ${err}\n`
+    },
+  }
+}
+
 // CRA -> Vite. The old editor is React 16 with JSX in `.js` files and CRA's
 // NODE_PATH='src/' absolute imports (only the `Editor/` root is used).
 export default defineConfig({
-  plugins: [legacyCssLayer(), react(), tailwindcss()],
+  plugins: [legacyCssLayer(), twipWasm(), react(), tailwindcss()],
   resolve: {
     // Replaces NODE_PATH='src/' for src-absolute imports. Only `Editor/` and
     // `resources/` are used as bare roots (the latter for image/asset imports).

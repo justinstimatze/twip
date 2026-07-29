@@ -1148,9 +1148,36 @@ class EditorCore extends Component {
   }
 
   /**
-   * Compile .wick bytes (Uint8Array) to a .swf Blob. Under the Tauri desktop shell this
-   * is an in-process Rust call (the compile_swf command -> twip::compile_wick). In a
-   * plain browser it POSTs to the local dev bridge (dev/twip_bridge.py on :8752).
+   * The in-page compiler (wasm), instantiated once and reused.
+   *
+   * Lazy on purpose: it is the largest single asset the editor can load, and the great
+   * majority of a session never presses export. Kept as a promise rather than the module so
+   * two exports in flight at once share one instantiation. A rejection is cached too — if
+   * the package is not built, that fact will not change while the page is open, and each
+   * subsequent export should fall through to the bridge without re-importing to find out.
+   */
+  twipWasm = null;
+
+  loadTwipWasm = () => {
+    if (!this.twipWasm) {
+      this.twipWasm = import('virtual:twip-wasm').then(mod => {
+        if (!mod.available) throw new Error('twip wasm not built');
+        return mod.init().then(() => mod.compile_wick);
+      });
+    }
+    return this.twipWasm;
+  }
+
+  /**
+   * Compile .wick bytes (Uint8Array) to a .swf Blob, by whichever of three routes exists.
+   *
+   * Under the Tauri desktop shell it is an in-process Rust call (the compile_swf command).
+   * In a browser it is the same compiler as wasm, running in the tab. Failing that — a
+   * checkout that never ran `pnpm wasm` — it POSTs to dev/twip_bridge.py on :8752.
+   *
+   * The fallback fires only when the wasm module could not be loaded or instantiated. A
+   * compile *error* from a loaded module is the compiler's real answer about this document
+   * and propagates; asking the bridge would only produce the same message a second time.
    */
   compileWickToSWF = (wickBytes) => {
     if (window.__TAURI__ && window.__TAURI__.core) {
@@ -1160,6 +1187,15 @@ class EditorCore extends Component {
           {type: 'application/x-shockwave-flash'}));
     }
 
+    return this.loadTwipWasm().then(
+      compile => new Blob([compile(wickBytes)], {type: 'application/x-shockwave-flash'}),
+      () => this.compileWickViaBridge(wickBytes));
+  }
+
+  /**
+   * The pre-wasm route: hand the bytes to a local server running the twip binary.
+   */
+  compileWickViaBridge = (wickBytes) => {
     return fetch('http://localhost:8752/compile', {method: 'POST', body: new Blob([wickBytes])})
       .then(res => {
         if (!res.ok) return res.text().then(t => { throw new Error(t || ('HTTP ' + res.status)); });
@@ -1167,7 +1203,8 @@ class EditorCore extends Component {
       })
       .catch(err => {
         if (err instanceof TypeError) {
-          throw new Error("could not reach the twip bridge on :8752 — is dev/twip_bridge.py running?");
+          throw new Error("no twip compiler available — build the in-page one with `pnpm wasm`, "
+            + "or start the dev bridge (dev/twip_bridge.py on :8752)");
         }
         throw err;
       });

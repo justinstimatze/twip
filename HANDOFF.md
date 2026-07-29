@@ -633,16 +633,47 @@ Each assertion was mutation-checked rather than trusted: hardcoding the stage wi
 version mutation silently hit a demo binary's header instead of `compile_document`'s, which is
 its own small lesson about `replace(…, 1)` on a file with three similar headers.
 
-NEXT UP, FOUND 2026-07-28 while auditing for a public release — **nobody but this box can
-export a SWF from the editor.** `EditorCore.jsx:1156` branches: `window.__TAURI__` invokes the
-in-process Rust `compile_swf`, everything else POSTs to `http://localhost:8752/compile`, which
-is `dev/twip_bridge.py`. A stranger running `pnpm dev` gets "could not reach the twip bridge on
-:8752" from the one button twip exists for. There is no wasm path either — `wasm-bindgen` appears
-nowhere in the tree. The Tauri shell was re-verified working the same day (see the TAURI entry
-below), so the desktop half of this is a packaging problem now rather than a broken one; the
-browser half is untouched. Two exits: ship a Tauri desktop binary, or compile the crate to wasm32 so the browser
-stands alone. Tauri is the shorter one; that path was verified working in a native window on
-2026-07-23 and only the config drifted.
+DONE 2026-07-28, both exits taken — **the browser can export a SWF on its own now.** The
+finding that opened this: `EditorCore.compileWickToSWF` had two routes, `window.__TAURI__`
+invoking the in-process Rust `compile_swf` and everything else POSTing to
+`http://localhost:8752/compile` (`dev/twip_bridge.py`), so a stranger running `pnpm dev` got
+"could not reach the twip bridge on :8752" from the one button twip exists for. Two exits were
+open: ship a Tauri desktop binary, or compile the crate to wasm32. Both are taken — the deb
+first (it was the shorter one), then wasm.
+
+`wasm/` is a cdylib shell over `twip::compile_wick`, deliberately not the root crate:
+`crate-type` applies to every build, so putting it there would make the everyday `cargo build`
+and the Tauri shell's dependency emit a shared object nobody links. `dev/build-wasm.sh`
+(`pnpm wasm`) builds it and runs `wasm-bindgen --target web` into the gitignored
+`editor/src/wasm-pkg/`. 480KB of wasm, 199KB gzipped, lazily imported so it costs nothing
+until the first export.
+
+The awkward part was that a gitignored generated module cannot be imported directly — a bare
+`import('./wasm-pkg/twip_wasm.js')` fails the *build* on a fresh clone, not just the button.
+`vite.config.mjs` resolves `virtual:twip-wasm` to the real package when it is on disk and to a
+stub naming `pnpm wasm` when it is not, which turns that into a runtime error with a fix in
+it. So `pnpm build` still works with no Rust toolchain, and that checkout gets the bridge
+exactly as before.
+
+The check is `pnpm wasm-check` (`editor/dev/wasm-check.mjs`), and it is the only one that
+presses the button twip exists for: hand `fixtures/editor-tween.wick` to `compileWickToSWF` in
+a real page and require the result to equal `target/release/twip`'s output **byte for byte**.
+Weaker assertions — starts with `CWS`, over 200 bytes — stay green for a compiler that has
+quietly diverged, and quiet divergence between two backends built from one source is the whole
+risk of the exercise. It goes through `compileWickToSWF` rather than importing the wasm module
+directly, so a mistake in the branch that *chooses* a route fails it too; with no bridge
+running, a fallback surfaces as an error rather than a pass. Mutation-checked: with
+`src/wasm-pkg/` moved aside and the frontend rebuilt, it exits 1 with the stub's message
+rather than quietly passing. 523 bytes, both sides, first try.
+
+`editor.yml`'s path filter now includes `src/**`, `wasm/**` and the root `Cargo.*`. That is not
+over-inclusion: the way two backends built from one source drift apart is a change to that
+source, so a filter that skipped `src/` would run the agreement check only on commits that
+could not break it. The CLI version is pinned from `wasm/Cargo.lock` via
+`dev/build-wasm.sh --print-bindgen-version`, because wasm-bindgen refuses a CLI/crate version
+mismatch and an unpinned `cargo install` breaks CI the day the next patch release lands.
+`release.yml` deliberately does *not* build the wasm — the desktop shell takes the Tauri
+branch, so it would be 480KB the binary can never reach.
 
 ALSO OPEN for a public release, in the order they'd bite:
    * **DONE 2026-07-28 — licensing stated, and the package now carries it.** `LICENSE` stays

@@ -32,9 +32,9 @@ route.
 
 The compiler handles what the fixtures exercise: filled and stroked paths, layer ordering, frame-by-frame timelines, nested clips as sprites, motion tweens with every easing curve the Wick engine ships, skew, brush shapes planarized so their holes survive, and `stop`/`play`/`gotoAndPlay`/`gotoAndStop` compiled to AVM1 — as frame actions and as click handlers. Gradients, text, audio, filters and images are out of scope for now.
 
-Three test layers back it: a structural oracle that parses the emitted SWF and asserts tags, depths and per-frame matrices; golden PNGs rendered through Ruffle's own exporter on lavapipe; and the editor's own browser checks. All of them run in CI.
+Four test layers back it: a structural oracle that parses the emitted SWF and asserts tags, depths and per-frame matrices; golden PNGs rendered through Ruffle's own exporter on lavapipe; the editor's own browser checks; and a check that compiles a fixture in a real browser tab and requires the bytes to match the CLI's exactly. All of them run in CI.
 
-What is not yet true: exporting a `.swf` from the editor works on a desktop build or against a local dev bridge, not from a plain browser tab. See [`HANDOFF.md`](HANDOFF.md) for the design, the verified `.wick` format notes, and the open work.
+Export works three ways, and the editor picks whichever exists: an in-process Rust call under the desktop build, the same compiler as wasm in a plain browser tab, or a local dev bridge. See [`editor/BUILD.md`](editor/BUILD.md) for setup and [`HANDOFF.md`](HANDOFF.md) for the design, the verified `.wick` format notes, and the open work.
 
 ## Credit
 

@@ -55,6 +55,10 @@ jobs:
 
       # The shell embeds ../build at compile time, so the frontend has to exist first.
       # Ruffle is gitignored and fetched, and without it the SWF preview 404s at runtime.
+      #
+      # Deliberately no `pnpm wasm` here. compileWickToSWF takes the Tauri branch in this
+      # shell, so the browser compiler would be ~480KB of bundled code the desktop build can
+      # never reach. The stub vite substitutes in its place is the right thing to ship.
       - name: Stage Ruffle and build the frontend
         working-directory: editor
         run: |

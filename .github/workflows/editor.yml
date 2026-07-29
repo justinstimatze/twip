@@ -5,17 +5,35 @@ name: editor
 # whatever the last person happened to run locally.
 #
 # Path-filtered because the editor is a vendored fork inside a Rust repo — a commit that only
-# touches src/ or fixtures/ has no reason to spend five minutes on a browser.
+# touches fixtures/ or the oracle has no reason to spend five minutes on a browser.
+#
+# The compiler's own sources ARE in the filter, and that is not over-inclusion. `pnpm
+# wasm-check` requires the tab and the CLI to emit identical bytes from one input, and the way
+# two backends built from one source drift apart is a change to that source. A filter that
+# skipped src/ would run the agreement check only on commits that could not break it.
+#
+# The two lists are duplicated because GitHub Actions does not resolve YAML anchors — an
+# `&paths`/`*paths` pair parses as a literal string and silently filters nothing.
 on:
   push:
     branches: [main]
     paths:
       - 'editor/**'
+      - 'wasm/**'
+      - 'src/**'
+      - 'fixtures/editor-tween.wick'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/editor.yml'
   pull_request:
     branches: [main]
     paths:
       - 'editor/**'
+      - 'wasm/**'
+      - 'src/**'
+      - 'fixtures/editor-tween.wick'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/editor.yml'
 
 concurrency:
@@ -45,6 +63,32 @@ jobs:
             editor/pnpm-lock.yaml
             editor/engine/pnpm-lock.yaml
 
+      # rust-toolchain.toml pins the channel; wasm32 is the browser compiler's target and the
+      # host triple builds the CLI that wasm-check compares its output against.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      # Pinned to the crate version in wasm/Cargo.lock. wasm-bindgen refuses to run a CLI and
+      # a crate at different versions, so an unpinned install breaks this job the day the next
+      # patch release lands, for no reason connected to any change here.
+      #
+      # RUSTFLAGS empty on purpose, twice over: the repo's .cargo/config.toml adds
+      # -fuse-ld=mold for x86_64 linux, which no runner has, and its `-D warnings` would apply
+      # to wasm-bindgen-cli's own source, which is not ours to keep warning-free.
+      - name: Install wasm-bindgen-cli
+        env:
+          RUSTFLAGS: ''
+        run: |
+          VERSION=$(dev/build-wasm.sh --print-bindgen-version)
+          echo "wasm/Cargo.lock wants wasm-bindgen $VERSION"
+          if [ "$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')" = "$VERSION" ]; then
+            echo "cached, skipping"
+          else
+            cargo install wasm-bindgen-cli --locked --version "$VERSION"
+          fi
+
       # engine/ is a separate package with its own lockfile, not a workspace member.
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir engine install --frozen-lockfile
@@ -65,8 +109,23 @@ jobs:
       - name: Stage the Ruffle runtime
         run: dev/fetch-ruffle.sh
 
+      # Before the build, not after: vite decides at load time whether `virtual:twip-wasm`
+      # resolves to the real package or to the stub, so a build that ran first would ship the
+      # stub and wasm-check would fail against a bundle nobody would ever ship.
+      - name: Build the browser compiler
+        env:
+          RUSTFLAGS: '-D warnings'
+        run: pnpm wasm
+
       - name: Build
         run: pnpm build
+
+      # wasm-check compares the tab's bytes against this binary's.
+      - name: Build the twip CLI
+        working-directory: .
+        env:
+          RUSTFLAGS: '-D warnings'
+        run: cargo build --release --bin twip
 
       # Both packages pin playwright 1.62.0 and share ~/.cache/ms-playwright, so one install
       # serves the engine suite and the editor scripts. --with-deps pulls the system libs
@@ -101,6 +160,14 @@ jobs:
 
       - name: Interact
         run: pnpm interact
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
+      # The one check that presses the button twip exists for. No bridge is running here, so a
+      # silent fall back to it cannot pass this off as working.
+      - name: Browser compiles a .wick, byte-identical to the CLI
+        run: pnpm wasm-check
         env:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173

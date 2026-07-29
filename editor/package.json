@@ -94,6 +94,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "wasm": "dev/build-wasm.sh",
+    "wasm-check": "node dev/wasm-check.mjs",
     "build-engine": "pnpm --dir engine build && cp -a engine/dist/. public/corelibs/wick-engine/",
     "test-engine": "pnpm --dir engine test",
     "smoke": "node dev/smoke.mjs",

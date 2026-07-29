@@ -40,6 +40,11 @@ engine/docs/*
 # Python bytecode from dev/twip_bridge.py
 __pycache__/
 
+# The compiler built to wasm, plus wasm-bindgen's generated glue. Build output of
+# dev/build-wasm.sh, not source — vite.config.mjs's `virtual:twip-wasm` resolves to a
+# stub when it is absent, so a checkout without it still builds.
+/src/wasm-pkg/
+
 # Baselines for dev/visual.mjs. Per-machine on purpose: browser text rendering
 # differs between this box and a CI runner, so a committed PNG would fail there for
 # reasons unrelated to the change under test. Bless locally, compare locally.

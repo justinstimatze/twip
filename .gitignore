@@ -35,3 +35,7 @@ reference/wick-editor/
 .DS_Store
 .idea/
 .vscode/
+
+# wasm build output (dev/build-wasm.sh) — the crate has its own target dir because it is
+# excluded from the root workspace.
+/wasm/target/

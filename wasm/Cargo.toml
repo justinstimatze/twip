@@ -1,0 +1,33 @@
+[package]
+name = "twip-wasm"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "wasm-bindgen wrapper around the twip compiler, so a browser tab can compile .wick -> .swf in-process."
+repository = "https://github.com/justinstimatze/twip"
+publish = false
+
+# cdylib is what wasm-bindgen consumes. Deliberately not in the root crate: `crate-type`
+# applies to every build, so putting it there would make the everyday `cargo build` and the
+# Tauri shell's dependency emit a shared object nobody links. This shell is the wasm
+# equivalent of editor/src-tauri — a thin surface over `twip::compile_wick`, nothing more.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+twip = { path = ".." }
+wasm-bindgen = "0.2"
+# Turns a Rust panic from "unreachable executed" into the real message and backtrace in the
+# browser console. wasm32 has no unwinding, so a panic still poisons the module — this only
+# buys legibility, which is the difference between a bug report and a shrug.
+console_error_panic_hook = "0.1"
+
+# The .wasm ships over the wire, so size is a user-facing cost in a way a native binary's is
+# not. opt-level="s" over "z": "z" additionally disables loop vectorization, and the
+# planarizer and the matrix walks are the hot paths.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
