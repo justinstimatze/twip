@@ -109,6 +109,17 @@ const CASES: &[Case] = &[
         fixture: "fixtures/dark-stage.wick",
         skipframes: 0,
     },
+    // Three rectangles, three gradients: linear, radial, and radial with a highlight. This is
+    // the case that has to be a rendered image rather than a structural assertion. A gradient
+    // reaches the file as a fixed square plus a matrix, so a wrong matrix produces a
+    // structurally perfect DefineShape4 that paints the ramp along the wrong axis, at the
+    // wrong scale, or with the bright spot on the wrong side — every one of which parses
+    // clean and looks obviously wrong the moment a player draws it.
+    Case {
+        name: "gradients",
+        fixture: "fixtures/gradients.wick",
+        skipframes: 0,
+    },
     // Mid-span. The clip is rotating 0 -> 180 and scaling 1 -> 2.5 while fading to 0.3, so
     // these three catch the interior at a quarter, a half and three quarters of the way.
     Case {

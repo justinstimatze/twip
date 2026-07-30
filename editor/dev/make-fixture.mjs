@@ -46,6 +46,22 @@ const PROJECT = {
   'dark-stage': { backgroundColor: '#1b1917', fill: '#ef4a2f' },
 };
 
+/*
+ * `gradients` is a different shape of fixture and takes a different path below: three
+ * rectangles, no tween. paper.js states a gradient as a ramp plus two points and means
+ * something different by the points per kind — for a linear one they are the ends of the
+ * ramp, for a radial one the centre and a point on the circle — so the three cases here are
+ * exactly the three conversions, and a matrix that muddles them renders visibly wrong rather
+ * than subtly so. The third adds a highlight, which is paper's name for what SWF calls a
+ * focal point and can only carry on a DefineShape4.
+ */
+const GRADIENTS = [
+  { at: [60, 60, 180, 180], radial: false, origin: [60, 60], destination: [240, 240] },
+  { at: [280, 60, 180, 180], radial: true, origin: [370, 150], destination: [460, 150] },
+  { at: [500, 60, 180, 180], radial: true, origin: [590, 150], destination: [680, 150],
+    highlight: [550, 110] },
+];
+
 const name = process.argv[2] || 'editor-tween';
 const out = path.join(new URL('../../fixtures/', import.meta.url).pathname, `${name}.wick`);
 
@@ -56,6 +72,35 @@ page.on('console', (m) => { if (m.type() === 'error') console.log('  page error:
 await page.goto(URL_, { waitUntil: 'networkidle', timeout: 60_000 });
 // The engine mounts imperatively from componentDidMount, same wait the other dev scripts use.
 await page.waitForTimeout(2500);
+
+if (name === 'gradients') {
+  const built = await page.evaluate((specs) => {
+    const paper = window.paper;
+    const frame = window.editor.project.activeFrame;
+    if (!frame) return { error: 'no active frame' };
+    for (const spec of specs) {
+      const item = new paper.Path.Rectangle(new paper.Rectangle(...spec.at));
+      const color = new paper.Color({
+        gradient: { stops: [['#ef4a2f', 0], ['#f2b54a', 0.5], ['#64b6df', 1]], radial: spec.radial },
+        origin: new paper.Point(...spec.origin),
+        destination: new paper.Point(...spec.destination),
+      });
+      if (spec.highlight) color.highlight = new paper.Point(...spec.highlight);
+      item.fillColor = color;
+      frame.addPath(new window.Wick.Path({ path: item }));
+    }
+    window.editor.project.view.render();
+    return { paths: frame.paths.length };
+  }, GRADIENTS);
+  if (built.error) { console.error(built.error); await browser.close(); process.exit(1); }
+  const b64 = await page.evaluate(() => new Promise((resolve) =>
+    window.Wick.WickFile.toWickFile(window.editor.project, resolve, 'base64')));
+  const comma = b64.indexOf(',');
+  await writeFile(out, Buffer.from(comma === -1 ? b64 : b64.slice(comma + 1), 'base64'));
+  console.log(`${built.paths} gradient-filled paths -> ${out}`);
+  await browser.close();
+  process.exit(0);
+}
 
 // Draw with the actual tool. page.mouse drives the same paper.js path the user would get.
 await page.locator('#tool-button-rectangle').first().click();

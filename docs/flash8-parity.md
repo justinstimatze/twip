@@ -59,17 +59,21 @@ invert, alpha, erase, overlay, hardlight.
 | Solid fills with alpha | `DefineShape3` RGBA | ● |
 | Multiple fill and line styles per shape | FILLSTYLEARRAY, LINESTYLEARRAY | ● |
 | Holes via winding (planarised brush shapes) | — | ● |
-| **Linear and radial gradient fills** | `GRADIENT`, up to 8 stops | ○ |
+| **Linear and radial gradient fills** | `GRADIENT` | ● |
+| **Focal radial gradients** **[SWF 8]** | `FOCALGRADIENT`, `DefineShape4` only | ● |
+| **15 gradient stops** instead of 8 **[SWF 8]** | `DefineShape4` NumGradients 1–15 | ● |
+| **Stroke caps and joins** **[SWF 8]** | `LINESTYLE2`, `DefineShape4` | ● |
 | **Bitmap fills** (clipped, tiled, smoothed) | FILLSTYLE types 0x40–0x43 | ○ |
-| **Focal radial gradients** **[SWF 8]** | `FOCALGRADIENT`, `DefineShape4` only | ○ |
-| **15 gradient stops** instead of 8 **[SWF 8]** | `DefineShape4` NumGradients 1–15 | ○ |
-| **Stroke caps and joins** **[SWF 8]** | `LINESTYLE2`, `DefineShape4` | ○ |
-| **Non-scaling strokes, filled strokes** **[SWF 8]** | `LINESTYLE2` | ○ |
+| Gradient-filled strokes **[SWF 8]** | `LINESTYLE2` FILLSTYLE | ○ |
+| Non-scaling strokes **[SWF 8]** | `LINESTYLE2` | ○ |
 
 Worth knowing: before `LINESTYLE2` arrived in SWF 8, *every* line in a SWF has rounded joins
-and round caps — the format could not express anything else. twip's `Stroke` already carries
-cap, join and miter limit from paper.js, so the data is there and only the SWF 8 shape writer
-is missing.
+and round caps — the format could not express anything else.
+
+twip emits `DefineShape4`, which is the SWF 8 shape tag, so the SWF 8 shape features are
+available to it rather than blocked: caps and joins already ride out on `LINESTYLE2`, and
+gradients get focal points and the full fifteen stops instead of the eight the older tags
+allow. A ramp with more stops than that loses its tail, and the export says so.
 
 ## 3. Bitmaps
 
@@ -198,6 +202,11 @@ The compiler emits `DefineShape`, `DefineSprite`, `PlaceObject`, `RemoveObject`,
 `SetBackgroundColor`, `ShowFrame` and `DoAction`. Everything else in this document is
 unwritten.
 
+That is seven tags of seventy, but tags are a poor unit — `DefineShape4` alone carries solid
+fills, gradients of three kinds, and every stroke style the format has. What the number does
+say is that whole *categories* are absent: nothing here defines a bitmap, a font, a sound or
+a video.
+
 That reads worse than it is, for two reasons worth stating plainly.
 
 **The runtime is not the constraint.** Ruffle — which is the only player twip targets, and
@@ -212,6 +221,6 @@ and `swf/src/avm1/write.rs` exist in the crate twip already depends on, so the e
 solved — what is missing is the mapping from a `.wick` document onto it, which is twip's whole
 job and is written one capability at a time.
 
-The cheapest ground per unit of work, in order: gradient fills (the format has them natively
-and the editor already ships a gradient tool), `DefineEditText` with device fonts, bitmap
-fills, then event sounds.
+The cheapest ground per unit of work, in order: `DefineEditText` with device fonts (no glyph
+outlines to extract — the player renders with a system face), bitmap fills, then event sounds.
+Gradients were first on this list and are done.

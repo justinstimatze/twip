@@ -41,7 +41,7 @@
 use anyhow::{Context, Result};
 use swf::{FillStyle, LineCapStyle, LineJoinStyle, LineStyle, ShapeRecord, Twips};
 
-use crate::wick::{Contour, Stroke, StrokeCap, StrokeJoin};
+use crate::wick::{Contour, Fill, Stroke, StrokeCap, StrokeJoin};
 
 /// One recovered ring: its points in pixels, and what it was painted with.
 fn ring_to_contour(
@@ -56,7 +56,9 @@ fn ring_to_contour(
         // stream does not say which, and closing an open stroke is the visible error while
         // leaving a fill open is not.
         closed: fill.is_some(),
-        fill,
+        // `import` reads solid fills only; a gradient in an incoming SWF is one of the
+        // things the README says to decompile with FFDec first.
+        fill: fill.map(Fill::Solid),
         stroke,
     }
 }
@@ -361,7 +363,7 @@ fn draw(
                         points: ring.points.iter().map(|&p| here.apply(p)).collect(),
                         holes: vec![],
                         closed: ring.closed,
-                        fill: ring.fill,
+                        fill: ring.fill.clone(),
                         stroke: ring.stroke.as_ref().map(|s| Stroke {
                             color: s.color,
                             // Stroke width scales with the placement, near enough for a
@@ -545,12 +547,14 @@ pub fn contours_to_svg(groups: &[Vec<Contour>], width: f64, height: f64) -> Stri
 
         // The rings of one shape share its paint; the first ring's is the shape's.
         let fill = match &first.fill {
-            Some(c) => format!(
+            Some(Fill::Solid(c)) => format!(
                 " fill=\"{}\" fill-opacity=\"{:.3}\" fill-rule=\"nonzero\"",
                 svg_color(c),
                 f64::from(c.a) / 255.0
             ),
-            None => " fill=\"none\"".to_string(),
+            // Unreachable while `import` only builds solid fills, and an honest arm rather
+            // than an unwrap that would become a panic the day it does more.
+            Some(Fill::Gradient(_)) | None => " fill=\"none\"".to_string(),
         };
         let stroke = match &first.stroke {
             Some(s) => format!(

@@ -196,7 +196,7 @@ pub fn tween_demo_swf() -> Vec<u8> {
         points: vec![(-20.0, -20.0), (20.0, -20.0), (20.0, 20.0), (-20.0, 20.0)],
         holes: vec![],
         closed: true,
-        fill: Some(Color::from_rgb(0xff3030, 255)),
+        fill: Some(wick::Fill::Solid(Color::from_rgb(0xff3030, 255))),
         stroke: None,
     };
     let mut tags: Vec<Tag> = vec![Tag::DefineShape(Box::new(contour_to_shape(1, &contour)))];
@@ -287,6 +287,138 @@ pub fn hello_square_swf() -> Vec<u8> {
     let mut out = Vec::new();
     write_swf(&header, &tags, &mut out).expect("write_swf into a Vec cannot fail");
     out
+}
+
+/// How many colour stops a `DefineShape4` gradient can hold (SWF19 p.136: NumGradients is 1
+/// to 15). The older shape tags stop at 8; twip emits `DefineShape4`, so this is the number.
+pub const MAX_GRADIENT_STOPS: usize = 15;
+
+/// Half the side of SWF's gradient square, in twips.
+///
+/// Every gradient in the format is stated over one fixed box — 32768 twips on a side, centred
+/// on the origin — and a matrix maps that box onto the shape. A linear ramp runs along x from
+/// `-GRADIENT_HALF` to `+GRADIENT_HALF`; a radial one is a circle of radius `GRADIENT_HALF`
+/// about the centre. Nothing about a shape's own coordinates appears in a gradient record;
+/// the matrix carries all of it. SWF19 p.135.
+const GRADIENT_HALF: f64 = 16384.0;
+
+/// Map SWF's gradient square onto the two points paper.js states a gradient with.
+///
+/// The two points mean different things per kind, which is the whole of the difference here.
+/// For a linear gradient they are the ends of the ramp, so the square's x axis has to land on
+/// the segment from one to the other: rotate to the segment's angle, scale so the square's
+/// full width covers its length, and translate to its midpoint. For a radial gradient the
+/// origin is the centre and the destination is a point on the circle, so there is no rotation
+/// to apply — scale the unit circle to the radius and translate to the centre.
+///
+/// The y scale is set equal to the x scale rather than left at 1. It is invisible for a linear
+/// gradient, whose ramp ignores y entirely, but a degenerate y would make the matrix
+/// non-invertible, and a player that inverts it to sample the ramp gets nothing.
+fn gradient_matrix(g: &wick::Gradient) -> Matrix {
+    let (ox, oy) = g.origin;
+    let (dx, dy) = g.destination;
+    let (vx, vy) = (dx - ox, dy - oy);
+    let length = vx.hypot(vy);
+
+    // A zero-length gradient has no direction to point and no size to scale to. Paint it as a
+    // hairline rather than dividing by zero — the ramp collapses to its last stop, which is
+    // what a player shows for a degenerate gradient anyway.
+    let length = if length < f64::EPSILON { 1.0 } else { length };
+
+    let spin = |cos: f64, sin: f64, scale: f64, tx: f64, ty: f64| Matrix {
+        a: Fixed16::from_f64(cos * scale),
+        b: Fixed16::from_f64(sin * scale),
+        c: Fixed16::from_f64(-sin * scale),
+        d: Fixed16::from_f64(cos * scale),
+        tx: Twips::from_pixels(tx),
+        ty: Twips::from_pixels(ty),
+    };
+
+    if g.radial {
+        let scale = Twips::from_pixels(length).get() as f64 / GRADIENT_HALF;
+        // A circle is the same in every orientation, so a radial gradient would not need one
+        // — except that SWF states a focal point along the gradient square's *x axis* and
+        // nowhere else. Aiming x at the highlight is what lets the bright spot land where the
+        // author put it rather than somewhere off to the stage's right.
+        let (cos, sin) = match g.highlight {
+            Some((hx, hy)) if (hx - ox).hypot(hy - oy) > f64::EPSILON => {
+                let (fx, fy) = (hx - ox, hy - oy);
+                let d = fx.hypot(fy);
+                (fx / d, fy / d)
+            }
+            _ => (1.0, 0.0),
+        };
+        return spin(cos, sin, scale, ox, oy);
+    }
+
+    // Linear: the square's full width (2 * GRADIENT_HALF) spans the ramp, and its x axis runs
+    // from origin to destination.
+    let scale = Twips::from_pixels(length).get() as f64 / (2.0 * GRADIENT_HALF);
+    spin(
+        vx / length,
+        vy / length,
+        scale,
+        (ox + dx) / 2.0,
+        (oy + dy) / 2.0,
+    )
+}
+
+/// A paper.js gradient as a SWF fill style.
+///
+/// Both spread and interpolation are the defaults the older shape tags require anyway (SWF19
+/// p.135: for DefineShape/2/3 they *must* be 0), and paper.js has no concept matching either —
+/// its ramps pad, which is `Pad`.
+///
+/// A radial gradient whose highlight is off-centre becomes a `FocalGradient`. SWF states the
+/// focal point as a fraction of the radius along the gradient square's x axis, in [-1, 1], so
+/// only the component along the ramp direction survives — an off-axis highlight is projected
+/// onto it rather than dropped, since projecting keeps the bright spot on the side the author
+/// put it.
+fn fill_to_style(fill: &wick::Fill) -> FillStyle {
+    use swf::{GradientInterpolation, GradientRecord, GradientSpread};
+
+    let g = match fill {
+        wick::Fill::Solid(color) => return FillStyle::Color(*color),
+        wick::Fill::Gradient(g) => g,
+    };
+
+    let mut stops: Vec<_> = g.stops.clone();
+    stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let gradient = swf::Gradient {
+        matrix: gradient_matrix(g),
+        spread: GradientSpread::Pad,
+        interpolation: GradientInterpolation::Rgb,
+        records: stops
+            .iter()
+            // Extra stops beyond the format's ceiling are reported by the reader.
+            .take(MAX_GRADIENT_STOPS)
+            .map(|&(offset, color)| GradientRecord {
+                ratio: (offset.clamp(0.0, 1.0) * 255.0).round() as u8,
+                color,
+            })
+            .collect(),
+    };
+
+    if !g.radial {
+        return FillStyle::LinearGradient(gradient);
+    }
+    let Some((hx, hy)) = g.highlight else {
+        return FillStyle::RadialGradient(gradient);
+    };
+
+    let (ox, oy) = g.origin;
+    let radius = (g.destination.0 - ox).hypot(g.destination.1 - oy);
+    if radius < f64::EPSILON {
+        return FillStyle::RadialGradient(gradient);
+    }
+    // `gradient_matrix` has already aimed the square's x axis at the highlight, so what is
+    // left to say is how far along it sits, as a fraction of the radius. Ruffle's own shader
+    // reads it that way: it remaps the square to [-1, 1] and offsets from `(focal_point, 0)`.
+    let offset = (hx - ox).hypot(hy - oy) / radius;
+    FillStyle::FocalGradient {
+        gradient,
+        focal_point: Fixed8::from_f64(offset.clamp(0.0, 1.0)),
+    }
 }
 
 /// Build the SWF LineStyle2 for a parsed stroke.
@@ -418,7 +550,8 @@ fn contour_to_shape(id: u16, contour: &Contour) -> Shape {
         styles: ShapeStyles {
             fill_styles: contour
                 .fill
-                .map(|c| vec![FillStyle::Color(c)])
+                .as_ref()
+                .map(|f| vec![fill_to_style(f)])
                 .unwrap_or_default(),
             line_styles: contour
                 .stroke
@@ -1761,7 +1894,7 @@ mod tests {
                             points: vec![(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)],
                             holes: vec![],
                             closed: true,
-                            fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
+                            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x00ff00, 255))),
                             stroke: None,
                         }],
                         clips: vec![],
@@ -1775,7 +1908,7 @@ mod tests {
                             points: vec![(20.0, 0.0), (30.0, 0.0), (25.0, 10.0)],
                             holes: vec![],
                             closed: true,
-                            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+                            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x0000ff, 255))),
                             stroke: None,
                         }],
                         clips: vec![],
@@ -1848,7 +1981,7 @@ mod tests {
             points: vec![(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0xff0000, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0xff0000, 255))),
             stroke: None,
         };
         for rate in [12.0, 24.0, 30.0, 59.94] {
@@ -1905,7 +2038,7 @@ mod tests {
                         points: vec![(0.0, 0.0), (10.0, 0.0), (5.0, 10.0)],
                         holes: vec![],
                         closed: true,
-                        fill: Some(swf::Color::from_rgb(0xff0000, 255)),
+                        fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0xff0000, 255))),
                         stroke: None,
                     }],
                     clips: vec![],
@@ -1940,7 +2073,7 @@ mod tests {
             points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0xff0000, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0xff0000, 255))),
             stroke: None,
         };
         let doc = Document {
@@ -2064,7 +2197,7 @@ mod tests {
             points: vec![(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)],
             holes: vec![],
             closed: true,
-            fill: Some(Color::from_rgb(0x00ff00, 255)),
+            fill: Some(wick::Fill::Solid(Color::from_rgb(0x00ff00, 255))),
             stroke: Some(wick::Stroke {
                 color: Color::from_rgb(0x000000, 255),
                 width: 2.0,
@@ -2151,7 +2284,7 @@ mod tests {
             points: vec![(x, 0.0), (x + 10.0, 0.0), (x + 5.0, 10.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x00ff00, 255))),
             stroke: None,
         };
         // A clip whose OWN timeline is a 2-keyframe animation, placed at (100, 50).
@@ -2774,14 +2907,176 @@ mod tests {
         assert_eq!(doc.background, swf::Color::WHITE);
     }
 
+    /// A gradient reaches the movie, and reaches it the right way round.
+    ///
+    /// The golden render is what proves a gradient looks right; this is what says why. SWF
+    /// states every gradient over one fixed square and carries a matrix mapping that square
+    /// onto the shape, so all the meaning is in six numbers, and a matrix that is wrong by a
+    /// rotation or a factor of two still writes a structurally perfect `DefineShape4`.
+    ///
+    /// The conventions asserted here were read off Ruffle's own tessellator and gradient
+    /// shader rather than inferred from the specification, because Ruffle is the only player
+    /// twip targets and therefore the only opinion that decides: `swf_to_gl_matrix` inverts
+    /// this matrix and divides by 32768, and `find_t` samples `uv.x` for a linear ramp and
+    /// `length(uv * 2 - 1)` for a radial one.
+    #[test]
+    fn a_gradient_maps_onto_swfs_gradient_square() {
+        let ramp = vec![
+            (0.0, Color::from_rgb(0xef4a2f, 255)),
+            (1.0, Color::from_rgb(0x64b6df, 255)),
+        ];
+        let linear = wick::Gradient {
+            stops: ramp.clone(),
+            radial: false,
+            // 200px along +x, so the ramp is axis-aligned and the numbers are readable.
+            origin: (100.0, 100.0),
+            destination: (300.0, 100.0),
+            highlight: None,
+        };
+
+        let m = gradient_matrix(&linear);
+        // The square is 32768 twips wide and the ramp is 200px = 4000 twips.
+        assert!((m.a.to_f64() - 4000.0 / 32768.0).abs() < 1e-6, "{:?}", m.a);
+        assert_eq!(m.b, Fixed16::ZERO, "no rotation for a gradient along +x");
+        // Translation is the ramp's midpoint, since the square is centred on its own origin.
+        assert_eq!(m.tx, Twips::from_pixels(200.0));
+        assert_eq!(m.ty, Twips::from_pixels(100.0));
+
+        // Straight down instead: same scale, rotated a quarter turn.
+        let down = wick::Gradient {
+            destination: (100.0, 300.0),
+            ..linear.clone()
+        };
+        let m = gradient_matrix(&down);
+        assert!((m.a.to_f64() - 0.0).abs() < 1e-3, "{:?}", m.a);
+        assert!((m.b.to_f64() - 4000.0 / 32768.0).abs() < 1e-6, "{:?}", m.b);
+
+        // Radial: the destination is a point on the circle, so the square's *half* width is
+        // the radius — half the scale a linear gradient of the same length would take.
+        let radial = wick::Gradient {
+            radial: true,
+            ..linear.clone()
+        };
+        let m = gradient_matrix(&radial);
+        assert!((m.a.to_f64() - 4000.0 / 16384.0).abs() < 1e-6, "{:?}", m.a);
+        assert_eq!(
+            m.tx,
+            Twips::from_pixels(100.0),
+            "centred on the origin, not the midpoint"
+        );
+
+        assert!(matches!(
+            fill_to_style(&wick::Fill::Gradient(linear.clone())),
+            FillStyle::LinearGradient(_)
+        ));
+        assert!(matches!(
+            fill_to_style(&wick::Fill::Gradient(radial.clone())),
+            FillStyle::RadialGradient(_)
+        ));
+
+        // A highlight makes it focal, and the matrix has to rotate even though a circle does
+        // not care: SWF states the focal point along the square's x axis and nowhere else, so
+        // without the rotation the bright spot slides off toward stage-right instead of
+        // toward wherever the author dragged it.
+        let focal = wick::Gradient {
+            highlight: Some((100.0, 150.0)),
+            ..radial.clone()
+        };
+        let m = gradient_matrix(&focal);
+        assert!(
+            (m.b.to_f64() - 4000.0 / 16384.0).abs() < 1e-6,
+            "x aims at the highlight"
+        );
+        match fill_to_style(&wick::Fill::Gradient(focal)) {
+            // 50px along a 200px radius.
+            FillStyle::FocalGradient { focal_point, .. } => {
+                assert!(
+                    (focal_point.to_f64() - 0.25).abs() < 0.01,
+                    "{focal_point:?}"
+                );
+            }
+            other => panic!("expected a focal gradient, got {other:?}"),
+        }
+
+        // The ramp itself: paper's 0..1 offsets become SWF's 0..255 ratios.
+        let FillStyle::LinearGradient(g) = fill_to_style(&wick::Fill::Gradient(linear)) else {
+            panic!("expected a linear gradient");
+        };
+        assert_eq!(
+            g.records.iter().map(|r| r.ratio).collect::<Vec<_>>(),
+            vec![0, 255]
+        );
+    }
+
+    /// A document holding a gradient compiles at all.
+    ///
+    /// This is not a subtle case and it did not fail subtly. paper.js stores a gradient once
+    /// in a shared dictionary and references it by key, which changes the shape of the whole
+    /// export: a path with only solid colours is `[class, props]`, and one carrying a
+    /// gradient is `[["dictionary", {…}], [class, props]]`. Reading `json[1]` as the props
+    /// map without noticing got an array, and the error was `Path props missing` — so a
+    /// project with one gradient anywhere in it did not export a movie without the gradient,
+    /// it did not export at all.
+    #[test]
+    fn a_document_with_a_gradient_compiles() {
+        let bytes = include_bytes!("../fixtures/gradients.wick");
+        let (swf, skipped) =
+            compile_wick_reporting(bytes, &Options::default()).expect("gradients.wick compiles");
+        assert!(
+            skipped.is_empty(),
+            "nothing left behind: {}",
+            skipped.describe()
+        );
+
+        let doc = wick::parse_wick(bytes).expect("parse");
+        let fills: Vec<_> = doc
+            .layers
+            .iter()
+            .flat_map(|l| l.frames.iter())
+            .flat_map(|f| f.contours.iter())
+            .filter_map(|c| c.fill.as_ref())
+            .collect();
+        assert_eq!(fills.len(), 3, "three gradient-filled rectangles");
+        assert!(
+            fills.iter().all(|f| matches!(f, wick::Fill::Gradient(_))),
+            "every one of them a gradient, not a solid fallback",
+        );
+
+        // And the movie carries all three as gradient fill styles rather than flat colours,
+        // which is the half a byte count cannot tell you.
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+        let styles: Vec<_> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::DefineShape(s) => Some(s.styles.fill_styles.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert_eq!(styles.len(), 3);
+        assert_eq!(
+            styles
+                .iter()
+                .filter(|f| matches!(
+                    f,
+                    FillStyle::LinearGradient(_)
+                        | FillStyle::RadialGradient(_)
+                        | FillStyle::FocalGradient { .. }
+                ))
+                .count(),
+            3,
+            "got {styles:?}",
+        );
+    }
+
     /// The export names what it left behind.
     ///
     /// This is the case for a whole class of quiet failure rather than for four particular
-    /// classnames. The editor ships a text tool, a gradient tool, image import and sound
-    /// import; the compiler reads none of them; and until this, drawing with any of them and
-    /// pressing export produced a movie missing that work, a success message, and nothing
-    /// else. The gradient was worse than missing — a colour array whose first element is the
-    /// word "gradient" read as channel zero, so a sunset compiled to opaque black.
+    /// classnames. The editor ships a text tool, image import and sound import; the compiler
+    /// reads none of them; and until this, drawing with any of them and pressing export
+    /// produced a movie missing that work, a success message, and nothing else.
     ///
     /// The compile still succeeds, which is the other half. Refusing a project because one
     /// title card cannot come along is the worse of the two failures.
@@ -2792,18 +3087,10 @@ mod tests {
 
         assert_eq!(
             doc.skipped.kinds().collect::<Vec<_>>(),
-            vec![
-                ("gradient", 1),
-                ("image", 1),
-                ("sound", 1),
-                ("text object", 1)
-            ],
+            vec![("image", 1), ("sound", 1), ("text object", 1)],
         );
-        assert_eq!(doc.skipped.total(), 4);
-        assert_eq!(
-            doc.skipped.describe(),
-            "1 gradient, 1 image, 1 sound, 1 text object",
-        );
+        assert_eq!(doc.skipped.total(), 3);
+        assert_eq!(doc.skipped.describe(), "1 image, 1 sound, 1 text object");
 
         // Reported through the entry point the CLI and the export button actually call, and
         // the movie is still a movie.
@@ -2861,10 +3148,7 @@ mod tests {
 
         let doc = wick::parse_wick(&rewrap_test1(&serde_json::to_string(&json).expect("json")))
             .expect("parse");
-        assert_eq!(
-            doc.skipped.describe(),
-            "1 gradient, 1 image, 1 sound, 2 text objects",
-        );
+        assert_eq!(doc.skipped.describe(), "1 image, 1 sound, 2 text objects");
     }
 
     /// Every string shape the format can hold. paper.js `toCSS()` writes `rgb(...)` when the
@@ -2930,14 +3214,16 @@ mod tests {
     }
 
     /// Zip a project.json back into something parse_wick will take.
-    /// test1's project.json with a text object, a placed image, an attached sound and a
-    /// gradient fill added to its first frame — the four things the editor can make and the
-    /// compiler cannot carry.
+    /// test1's project.json with a text object, a placed image and an attached sound added to
+    /// its first frame — three things the editor can make and the compiler cannot carry.
     ///
     /// Synthesized rather than authored through the editor, because the point is the shapes
     /// the format uses, and those are stable: a text object and an image are both Wick
-    /// `Path`s distinguished by the class inside `json`, a sound is a UUID on the frame, and
-    /// a gradient is a paper.js colour array whose leading element is a word.
+    /// `Path`s distinguished by the class inside `json`, and a sound is a UUID on the frame.
+    ///
+    /// A gradient used to be the fourth. It is not, since the compiler emits gradients now —
+    /// `fixtures/gradients.wick` is the real thing, authored through paper.js, and the golden
+    /// render is what checks it.
     fn fixture_json_with_unsupported() -> String {
         use std::io::Read;
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(
@@ -2961,20 +3247,6 @@ mod tests {
             .find(|(_, v)| v.get("classname").and_then(|c| c.as_str()) == Some("Frame"))
             .map(|(k, _)| k.clone())
             .expect("test1 has a Frame");
-
-        // A gradient fill goes on a path that is otherwise fine, so the case also pins that
-        // the shape leaves rather than arriving painted black.
-        let path_uuid = objects
-            .iter()
-            .find(|(_, v)| v.get("classname").and_then(|c| c.as_str()) == Some("Path"))
-            .map(|(k, _)| k.clone())
-            .expect("test1 has a Path");
-        // The real shape, read off paper.js's own Color._serialize in the vendored engine:
-        // a non-RGB colour is its type name followed by its components, so a gradient fill is
-        // ["gradient", <gradient>, <origin>, <destination>] — no "Color" wrapper.
-        objects[&path_uuid]["json"][1]["fillColor"] = serde_json::json!([
-            "gradient", ["Gradient", { "stops": [] }], [0.0, 0.0], [1.0, 1.0]
-        ]);
 
         for (uuid, class) in [("text-uuid", "PointText"), ("raster-uuid", "Raster")] {
             objects.insert(
@@ -3026,7 +3298,7 @@ mod tests {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x0000ff, 255))),
             stroke: None,
         };
         let clip = Clip {
@@ -3219,7 +3491,7 @@ mod tests {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x0000ff, 255))),
             stroke: None,
         };
         let ident = Transform {
@@ -3642,7 +3914,7 @@ mod tests {
             points: vec![(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0x00ff00, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x00ff00, 255))),
             stroke: None,
         };
         Document {
@@ -3837,7 +4109,7 @@ mod tests {
             points: vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
             holes: vec![],
             closed: true,
-            fill: Some(swf::Color::from_rgb(0x0000ff, 255)),
+            fill: Some(wick::Fill::Solid(swf::Color::from_rgb(0x0000ff, 255))),
             stroke: None,
         };
         // A clip with a mousepressed handler, placed on the root timeline.

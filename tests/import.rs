@@ -9,7 +9,16 @@
 //! importer does not recover them and pretending otherwise in a test would be the same lie
 //! as pretending it in the tool.
 
-use twip::wick::Contour;
+use twip::wick::{Contour, Fill};
+
+/// The RGB of a solid fill. `import` never produces a gradient — see its module docs — so a
+/// gradient here would be a fill this comparison silently ignores rather than one it lost.
+fn solid(fill: Option<&Fill>) -> Option<(u8, u8, u8)> {
+    match fill? {
+        Fill::Solid(c) => Some((c.r, c.g, c.b)),
+        Fill::Gradient(_) => None,
+    }
+}
 
 /// Bounding box of a ring, in pixels, rounded to the twip the format actually stores.
 fn bounds(points: &[(f64, f64)]) -> (i64, i64, i64, i64) {
@@ -41,6 +50,7 @@ fn compile(name: &str) -> Vec<u8> {
 /// shapes, so a `CompoundPath` leaves as more rings than it arrived as, and demanding the
 /// original vertex list back would be demanding the planarizer be undone. Where the ink
 /// landed is the claim the importer actually makes.
+
 #[test]
 fn recovers_the_geometry_it_was_given() {
     for name in ["test1.wick", "multi-layer.wick", "brush-donut.wick"] {
@@ -112,11 +122,11 @@ fn recovers_fill_colors() {
         .iter()
         .flat_map(|l| l.frames.iter())
         .flat_map(|f| f.contours.iter())
-        .filter_map(|c| c.fill.as_ref().map(|f| (f.r, f.g, f.b)))
+        .filter_map(|c| solid(c.fill.as_ref()))
         .collect();
     let mut got: Vec<(u8, u8, u8)> = shapes
         .iter()
-        .filter_map(|c| c.fill.as_ref().map(|f| (f.r, f.g, f.b)))
+        .filter_map(|c| solid(c.fill.as_ref()))
         .collect();
     want.sort_unstable();
     got.sort_unstable();

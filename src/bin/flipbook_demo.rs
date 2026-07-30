@@ -12,7 +12,7 @@ fn square(x: f64, y: f64, side: f64) -> Contour {
         points: vec![(x, y), (x + side, y), (x + side, y + side), (x, y + side)],
         holes: vec![],
         closed: true,
-        fill: Some(Color::from_rgb(0xff0000, 255)),
+        fill: Some(twip::wick::Fill::Solid(Color::from_rgb(0xff0000, 255))),
         stroke: None,
     }
 }

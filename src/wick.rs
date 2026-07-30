@@ -167,8 +167,36 @@ pub struct Contour {
     pub holes: Vec<Vec<(f64, f64)>>,
     /// Whether paper.js marked the path closed (a fill closes regardless).
     pub closed: bool,
-    pub fill: Option<Color>,
+    pub fill: Option<Fill>,
     pub stroke: Option<Stroke>,
+}
+
+/// What fills a contour's area.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Fill {
+    Solid(Color),
+    Gradient(Gradient),
+}
+
+/// A paper.js gradient fill, in stage pixels.
+///
+/// paper.js states a gradient as two points and a ramp, and means something different by the
+/// points for each kind: for a linear gradient `origin` and `destination` are the ends of the
+/// ramp, and for a radial one `origin` is the centre and `destination` is any point on the
+/// circle. SWF instead states every gradient over one fixed "gradient square" and carries a
+/// matrix that maps that square onto the shape, so the conversion is entirely in the matrix —
+/// see `gradient_matrix` in lib.rs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gradient {
+    /// `(offset 0..1, colour)`, in the order paper.js stored them.
+    pub stops: Vec<(f64, Color)>,
+    pub radial: bool,
+    pub origin: (f64, f64),
+    pub destination: (f64, f64),
+    /// Where a radial gradient's bright spot sits, when it is not the centre. paper.js calls
+    /// this the highlight; SWF calls the same idea a focal point and can only carry it on a
+    /// `DefineShape4`, which is what twip emits.
+    pub highlight: Option<(f64, f64)>,
 }
 
 /// A stroke outline: paper.js `strokeColor` / `strokeWidth` / `strokeCap` /
@@ -463,6 +491,33 @@ fn parse_transform(clip: &Value) -> crate::Transform {
     }
 }
 
+/// paper.js's shared-object table, when `exportJSON` wrote one.
+///
+/// `Gradient._serialize` calls `dictionary.add`, so a gradient is stored once and referenced
+/// by key. That changes the shape of the whole export: a path with only solid colours is
+/// `[class, props]`, and one carrying a gradient is `[["dictionary", {…}], [class, props]]`.
+/// A parser that reads `json[1]` as the props map without noticing gets an array instead of
+/// an object — which is exactly what happened, and it was not a quiet wrong answer but a hard
+/// `Path props missing`, so a document with a single gradient anywhere in it failed to
+/// compile at all.
+type Dictionary<'a> = Option<&'a serde_json::Map<String, Value>>;
+
+fn split_dictionary(json: &[Value]) -> (Dictionary<'_>, &[Value]) {
+    let entry = json.first().and_then(Value::as_array);
+    let is_dict = entry.is_some_and(|e| e.first().and_then(Value::as_str) == Some("dictionary"));
+    if is_dict {
+        let table = entry.and_then(|e| e.get(1)).and_then(Value::as_object);
+        // The item itself is the next element, which is its own `[class, props]` pair.
+        let rest = json
+            .get(1)
+            .and_then(Value::as_array)
+            .map_or(&[][..], |v| &v[..]);
+        (table, rest)
+    } else {
+        (None, json)
+    }
+}
+
 fn path_to_contour(path: &Value, skipped: &mut Skipped) -> Result<Option<Contour>> {
     // Path.json = [class, props] (raw paper.js exportJSON). class is "Path" for a
     // single path or "CompoundPath" for a brush stroke with holes. A text object and a
@@ -472,13 +527,14 @@ fn path_to_contour(path: &Value, skipped: &mut Skipped) -> Result<Option<Contour
         .get("json")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("Path.json not an array"))?;
-    let props = json
+    let (dict, item) = split_dictionary(json);
+    let props = item
         .get(1)
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow!("Path props missing"))?;
-    match json.first().and_then(Value::as_str) {
-        Some("Path") => single_path_to_contour(props, skipped),
-        Some("CompoundPath") => compound_to_contour(props, skipped),
+    match item.first().and_then(Value::as_str) {
+        Some("Path") => single_path_to_contour(props, dict, skipped),
+        Some("CompoundPath") => compound_to_contour(props, dict, skipped),
         Some(other) => {
             skipped.note(human(other));
             Ok(None)
@@ -490,7 +546,41 @@ fn path_to_contour(path: &Value, skipped: &mut Skipped) -> Result<Option<Contour
     }
 }
 
+/// Read a fill off a props map: a solid colour, a gradient, or nothing readable.
+///
+/// A gradient reaches here as `["gradient", ["#41"], [ox, oy], [dx, dy]]`, optionally with a
+/// fifth `[hx, hy]` highlight — the ramp itself lives in the export's dictionary under that
+/// key, which is why this needs the table as well as the props.
+fn styled_fill(
+    props: &serde_json::Map<String, Value>,
+    key: &str,
+    dict: Dictionary<'_>,
+    skipped: &mut Skipped,
+) -> Option<Fill> {
+    let raw = props.get(key)?;
+    if let Some(color) = read_color(raw) {
+        return Some(Fill::Solid(color));
+    }
+    if let Some(gradient) = read_gradient(raw, dict) {
+        // 15 is the format's ceiling, not twip's (SWF19 p.136: NumGradients is 1 to 15, and
+        // the pre-SWF-8 shape tags stop at 8). paper.js has no such limit, so a ramp with
+        // more stops than the file can hold loses its tail — said out loud rather than
+        // rendered as a gradient that is quietly the wrong one.
+        for _ in crate::MAX_GRADIENT_STOPS..gradient.stops.len() {
+            skipped.note("gradient stop");
+        }
+        return Some(Fill::Gradient(gradient));
+    }
+    skipped.note(&unreadable_color(raw));
+    None
+}
+
 /// Read a style colour off a props map, counting it if it is there and cannot be read.
+///
+/// Solid only, for strokes. SWF can fill a stroke with a gradient from SWF 8 (`LINESTYLE2`
+/// carries a whole FILLSTYLE), and twip emits `DefineShape4`, so this is a gap rather than a
+/// limit — but a gradient stroke is a rarer thing than a gradient fill by some distance, and
+/// it is reported rather than guessed at.
 fn styled_color(
     props: &serde_json::Map<String, Value>,
     key: &str,
@@ -504,8 +594,47 @@ fn styled_color(
     color
 }
 
+/// `["gradient", ["#41"], [ox, oy], [dx, dy] (, [hx, hy])]` plus the dictionary entry
+/// `"#41": ["Gradient", [[[r,g,b(,a)], offset], …], radial]`.
+fn read_gradient(raw: &Value, dict: Dictionary<'_>) -> Option<Gradient> {
+    let arr = raw.as_array()?;
+    if arr.first()?.as_str()? != "gradient" {
+        return None;
+    }
+    let point = |i: usize| -> Option<(f64, f64)> {
+        let p = arr.get(i)?.as_array()?;
+        Some((p.first()?.as_f64()?, p.get(1)?.as_f64()?))
+    };
+
+    // The reference is itself a one-element array holding the key.
+    let key = arr.get(1)?.as_array()?.first()?.as_str()?;
+    let entry = dict?.get(key)?.as_array()?;
+    let stops = entry
+        .get(1)?
+        .as_array()?
+        .iter()
+        .filter_map(|stop| {
+            let stop = stop.as_array()?;
+            let color = read_color(stop.first()?)?;
+            Some((stop.get(1)?.as_f64()?, color))
+        })
+        .collect::<Vec<_>>();
+    if stops.is_empty() {
+        return None;
+    }
+
+    Some(Gradient {
+        stops,
+        radial: entry.get(2).and_then(Value::as_bool).unwrap_or(false),
+        origin: point(2)?,
+        destination: point(3)?,
+        highlight: point(4),
+    })
+}
+
 fn single_path_to_contour(
     props: &serde_json::Map<String, Value>,
+    dict: Dictionary<'_>,
     skipped: &mut Skipped,
 ) -> Result<Option<Contour>> {
     let segs = props
@@ -520,7 +649,7 @@ fn single_path_to_contour(
     let points = flatten_segments(segs, closed);
 
     // A fill needs a closed area (>=3 points); a stroke can be a bare 2-point line.
-    let fill = styled_color(props, "fillColor", skipped).filter(|_| points.len() >= 3);
+    let fill = styled_fill(props, "fillColor", dict, skipped).filter(|_| points.len() >= 3);
     let stroke = parse_stroke(props, skipped).filter(|_| points.len() >= 2);
     if fill.is_none() && stroke.is_none() {
         return Ok(None);
@@ -541,6 +670,7 @@ fn single_path_to_contour(
 /// "outer" here does not matter.
 fn compound_to_contour(
     props: &serde_json::Map<String, Value>,
+    dict: Dictionary<'_>,
     skipped: &mut Skipped,
 ) -> Result<Option<Contour>> {
     let children = props
@@ -566,7 +696,7 @@ fn compound_to_contour(
     }
 
     // A brush stroke is a solid fill; strokes on a CompoundPath are unusual but honored.
-    let fill = styled_color(props, "fillColor", skipped);
+    let fill = styled_fill(props, "fillColor", dict, skipped);
     let stroke = parse_stroke(props, skipped);
     if fill.is_none() && stroke.is_none() {
         return Ok(None);
