@@ -132,7 +132,7 @@ const audit = (longest) => page.evaluate((LONG) => {
         const need = textWidth(l);
         const have = inner(l);
         if (need - have > 0.5) clipped.push(`${l.textContent.trim()} short ${(need - have).toFixed(1)}px`);
-        columns.push({ text: l.textContent.trim(), need, box: l.clientWidth });
+        columns.push({ text: l.textContent.trim(), box: l.clientWidth, needs: need + (l.clientWidth - have) });
       }
     }
     return { clipped, overflowed, columns, rows: rows.length };
@@ -168,12 +168,15 @@ for (const width of WIDTHS) {
                      ...stressed.overflowed.map((o) => `${width}px ${o}`));
 
   /* The percentage split gave every row the same label column for free. An intrinsic one has
-   * to earn it: labels short enough to sit on the floor must still come out the same width,
-   * or a run of rows down the panel goes ragged. */
+   * to earn it, and the promise it can actually keep is narrower: a label that fits the floor
+   * sits exactly on it, and only a label that does not fit takes more. `needs` is the whole
+   * box the text wants, gutter included — comparing bare text against a padded floor is what
+   * made this case fail on a label that was behaving. */
   const floor = Math.min(...real.columns.map((c) => c.box));
-  const shorts = real.columns.filter((c) => c.need <= floor);
-  const odd = shorts.filter((c) => Math.abs(c.box - floor) > 0.5);
+  const odd = real.columns.filter((c) => c.needs <= floor && Math.abs(c.box - floor) > 0.5);
   if (odd.length) misaligned.push(`${width}px: ${odd.map((c) => `${c.text} ${c.box}`).join(', ')} against ${floor}`);
+  const spread = Math.max(...real.columns.map((c) => c.box)) - floor;
+  if (spread > 0.5) seen.push(`${width}px label column ${floor}-${floor + spread}`);
 }
 
 record('reads-the-real-widths', WIDTHS.length === 3,

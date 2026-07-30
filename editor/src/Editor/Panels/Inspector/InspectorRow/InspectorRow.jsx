@@ -17,8 +17,8 @@
  * takes whatever is left. Every label that already fit still sits in that shared column,
  * which is what keeps a run of rows aligned down the panel; only the long ones push past it,
  * and every one of those is on a row with a single field to give the space up. The two-label
- * rows — Origin X/Y, Width/Height, Fill/Opacity — are short by construction and unaffected,
- * apart from the pixel the floor gains below.
+ * rows — Origin X/Y, Width/Height, Fill/Opacity — are short by construction, and give up a
+ * pixel of input width at the 200px floor so that their labels never have to.
  *
  * `small` is a fixed cell that expects a sibling beside it (X next to Y). Everything else
  * fills the remainder, which is what `medium` at 50% and `large` at 70% were both hand-
@@ -44,15 +44,19 @@ export function InspectorLabel ({ htmlFor, children }) {
   return (
     <label
       htmlFor={htmlFor}
-      /* w-auto with nowrap sizes to the text; the floor holds the shared column the short
-         labels line up in. That floor is 30% of the sidebar, except where 30% is too little:
-         at the sidebar's own 200px minimum it comes to 55px, and "Scale W" — the widest
-         label the editor puts on a two-label row, the one shape with no slack anywhere in
-         it — measures 53.81px and wants 56.56 with its gutter. Hence 57. Shrink stays on so
-         that row gives back a fraction of a pixel rather than overflowing the panel, and a
-         field is flex-1 off a zero base so it never takes space a long label asked for.
-         No left padding: the text is right-aligned, so it only ever shrank the box. */
-      className="mt-[3px] flex h-full w-auto min-w-[max(30%,57px)] flex-col overflow-hidden pr-[1.5%] pl-0 text-right text-sm font-bold whitespace-nowrap text-content"
+      /* w-auto with nowrap sizes to the text; min-w-[30%] holds the shared column the short
+         labels line up in. shrink-0 is what makes a two-label row work: its four cells add
+         up to exactly 100%, so at the sidebar's 200px floor "Scale W" is a pixel over its
+         share and something has to give. The label refusing means the two `small` fields
+         give instead, by a pixel each, down to a 30px ceiling on how far they will go — and
+         they are nowhere near it, since two labels and two floored inputs come to 171 of
+         183px. A pixel off an input nobody can see beats a letter off a word they can.
+         (A fixed px floor sized to fit "Scale W" was the other way to do this. It passed
+         here and failed on CI by 0.7px: the same string measures wider in the runner's
+         chromium, and any constant fitted to one renderer's metrics is fitted to one
+         renderer.) A field is flex-1 off a zero base, so it never takes space a long label
+         asked for. No left padding: right-aligned text only ever shrank the box. */
+      className="mt-[3px] flex h-full w-auto min-w-[30%] shrink-0 flex-col overflow-hidden pr-[1.5%] pl-0 text-right text-sm font-bold whitespace-nowrap text-content"
     >
       {children}
     </label>
