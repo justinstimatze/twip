@@ -11,6 +11,11 @@ name: release
 # back at any time without anyone touching this file.
 #
 # See LICENSING.md.
+# The build itself is also called by desktop.yml on pushes to main, which is why it is a
+# `workflow_call` as well. That indirection exists because `on.push` cannot hold one paths
+# filter for tags and another for branches — a `paths` list applies to both, so filtering the
+# push build here would mean a v-tag landing on a commit that only touched docs quietly fails
+# to release.
 on:
   push:
     tags: ['v*']
@@ -19,6 +24,13 @@ on:
       tag:
         description: 'Tag to create and release (e.g. v0.1.0). Leave blank to build without releasing.'
         required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Tag to release. Blank builds the .deb and publishes nothing.'
+        required: false
+        default: ''
         type: string
 
 concurrency:
@@ -58,7 +70,20 @@ jobs:
       # RUSTFLAGS empty because .cargo/config.toml adds `-fuse-ld=mold` for any x86_64 linux and
       # config discovery walks up from the cwd — an install run from the repo root inherits it
       # onto a runner with no mold. Its `-D warnings` would also apply to the CLI's own source.
+      #
+      # Cached as a binary rather than rebuilt. Swatinem/rust-cache above covers the editor
+      # workspace's dependencies, not a `cargo install` into ~/.cargo/bin, so this was compiling
+      # the CLI from source on every single run — the largest fixed cost in a job that now runs
+      # on pushes instead of only on tags. The key is the version, so a bump refetches.
+      - name: Cache the tauri CLI
+        id: tauri-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri
+          key: cargo-tauri-2.11.4-${{ runner.os }}
+
       - name: Install the tauri CLI
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
         env:
           RUSTFLAGS: ''
         run: cargo install tauri-cli --locked --version 2.11.4
@@ -117,12 +142,17 @@ jobs:
           path: editor/src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
 
-      # Two ways in, one tag out: a pushed tag names itself, a dispatch names one or leaves it
-      # blank to build without releasing.
+      # Three ways in, one tag out: a pushed *tag* names itself, a dispatch names one or leaves
+      # it blank, and a call from desktop.yml passes nothing at all.
+      #
+      # The ref has to be checked for being a tag, not just for the event being a push. Under
+      # workflow_call the event stays whatever the caller's was, so a push to main reaching here
+      # through desktop.yml would read github.ref_name as `main` and try to publish a release
+      # called main.
       - name: Which tag, if any
         id: which
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"

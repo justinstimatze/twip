@@ -117,6 +117,16 @@ in `vite.config.mjs`.
 
 ## The desktop build
 
+CI builds it. `desktop.yml` runs on every push to main that touches `editor/`, `src/` or the
+cargo manifests, and leaves a `.deb` as a run artifact; `scripts/install-desktop.sh` fetches the
+newest one and installs it, or builds from the working tree with `--local`.
+
+That exists because this was the one artifact nothing kept current. The site redeploys on push
+and the goldens run on push, while the package was built by hand — so it sat 46 commits behind
+main, through the entire rebrand, and the only thing that noticed was opening it.
+
+By hand, when you want this tree rather than main's:
+
 ```
 pnpm build                                    # the frontend first; the shell embeds build/
 cd src-tauri && ~/.cargo/bin/cargo-tauri build --bundles deb
