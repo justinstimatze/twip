@@ -75,6 +75,13 @@ available to it rather than blocked: caps and joins already ride out on `LINESTY
 gradients get focal points and the full fifteen stops instead of the eight the older tags
 allow. A ramp with more stops than that loses its tail, and the export says so.
 
+Gradients are authored with the gradient tool, and the gestures are worth knowing because
+they are not the ones a Flash veteran expects. The tool targets a shape on **click** rather
+than on a drag across it, and seeds a two-stop ramp from the fill already there — so nothing
+looks different until a handle is moved, and nothing looks like a *gradient* until a stop is
+recoloured, since both stops start the same colour. `pnpm gradient-check` drives exactly that
+sequence.
+
 ## 3. Bitmaps
 
 | Capability | Tags | twip |
