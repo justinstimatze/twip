@@ -1,15 +1,19 @@
 name: golden
 
-# Ruffle golden-PNG oracle (test layer 2). SEPARATE from ci.yml, manual-only: run it
-# from the Actions tab.
+# Ruffle golden-PNG oracle (test layer 2). A separate workflow from ci.yml, in its own
+# pinned container, and since 2026-07-29 it runs on push instead of only from a button.
 #
-# The stated reason used to be a ~20-40 min exporter build. MEASURED on the first green
-# run (30132465564, 2026-07-24): full ruffle clone + release build of -p exporter took
-# 5m45s, whole job 8m7s cold, and the exporter cache below makes a warm run a fraction
-# of that. So cost is no longer the argument for keeping this off ci.yml — pixel
-# comparison against a versioned system rasterizer is. Moving it to `on: push` would be
-# a real option now; it would just mean a mesa SRU can red the build on a commit that
-# changed nothing.
+# Manual-only rested on a guessed ~20-40 min exporter build. MEASURED on the first green
+# run (30132465564, 2026-07-24): the ruffle clone plus a release build of -p exporter
+# took 5m45s, the whole job 8m7s cold, and the exporter cache below makes a warm run a
+# fraction of that. What manual-only actually bought was an oracle nobody remembers to
+# press. ci.yml has asserted the emitted tags, depths and matrices on every push since it
+# existed; nothing asserted the pixels unless someone thought to go and click this.
+#
+# Running on push costs the reverse: a mesa SRU can red a commit that changed nothing.
+# That failure is legible — an outlier count, with the installed mesa version printed a
+# few lines above it — and its fix is the re-bless described below, so it is the cheaper
+# of the two silences.
 #
 # The goldens are pixel-compared, so the RENDERING BACKEND IS PART OF THE CONTRACT:
 # whatever blessed a golden must be what checks it. lavapipe is the deterministic
@@ -29,7 +33,37 @@ name: golden
 # prints the installed version directly above it in the same log. Fix is a re-bless
 # (dispatch with bless=true, download the artifact, commit tests/goldens/) — not a
 # tolerance bump, which would blind the oracle to the regressions it exists to catch.
+#
+# The path filter is what makes running on push affordable. Only four things can move a
+# pixel: the compiler, a fixture, the harness, or the ruffle rev the exporter is built
+# from. Editor commits cannot, and most commits here are editor commits. The two lists are
+# duplicated because GitHub Actions does not resolve YAML anchors — an `&paths`/`*paths`
+# pair parses as a literal string and filters nothing, silently. editor.yml says the same.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'fixtures/**'
+      - 'tests/golden.rs'
+      - 'tests/goldens/**'
+      - 'scripts/oracle-setup.sh'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/golden.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'fixtures/**'
+      - 'tests/golden.rs'
+      - 'tests/goldens/**'
+      - 'scripts/oracle-setup.sh'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/golden.yml'
+  # Re-blessing stays a deliberate act. Running this by hand and downloading the artifact
+  # is the only way to get new PNGs; see the bless step below for why a push must not.
   workflow_dispatch:
     inputs:
       bless:
@@ -103,6 +137,10 @@ jobs:
         if: steps.exporter.outputs.cache-hit != 'true'
         run: bash scripts/oracle-setup.sh
 
+      # `inputs` is populated for workflow_dispatch and nothing else, so on a push
+      # `inputs.bless` is null: the check runs, the bless step skips. That is the only
+      # acceptable arrangement — a run triggered by a commit must never rewrite the
+      # goldens it exists to compare that commit against.
       - name: Golden oracle
         if: ${{ !inputs.bless }}
         run: cargo test --features golden -- --nocapture
