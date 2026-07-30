@@ -71,10 +71,10 @@ jobs:
       # config discovery walks up from the cwd — an install run from the repo root inherits it
       # onto a runner with no mold. Its `-D warnings` would also apply to the CLI's own source.
       #
-      # Cached as a binary rather than rebuilt. Swatinem/rust-cache above covers the editor
-      # workspace's dependencies, not a `cargo install` into ~/.cargo/bin, so this was compiling
-      # the CLI from source on every single run — the largest fixed cost in a job that now runs
-      # on pushes instead of only on tags. The key is the version, so a bump refetches.
+      # Keyed on the CLI's version alone, which is the point. Swatinem/rust-cache above also
+      # restores ~/.cargo/bin, but it keys on the editor workspace's lockfile — so every change
+      # to the app's dependencies would otherwise throw away a compiled tauri-cli that has
+      # nothing to do with them. This survives that churn; a version bump is what refetches it.
       - name: Cache the tauri CLI
         id: tauri-cli-cache
         uses: actions/cache@v4
