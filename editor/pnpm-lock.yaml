@@ -101,9 +101,6 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
-      react-hotkeys:
-        specifier: ^2.0.0
-        version: 2.0.0(react@19.2.8)
       react-modal:
         specifier: ^3.16
         version: 3.16.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -122,6 +119,9 @@ importers:
       tinycolor2:
         specifier: ^1.4.1
         version: 1.6.0
+      tinykeys:
+        specifier: ^4.0.0
+        version: 4.0.0
       underscore:
         specifier: ^1.13.7
         version: 1.13.8
@@ -2552,11 +2552,6 @@ packages:
       react: '>= 16.3.0'
       react-dom: '>= 16.3.0'
 
-  react-hotkeys@2.0.0:
-    resolution: {integrity: sha512-3n3OU8vLX/pfcJrR3xJ1zlww6KS1kEJt0Whxc4FiGV+MJrQ1mYSYI3qS/11d2MJDFm8IhOXMTFQirfu6AVOF6Q==}
-    peerDependencies:
-      react: '>= 0.14.0'
-
   react-inline-center@1.0.1:
     resolution: {integrity: sha512-nMxG933OWuZET/CkvQTPBVEPNRI2zhfeeeiRqXKKzSdvIPHnHnDXZmh9KkRO2DDCjJFvZQ3KIe50lXaaxvnoNw==}
     peerDependencies:
@@ -2906,6 +2901,10 @@ packages:
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
+
+  tinykeys@4.0.0:
+    resolution: {integrity: sha512-z5bQRQHL1PSx3lGOZEAMM2oKp0EBtn5T5f7HJnaKPOzk6vEH0wUPvdHLeQ7F4tmkek8AgoTQISUFmn/5SNF2xA==}
+    engines: {node: '>=22'}
 
   to-absolute-glob@2.0.2:
     resolution: {integrity: sha512-rtwLUQEwT8ZeKQbyFJyomBRYXyE16U5VKuy0ftxLMK/PZb2fkOsg5r9kHdauuVDbsNdIBoC/HCthpidamQFXYA==}
@@ -5531,11 +5530,6 @@ snapshots:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
-  react-hotkeys@2.0.0(react@19.2.8):
-    dependencies:
-      prop-types: 15.8.1
-      react: 19.2.8
-
   react-inline-center@1.0.1(react@19.2.8):
     dependencies:
       react: 19.2.8
@@ -5923,6 +5917,8 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
+
+  tinykeys@4.0.0: {}
 
   to-absolute-glob@2.0.2:
     dependencies:

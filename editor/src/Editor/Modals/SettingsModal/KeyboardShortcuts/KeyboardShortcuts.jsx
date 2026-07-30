@@ -18,7 +18,7 @@
  */
 
 import React, { Component } from 'react';
-import { recordKeyCombination } from 'react-hotkeys';
+import { recordKeyCombination } from 'Editor/hotkeys';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton'; 
 import HotKeyInterface from 'Editor/hotKeyMap.js';
 
@@ -164,15 +164,11 @@ class KeyboardShortcuts extends Component {
 
   beginEdit = (actionName, index) => {
     // Begin recording that we are editing a key.
+    // The recorder names the space bar 'space', so the fixup that used to rewrite a literal
+    // " " here is gone — these strings are the shortcut's own label in the table below, and a
+    // row reading `⌃ + ` is not one.
     var cancelKeyRecording =  recordKeyCombination(
-      (sequence) => {
-        if (sequence.keys[" "]) {
-          sequence.id = sequence.id.replace(" ", "space");
-          delete sequence.keys[" "];
-          sequence.keys.space = true;
-        }
-        return this.changeKey(actionName, index, sequence);
-      }
+      (sequence) => this.changeKey(actionName, index, sequence)
     );
 
     // Set that we are editing a key.

@@ -182,6 +182,15 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # Fourteen shortcut behaviours, thirteen of them recorded against react-hotkeys before it
+      # was replaced. The sequence strings in hotKeyMap.js are also the labels the settings modal
+      # renders, so a change here can be wrong twice over and look right once.
+      - name: Every keyboard shortcut still behaves
+        run: pnpm hotkeys-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI

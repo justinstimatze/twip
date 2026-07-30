@@ -78,7 +78,7 @@ Menus
 
 [react-ga](https://github.com/react-ga/react-ga) - Used for Analytics
 
-[react-hotkeys](https://github.com/greena13/react-hotkeys) - Used for hotkey system
+[tinykeys](https://github.com/jamiebuilds/tinykeys) - Used for hotkey system
 
 [react-modal](https://github.com/reactjs/react-modal) - Used for popping up modals
 

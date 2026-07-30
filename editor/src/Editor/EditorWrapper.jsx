@@ -17,11 +17,11 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import ErrorBoundary from './Util/ErrorBoundary';
 import { TooltipProvider } from '@/ui/tooltip';
 import { Toaster } from '@/ui/toast';
-import { GlobalHotKeys } from 'react-hotkeys';
+import { bindHotKeys } from './hotkeys';
 import ErrorPage from './Util/ErrorPage';
 import ModalHandler from './Modals/ModalHandler/ModalHandler';
 import { Hook, Unhook } from 'console-feed';
@@ -39,6 +39,22 @@ export default function EditorWrapper(props) {
         return () => Unhook(window.console)
     }, [])
 
+    // The shortcuts are bound to the window rather than to an element, which is what makes them
+    // work while a toolbar button holds focus — pick a tool with the mouse, then press Ctrl+Z.
+    //
+    // Rebound only when the sequences themselves change, which is on the two state changes that
+    // narrow the map (preview playback, view-only) and when the user edits a custom hotkey. The
+    // handlers are read through a ref at fire time instead, because getKeyHandlers() builds a
+    // fresh object on every render in the view-only branch and depending on it would rebind
+    // eighty-four listeners on every keystroke.
+    const keyMap = props.editor.getKeyMap();
+    const handlers = useRef(null);
+    handlers.current = props.editor.getKeyHandlers();
+    useEffect(
+        () => bindHotKeys(keyMap, () => handlers.current),
+        [JSON.stringify(keyMap)]
+    );
+
 
     return (
         <ErrorBoundary
@@ -50,10 +66,6 @@ export default function EditorWrapper(props) {
               second tooltip immediately instead of re-waiting the delay. */}
           <TooltipProvider delayDuration={200} skipDelayDuration={400}>
             <Toaster />
-            <GlobalHotKeys
-                allowChanges={true}
-                keyMap={props.editor.getKeyMap()}
-                handlers={props.editor.getKeyHandlers()} />
             <div id="editor" className="theme-default">
                 <ModalHandler
                     getRenderSize={props.editor.getRenderSize}
