@@ -231,6 +231,17 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # The Inspector describes three subjects now, and the one that earns the tabs is Frame:
+      # with a clip selected it still answers about the frame under the playhead, which the
+      # flat panel could not do at all. The other half is the rail following the selection
+      # without overriding a tab picked by hand — wrong in either direction and the panel you
+      # chose keeps disappearing.
+      - name: The Inspector holds three subjects at once
+        run: pnpm inspector-tabs-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI

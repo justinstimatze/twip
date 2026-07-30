@@ -37,6 +37,9 @@ import InspectorScriptWindow from './InspectorScriptWindow/InspectorScriptWindow
 import InspectorCheckbox from './InspectorRow/InspectorRowTypes/InspectorCheckbox';
 import InspectorFramePicker from './InspectorFramePicker/InspectorFramePicker';
 import InspectorEasingCurve from './InspectorEasingCurve/InspectorEasingCurve';
+import InspectorTabs from './InspectorTabs/InspectorTabs';
+import InspectorDocument from './InspectorDocument/InspectorDocument';
+import InspectorDraft from './InspectorDraft/InspectorDraft';
 
 /*
  * One property group: a labelled block of rows with a hairline under it. Was
@@ -45,9 +48,37 @@ import InspectorEasingCurve from './InspectorEasingCurve/InspectorEasingCurve';
  */
 const ITEM = 'flex flex-col items-center border-b-2 border-surface-sunken px-panel-pad py-[5px]';
 
+const TABS = [
+  { id: 'object', label: 'Object' },
+  { id: 'frame', label: 'Frame' },
+  { id: 'document', label: 'Doc' },
+];
+
+/*
+ * Which tab owns each selection type. Everything the engine can report is in one list or the
+ * other except 'unknown', which is what an empty selection reports — deliberately absent, so
+ * that deselecting leaves you on the tab you were reading rather than throwing you back to
+ * Object to look at a blank panel.
+ */
+const TAB_FOR_TYPE = {};
+['clip', 'button', 'path', 'text', 'image', 'multipath', 'multiclip', 'multicanvas',
+  'multitimeline', 'imageasset', 'soundasset', 'multiassetmixed', 'multisoundasset',
+  'multiimageasset', 'gradientfill', 'gradientstroke', 'gradientstop',
+].forEach(type => { TAB_FOR_TYPE[type] = 'object'; });
+['frame', 'multiframe', 'tween', 'multitween', 'layer', 'multilayer',
+].forEach(type => { TAB_FOR_TYPE[type] = 'frame'; });
+
 class Inspector extends Component {
   constructor (props) {
     super(props);
+
+    this.state = {
+      tab: 'object',
+      /* Both are here so getDerivedStateFromProps can tell a real change from a re-render:
+       * it runs on every render, including the ones its own setState causes. */
+      lastSelectionType: null,
+      lastTabRequest: props.inspectorTabRequest,
+    };
 
     /**
      * Which render function should be used for each selection type?
@@ -122,6 +153,41 @@ class Inspector extends Component {
       "gradientstop": "Gradient Stop",
       "unknown": "",
     }
+  }
+
+  /*
+   * What the panel is describing right now. The gradient tool reports its own sub-selection
+   * — a fill, a stroke, an individual stop — which the project's selection never holds.
+   */
+  static currentSelectionType (props) {
+    const activeTool = props.getActiveTool();
+    return activeTool.name === 'gradienttool' ? activeTool.selectionType : props.getSelectionType();
+  }
+
+  /*
+   * The context half of "context-aware": selecting something moves the panel to the tab that
+   * can describe it. Clicking a tab by hand sticks, because nothing here fires until the
+   * selection type actually changes — so you can sit on Frame while dragging shapes around
+   * and the panel stays where you put it until you select a different kind of thing.
+   *
+   * getDerivedStateFromProps rather than componentDidUpdate because the selection type is not
+   * a prop, it is the return of a prop function, so there is no previous value to diff against
+   * — the previous value has to be kept here.
+   */
+  static getDerivedStateFromProps (props, state) {
+    if(props.inspectorTabRequest !== state.lastTabRequest) {
+      return {
+        lastTabRequest: props.inspectorTabRequest,
+        lastSelectionType: Inspector.currentSelectionType(props),
+        tab: props.inspectorTab,
+      };
+    }
+
+    const type = Inspector.currentSelectionType(props);
+    if(type === state.lastSelectionType) return null;
+
+    const owner = TAB_FOR_TYPE[type];
+    return { lastSelectionType: type, tab: owner || state.tab };
   }
 
   /**
@@ -588,7 +654,7 @@ class Inspector extends Component {
    * Renders an inspector row allowing viewing and editing of sound assets attached to the
    * current object.
    */
-  renderSelectionSoundAsset = () => {
+  renderSelectionSoundAsset = (get, set) => {
     let options = [{
       value: null,
       label: "No Sound"
@@ -609,7 +675,7 @@ class Inspector extends Component {
 
     options = options.concat(this.props.getAllSoundAssets().map(mapAsset));
 
-    let value = this.getSelectionAttribute('sound');
+    let value = get('sound');
     return (
       <InspectorSelector
         tooltip="Sound"
@@ -617,36 +683,42 @@ class Inspector extends Component {
         options={options}
         value={value}
         isSearchable={true}
-        onChange={(val) => {this.setSelectionAttribute('sound', val.value)}} />
+        onChange={(val) => {set('sound', val.value)}} />
     );
   }
 
-  renderSelectionSoundVolume = () => {
+  renderSelectionSoundVolume = (get, set) => {
     return (
       <InspectorNumericInput
         tooltip="Volume"
-        val={this.getSelectionAttribute('soundVolume')}
-        onChange={(val) => {this.setSelectionAttribute('soundVolume', val)}}
+        val={get('soundVolume')}
+        onChange={(val) => {set('soundVolume', val)}}
         id="inspector-sound-volume" />
     )
   }
 
-  renderSelectionSoundStart = () => {
+  renderSelectionSoundStart = (get, set) => {
     return (
       <InspectorNumericInput
         tooltip="Start (ms)"
         type="numeric"
-        val={this.getSelectionAttribute('soundStart')}
-        onChange={(val) => {this.setSelectionAttribute('soundStart', val)}} />
+        val={get('soundStart')}
+        onChange={(val) => {set('soundStart', val)}} />
     )
   }
 
-  renderSoundContent = () => {
+  /*
+   * The same three rows whether the frame is selected or merely under the playhead — the
+   * Frame tab shows sound in both states, and a frame's sound does not become a different
+   * property depending on how you reached it. Defaults to the selection, which is every
+   * caller but that one.
+   */
+  renderSoundContent = (get = this.getSelectionAttribute, set = this.setSelectionAttribute) => {
     return (
       <div className={ITEM}>
-        {this.renderSelectionSoundAsset()}
-        {this.getSelectionAttribute('sound') && this.renderSelectionSoundVolume()}
-        {this.getSelectionAttribute('sound') && this.renderSelectionSoundStart()}
+        {this.renderSelectionSoundAsset(get, set)}
+        {get('sound') && this.renderSelectionSoundVolume(get, set)}
+        {get('sound') && this.renderSelectionSoundStart(get, set)}
       </div>
     )
   }
@@ -1058,6 +1130,77 @@ class Inspector extends Component {
   }
 
   /**
+   * The frame under the playhead, when nothing in the timeline is selected.
+   *
+   * This is what the Frame tab is for. Every other view in this panel describes the
+   * selection, and the selection holds one thing — so before the tabs, a clip on the canvas
+   * and the frame it sits in were mutually exclusive questions. There is always a frame under
+   * the playhead, so this tab is answerable at any moment, and it stays answerable while you
+   * work on the canvas.
+   *
+   * No script row, unlike the selected-frame view. Scripts come through
+   * getSelectedObjectScript, which reads the selection — the one thing this view is defined
+   * by not having. Clicking the frame in the timeline is how you get to its code, and that
+   * also switches this tab to the selection-driven rows.
+   */
+  renderPlayheadFrame = () => {
+    const context = this.props.getFrameContext();
+    if(!context || !context.frame) {
+      return (
+        <PanelEmpty>
+          No frame on this layer at the playhead. Add one in the timeline.
+        </PanelEmpty>
+      );
+    }
+
+    const {frame, layer} = context;
+    const get = (attribute) => frame[attribute];
+    const set = (attribute, value) => this.props.setActiveFrameAttribute(attribute, value);
+
+    return (
+      <div className="inspector-content">
+        {/* Length is held rather than applied per keystroke, and this row is the sharpest
+            case for it: typing 30 passes through 3, a 3-frame frame does not reach a playhead
+            at 4, and the row deletes its own subject mid-word. See InspectorDraft. */}
+        <InspectorDraft
+          className={ITEM}
+          values={{ identifier: frame.identifier, length: frame.length }}
+          onCommit={(draft) => this.props.setActiveFrameProperties(draft)}>
+          {(draft, edit) => (
+            <>
+              <InspectorTextInput
+                tooltip="Name"
+                val={draft.identifier}
+                onChange={edit('identifier')}
+                placeholder="no_name" />
+              <InspectorNumericInput
+                tooltip="Length"
+                val={draft.length}
+                onChange={edit('length')} />
+            </>
+          )}
+        </InspectorDraft>
+        {this.renderSoundContent(get, set)}
+        {layer &&
+          <div className={ITEM}>
+            <InspectorTextInput
+              tooltip="Layer"
+              val={layer.name}
+              onChange={(val) => this.props.setActiveLayerAttribute('name', val)}
+              id="inspector-active-layer-name" />
+            <InspectorNumericSlider
+              tooltip="Opacity"
+              val={layer.opacity}
+              onChange={(val) => this.props.setActiveLayerAttribute('opacity', val)}
+              divider={false}
+              inputProps={{min: 0, max: 1, step: 0.01}}
+              id="inspector-active-layer-opacity" />
+          </div>}
+      </div>
+    );
+  }
+
+  /**
    * Renders a default selection view with no properties.
    */
   renderUnknown = () => {
@@ -1144,49 +1287,100 @@ class Inspector extends Component {
 
   /**
    * Renders the inspector title for the current selection.
-   * @param {string} selectionType selection type to return.
+   * @param {string} context what the active tab is describing, shown beside the panel label.
    */
-  renderTitle = (selectionType) => {
-    if (!(selectionType in this.inspectorTitles)) selectionType = "";
+  renderTitle = (context) => {
+    return <InspectorTitle context={context} />;
+  }
+
+  /*
+   * The Object tab: the selection, when the selection is something on the stage or in the
+   * library. Everything here was the whole panel before the tabs.
+   *
+   * A column of flat colour is what it showed whenever nothing was selected, which on a
+   * fresh project is the state you first meet it in. It reads as broken. Saying what it is
+   * waiting for costs one line and makes the panel legible while idle.
+   */
+  renderObjectTab = (selectionType, gradient) => {
+    if (TAB_FOR_TYPE[selectionType] !== 'object') {
+      return <PanelEmpty>Select something on the stage to see its properties here.</PanelEmpty>;
+    }
 
     return (
-      <InspectorTitle
-        type={selectionType}
-        title={this.inspectorTitles[selectionType]} />
+      <>
+        {this.renderDisplay(selectionType)}
+        {this.renderActions(selectionType)}
+        {!gradient && this.props.selectionIsScriptable() && this.renderScripts()}
+        {!gradient && selectionType === 'clip' && this.renderAnimationSetting()}
+      </>
     );
   }
 
   /*
-   * A column of flat colour is what the Inspector showed whenever nothing was selected,
-   * which on a fresh project is the state you first meet it in. It reads as broken. Saying
-   * what it is waiting for costs one line and makes the panel legible while idle.
+   * The Frame tab: a selected frame, tween or layer if there is one, and otherwise the frame
+   * under the playhead. Both halves are the timeline's properties; which one you get depends
+   * only on whether you clicked in the timeline, and the fallback is what makes the tab worth
+   * having — see renderPlayheadFrame.
    */
+  renderFrameTab = (selectionType) => {
+    if (TAB_FOR_TYPE[selectionType] !== 'frame') return this.renderPlayheadFrame();
+
+    return (
+      <>
+        {this.renderDisplay(selectionType)}
+        {this.renderActions(selectionType)}
+        {this.props.selectionIsScriptable() && this.renderScripts()}
+      </>
+    );
+  }
+
   render () {
     const activeTool = this.props.getActiveTool();
     const gradient = activeTool.name === 'gradienttool';
-    const selectionType = gradient ? activeTool.selectionType : this.props.getSelectionType();
-    // 'unknown' is what the engine reports for an empty selection, and it *is* a key in
-    // inspectorTitles — mapped to the empty string — so a membership test alone reads it as
-    // a real type and renders the panel's blank branch.
-    const empty = selectionType === 'unknown' || !(selectionType in this.inspectorTitles);
+    const selectionType = Inspector.currentSelectionType(this.props);
+    const tab = this.state.tab;
+    const frameContext = this.props.getFrameContext();
+
+    /*
+     * The rail's second line names what THIS TAB is showing, not what is selected — on the
+     * Document tab a selected path is not what the panel is describing, and saying "Path"
+     * there would be a caption for the wrong picture.
+     *
+     * 'unknown' is what the engine reports for an empty selection, and it is a key in
+     * inspectorTitles mapped to the empty string, so a membership test alone reads it as a
+     * real type.
+     */
+    const context = {
+      object: this.inspectorTitles[selectionType] || null,
+      frame: TAB_FOR_TYPE[selectionType] === 'frame'
+        ? this.inspectorTitles[selectionType]
+        : (frameContext ? `Frame ${frameContext.playheadPosition}` : null),
+      document: this.props.getProjectSettings().name,
+    }[tab];
 
     return (
       <div
         className="flex h-full w-full flex-col overflow-hidden border-r border-line bg-surface font-ui"
         aria-label="Inspector Panel"
       >
-        {this.renderTitle(selectionType)}
-        <div className="min-h-0 w-full flex-1 overflow-hidden hover:overflow-y-auto">
-          {empty
-            ? <PanelEmpty>Select something on the stage to see its properties here.</PanelEmpty>
-            : (
-              <>
-                {this.renderDisplay(selectionType)}
-                {this.renderActions(selectionType)}
-                {!gradient && this.props.selectionIsScriptable() && this.renderScripts()}
-                {!gradient && selectionType === 'clip' && this.renderAnimationSetting()}
-              </>
-            )}
+        {this.renderTitle(context)}
+        <InspectorTabs
+          tabs={TABS}
+          active={tab}
+          onSelect={(id) => this.setState({ tab: id })} />
+        <div
+          role="tabpanel"
+          id={`inspector-tabpanel-${tab}`}
+          aria-labelledby={`inspector-tab-${tab}`}
+          className="min-h-0 w-full flex-1 overflow-hidden hover:overflow-y-auto"
+        >
+          {tab === 'object' && this.renderObjectTab(selectionType, gradient)}
+          {tab === 'frame' && this.renderFrameTab(selectionType)}
+          {tab === 'document' &&
+            <InspectorDocument
+              className={ITEM}
+              settings={this.props.getProjectSettings()}
+              onCommit={this.props.updateProjectSettings} />}
         </div>
       </div>
     );

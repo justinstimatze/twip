@@ -34,7 +34,7 @@
  *
  * Env: SMOKE_URL (default http://localhost:3000), PLAYWRIGHT_CHANNEL (see dev/browser.mjs).
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { launch, URL_ } from './browser.mjs';
@@ -42,11 +42,24 @@ import { launch, URL_ } from './browser.mjs';
 const src = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'Editor');
 
 /* Every string the panel can put in a label. tooltip is the single-label rows, tooltip1 and
- * tooltip2 the two-label ones — the prop is named for what it used to be. */
-const inspectorSource = readFileSync(join(src, 'Panels', 'Inspector', 'Inspector.jsx'), 'utf8');
+ * tooltip2 the two-label ones — the prop is named for what it used to be.
+ *
+ * The whole Inspector tree, not just Inspector.jsx: the tabs moved the Document tab's rows
+ * into their own file, and a check that reads one file only keeps its promise — "a label
+ * added tomorrow is covered the day it lands" — until somebody adds a component. */
 const LABELS = [...new Set(
-  [...inspectorSource.matchAll(/tooltip[12]?="([^"]+)"/g)].map((m) => m[1])
+  [...jsxUnder(join(src, 'Panels', 'Inspector'))]
+    .flatMap((file) => [...readFileSync(file, 'utf8').matchAll(/tooltip[12]?="([^"]+)"/g)])
+    .map((m) => m[1])
 )];
+
+function * jsxUnder (dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) yield * jsxUnder(path);
+    else if (entry.name.endsWith('.jsx')) yield path;
+  }
+}
 const LONGEST = LABELS.reduce((a, b) => (b.length > a.length ? b : a), '');
 
 /* The sidebar's own range, so this tests the widths that exist rather than three guesses. */
@@ -182,7 +195,7 @@ for (const width of WIDTHS) {
 record('reads-the-real-widths', WIDTHS.length === 3,
   `sidebar range from Editor.jsx: ${WIDTHS.join(', ')}px — ${seen.join('  ')}`);
 record('knows-every-label', LABELS.length > 30,
-  `${LABELS.length} label strings from Inspector.jsx, longest "${LONGEST}"`);
+  `${LABELS.length} label strings across the Inspector, longest "${LONGEST}"`);
 record('nothing-clips', clipped.length === 0,
   clipped.join(' | ') || `every rendered label fits at ${WIDTHS.join('/')}px`);
 record('nothing-overflows', overflowed.length === 0,

@@ -83,9 +83,16 @@ class MenuBar extends Component {
 
         <div className="h-4 w-px shrink-0 bg-line" aria-hidden="true" />
 
+        {/* The project name is still the handle for the project's settings; the settings are
+            no longer a dialog over the stage you are sizing. See InspectorDocument. */}
+        {/* No aria-label: the visible text is the project name, and naming the button
+            "Project settings" would replace it — WCAG's Label in Name wants the accessible
+            name to contain what is written on the control. What the button DOES belongs in
+            the description, which is what title already is. */}
         <button
           type="button"
-          onClick={() => this.props.openModal('SimpleProjectSettings')}
+          id="menu-bar-project-name"
+          onClick={this.props.openProjectSettings}
           title="Project settings"
           className="min-w-0 truncate rounded-sm px-1.5 py-0.5 text-[13px] text-content-muted transition-colors hover:bg-surface-hover hover:text-content"
         >

@@ -64,6 +64,7 @@
     "a11y-timeline-check": "node dev/a11y-timeline-check.mjs",
     "autokey-check": "node dev/autokey-check.mjs",
     "easing-check": "node dev/easing-check.mjs",
+    "inspector-tabs-check": "node dev/inspector-tabs-check.mjs",
     "build-engine": "pnpm --dir engine build && cp -a engine/dist/. public/corelibs/wick-engine/",
     "test-engine": "pnpm --dir engine test",
     "smoke": "node dev/smoke.mjs",

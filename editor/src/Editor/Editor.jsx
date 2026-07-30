@@ -132,6 +132,10 @@ class Editor extends EditorCore {
       // reads Wick.Project.autoKey, which componentDidMount syncs from the same place.
       autoKey: window.localStorage.getItem('twip:auto-key') === 'on',
       localSavedFiles: [], // Files to display in savedProjects Modal.
+      // Which Inspector tab something outside the panel last asked for, and a counter so
+      // asking for the tab already showing still counts as asking. See focusInspectorTab.
+      inspectorTab: 'object',
+      inspectorTabRequest: 0,
       // Held in state rather than read from window.innerWidth during render, so that
       // componentDidUpdate can see the transition and tell the engine about it.
       renderSize: computeRenderSize(),
@@ -1064,6 +1068,7 @@ class Editor extends EditorCore {
             <MenuBar
               openModal={this.openModal}
               projectName={this.project.name}
+              openProjectSettings={() => this.focusInspectorTab('document')}
               openProjectFileDialog={this.openProjectFileDialog}
               openNewProjectConfirmation={this.openNewProjectConfirmation}
               exportProjectAsWickFile={this.exportProjectAsWickFile}
@@ -1243,6 +1248,14 @@ class Editor extends EditorCore {
                         getSelectedTweenCurve={this.getSelectedTweenCurve}
                         setSelectedTweenCurve={this.setSelectedTweenCurve}
                         autoSmoothSelectedTweens={this.autoSmoothSelectedTweens}
+                        getFrameContext={this.getFrameContext}
+                        setActiveFrameAttribute={this.setActiveFrameAttribute}
+                        setActiveFrameProperties={this.setActiveFrameProperties}
+                        setActiveLayerAttribute={this.setActiveLayerAttribute}
+                        getProjectSettings={this.getProjectSettings}
+                        updateProjectSettings={this.updateProjectSettings}
+                        inspectorTab={this.state.inspectorTab}
+                        inspectorTabRequest={this.state.inspectorTabRequest}
                         editorActions={this.actionMapInterface.editorActions}
                         selectionIsScriptable={this.selectionIsScriptable}
                         script={this.getSelectedObjectScript()}

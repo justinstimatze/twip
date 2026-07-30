@@ -2017,6 +2017,95 @@ class EditorCore extends Component {
   }
 
   /**
+   * The frame and layer under the playhead, for the Inspector's Frame tab.
+   *
+   * The Inspector reads everything else through getAllSelectionAttributes, which by
+   * construction can only describe one thing at a time — so with a clip selected, the frame
+   * that clip sits in is unreachable without deselecting it. That is the whole reason the
+   * panel needed tabs, and a tab that goes blank the moment you touch the canvas would not
+   * have fixed it. There is always a frame under the playhead; this is how the panel says so.
+   *
+   * Returns the objects rather than a snapshot of their values. The Frame tab renders three
+   * of them and would otherwise need a snapshot key per property, and Wick's model objects
+   * are the same identities across a render, so a stale read is not a risk here.
+   */
+  getFrameContext = () => {
+    const timeline = this.project.activeTimeline;
+    if(!timeline) return null;
+    return {
+      playheadPosition: timeline.playheadPosition,
+      layer: this.project.activeLayer || null,
+      frame: this.project.activeFrame || null,
+    };
+  }
+
+  /**
+   * Change a property of the frame under the playhead.
+   *
+   * Separate from setSelectionAttribute because that one writes through the selection, and
+   * the frame this edits is by definition the one that is NOT selected — if it were, the
+   * Frame tab would be showing the selection-driven rows instead.
+   */
+  setActiveFrameAttribute = (attribute, value) => {
+    this.setActiveFrameProperties({ [attribute]: value });
+  }
+
+  /**
+   * Write several at once, as one undo state.
+   *
+   * The Frame tab's name and length arrive together from a held draft, and they are two
+   * properties of one edit — splitting them into two history entries would make undoing that
+   * edit take two presses, one of which lands on a state the user never saw.
+   */
+  setActiveFrameProperties = (properties) => {
+    const frame = this.project.activeFrame;
+    if(!frame) return;
+
+    let changed = false;
+    Object.keys(properties).forEach(key => {
+      if(frame[key] === properties[key]) return;
+      frame[key] = properties[key];
+      changed = true;
+    });
+    if(!changed) return;
+
+    this.projectDidChange({ actionName: "Change Frame Property" });
+  }
+
+  setActiveLayerAttribute = (attribute, value) => {
+    const layer = this.project.activeLayer;
+    if(!layer) return;
+    layer[attribute] = value;
+    this.projectDidChange({ actionName: "Change Layer Property" });
+  }
+
+  /**
+   * The document's own properties, for the Inspector's Document tab.
+   */
+  getProjectSettings = () => {
+    return {
+      name: this.project.name,
+      framerate: this.project.framerate,
+      width: this.project.width,
+      height: this.project.height,
+    };
+  }
+
+  /**
+   * Ask the Inspector to show one of its tabs.
+   *
+   * The nonce is the message: the tab the panel is on is the panel's own state, and it
+   * follows the selection on its own, so a plain prop would either fight that or need the
+   * caller to clear it afterwards. A counter says "this was asked for just now" exactly once.
+   */
+  focusInspectorTab = (tab) => {
+    this.setState(state => ({
+      inspectorTab: tab,
+      inspectorTabRequest: state.inspectorTabRequest + 1,
+    }));
+  }
+
+  /**
    * Return all possible sound assets.
    */
   getAllSoundAssets = () => {

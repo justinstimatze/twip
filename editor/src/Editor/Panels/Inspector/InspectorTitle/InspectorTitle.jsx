@@ -20,9 +20,14 @@
 import React, { Component } from 'react';
 import { PanelHeader } from '@/ui/panel';
 
+/*
+ * `context` names what the panel is currently describing. It used to be the selection type,
+ * which is now only true on the Object tab — on Frame it is the frame, and on Document it is
+ * the project. So the caller decides and this only places it.
+ */
 class InspectorTitle extends Component {
   render () {
-    return <PanelHeader label="Inspector" context={this.props.type ? this.props.title : null} />;
+    return <PanelHeader label="Inspector" context={this.props.context || null} />;
   }
 }
 

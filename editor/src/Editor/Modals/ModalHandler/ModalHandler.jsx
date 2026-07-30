@@ -30,7 +30,6 @@ import BuiltinLibrary from '../BuiltinLibrary/BuiltinLibrary';
 import EditorInfo from '../EditorInfo/EditorInfo';
 import OpenSourceNotices from '../OpenSourceNotices/OpenSourceNotices';
 import SavedProjects from '../SavedProjects/SavedProjects';
-import SimpleProjectSettings from '../SimpleProjectSettings/SimpleProjectSettings';
 import SwfPreview from '../SwfPreview/SwfPreview';
 
 class ModalHandler extends Component {
@@ -146,12 +145,6 @@ class ModalHandler extends Component {
           reloadSavedWickFiles={this.props.reloadSavedWickFiles}
           openWarningModal={this.props.openWarningModal}
           />
-        <SimpleProjectSettings 
-          updateProjectSettings={this.props.updateProjectSettings}
-          project={this.props.project}
-          toggle={this.props.closeActiveModal}
-          open={this.props.activeModalName === 'SimpleProjectSettings'}/>
-
         <SwfPreview
           open={this.props.activeModalName === 'SwfPreview'}
           toggle={this.props.closeActiveModal}
