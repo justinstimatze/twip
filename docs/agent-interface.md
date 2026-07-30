@@ -66,6 +66,47 @@ also to be readable by a person.
 This is the highest-leverage thing to expose, and it is already built — it needs naming, not
 writing.
 
+## The shape tier one should take
+
+Written down while the codebase was fresh, so the build does not have to rediscover it.
+
+**A Go binary, `twipdoc`, and an MCP server over the same package.** Go because it is the
+house default and because [gemot](https://github.com/justinstimatze/gemot) already solves the
+surrounding problem — a Go MCP server with an HTTP transport, an agent card at
+`/.well-known/agent-card.json`, anonymous rate-limited access, and a CLI beside the server.
+That skeleton is worth lifting rather than rewriting; what is twip-specific is only the verbs.
+
+Not Rust, even though the compiler is Rust. The document tier does not compile anything — it
+reads and writes a zip of JSON — and putting it in the compiler crate would mean either
+linking an MCP server into `twip` or maintaining a second binary in a language chosen for a
+job this one does not do.
+
+The verbs, in the order they earn their place:
+
+| | |
+|---|---|
+| `read` | the document as a summary: stage, framerate, layers, frames and their spans, clips, tween keys, scripts, assets |
+| `frames` | one layer's keyframes, with what is on each |
+| `script get` / `script set` | a frame's or clip's script, by event name |
+| `tween` | read and retime a tween's keys, including its easing and any `bezier` |
+| `layer add` / `layer reorder` | the structural edits with no geometry in them |
+| `compile` | shell out to `twip`, returning the report from `wick::Skipped` alongside the bytes |
+
+Two constraints the format imposes, both learned the hard way this week and neither obvious
+from the outside:
+
+- `project.json` is a **flat UUID map**, not a tree. Parents name children by UUID and a
+  `Selection` object is editor state. Anything that walks it must go root-down through the
+  project's root Clip to its Timeline, or it will read the same objects twice.
+- A path's `json` is `[class, props]` **or** `[["dictionary", {…}], [class, props]]` when it
+  carries a gradient, because paper.js stores shared objects in a table. A reader that assumes
+  the first shape does not degrade — it fails outright. See `split_dictionary` in
+  `src/wick.rs`.
+
+The canvas tier stays what it is for now: `window.editor`, driven the way `editor/dev/*.mjs`
+already drive it. Naming that surface deliberately is worth doing, but it is worth doing after
+the document tier, because most of what an agent wants does not need it.
+
 ## What exists today
 
 `window.editor` is the whole `EditorCore` surface, and the ten scripts in `editor/dev/` drive
