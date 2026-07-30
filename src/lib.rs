@@ -2792,7 +2792,12 @@ mod tests {
 
         assert_eq!(
             doc.skipped.kinds().collect::<Vec<_>>(),
-            vec![("gradient", 1), ("image", 1), ("sound", 1), ("text object", 1)],
+            vec![
+                ("gradient", 1),
+                ("image", 1),
+                ("sound", 1),
+                ("text object", 1)
+            ],
         );
         assert_eq!(doc.skipped.total(), 4);
         assert_eq!(
@@ -2804,7 +2809,11 @@ mod tests {
         // the movie is still a movie.
         let (swf, skipped) =
             compile_wick_reporting(&bytes, &Options::default()).expect("compile anyway");
-        assert!(swf.len() > 100, "still produced a movie: {} bytes", swf.len());
+        assert!(
+            swf.len() > 100,
+            "still produced a movie: {} bytes",
+            swf.len()
+        );
         assert_eq!(skipped, doc.skipped);
 
         // A document the compiler can carry whole says nothing at all — the warning has to
@@ -2819,18 +2828,17 @@ mod tests {
     #[test]
     fn the_report_counts_in_english() {
         let bytes = rewrap_test1(&fixture_json_with_unsupported());
-        let mut json: serde_json::Value =
-            serde_json::from_slice(&{
-                use std::io::Read;
-                let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes[..])).expect("zip");
-                let mut s = Vec::new();
-                zip.by_name("project.json")
-                    .expect("project.json")
-                    .read_to_end(&mut s)
-                    .expect("read");
-                s
-            })
-            .expect("parse");
+        let mut json: serde_json::Value = serde_json::from_slice(&{
+            use std::io::Read;
+            let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes[..])).expect("zip");
+            let mut s = Vec::new();
+            zip.by_name("project.json")
+                .expect("project.json")
+                .read_to_end(&mut s)
+                .expect("read");
+            s
+        })
+        .expect("parse");
 
         // A second text object, so one kind is plural and the rest are not.
         let objects = json

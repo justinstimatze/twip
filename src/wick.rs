@@ -306,7 +306,11 @@ fn child_objects<'a>(v: &Value, objects: &'a Objects) -> impl Iterator<Item = &'
 }
 
 /// Parse a Timeline object into its layers (Wick order; index 0 = frontmost).
-fn parse_timeline(timeline: &Value, objects: &Objects, skipped: &mut Skipped) -> Result<Vec<Layer>> {
+fn parse_timeline(
+    timeline: &Value,
+    objects: &Objects,
+    skipped: &mut Skipped,
+) -> Result<Vec<Layer>> {
     let mut layers = Vec::new();
     for layer_obj in child_objects(timeline, objects) {
         if classname(layer_obj) != Some("Layer") {
