@@ -1951,6 +1951,44 @@ class EditorCore extends Component {
   }
 
   /**
+   * The easing curve on the selected tween, or null if no tween is selected.
+   *
+   * Read straight off the tween rather than through getSelectionAttribute, which is not
+   * usable for this: it treats an Array value as the list of values across a multi-selection
+   * and returns the first element, so asking it for `bezier` yields 0.42 — the x of the first
+   * control point — presented as the whole curve.
+   */
+  getSelectedTweenCurve = () => {
+    const tweens = this.project.selection.getSelectedObjects('Tween');
+    if(!tweens.length) return null;
+    return { easingType: tweens[0].easingType, bezier: tweens[0].bezier.slice() };
+  }
+
+  /**
+   * Put a drawn curve on every selected tween.
+   *
+   * `commit` is false while a handle is being dragged and true when it is let go. A drag
+   * emits a change per pointer move, and one undo state each would bury the history under a
+   * single gesture — the same reason the timeline mirror's arrow keys do not go through
+   * projectDidChange at all.
+   */
+  setSelectedTweenCurve = (bezier, commit) => {
+    this.project.selection.getSelectedObjects('Tween').forEach(tween => {
+      tween.easingType = 'custom';
+      tween.bezier = bezier;
+    });
+    this.projectDidChange({ actionName: "Set Easing Curve", skipHistory: !commit });
+  }
+
+  /**
+   * Give every selected tween the curve its position in the motion calls for.
+   */
+  autoSmoothSelectedTweens = () => {
+    this.project.selection.autoSmooth();
+    this.projectDidChange({ actionName: "Auto-Smooth Easing" });
+  }
+
+  /**
    * Whether moving something writes a keyframe at the playhead.
    *
    * Off until asked for, which is the one place this departs from docs/ui-research.md's

@@ -24,6 +24,7 @@ Wick.Tween = class extends Wick.Base {
     static get VALID_EASING_TYPES () {
         return [
             'none',
+            'custom',
             'in', 'out', 'in-out',
             'in-cubic', 'out-cubic', 'in-out-cubic',
             'in-quartic', 'out-quartic', 'in-out-quartic',
@@ -34,6 +35,83 @@ Wick.Tween = class extends Wick.Base {
             'in-back', 'out-back', 'in-out-back',
             'in-bounce', 'out-bounce', 'in-out-bounce'
         ];
+    }
+
+    /**
+     * The curve a tween uses when its easingType is 'custom': the two control points of a
+     * cubic Bézier from (0,0) to (1,1), as [x1, y1, x2, y2]. The default is CSS ease-in-out.
+     *
+     * x is time and is clamped to [0, 1], because a control point outside that makes the
+     * curve fold back on itself and progress run backwards. y is deliberately unclamped —
+     * pulling a handle past 1 overshoots and past 0 anticipates, which is the whole reason to
+     * want a curve instead of the named list.
+     */
+    static get DEFAULT_BEZIER () {
+        return [0.42, 0, 0.58, 1];
+    }
+
+    /**
+     * Progress through a curve at time k, for any easingType.
+     *
+     * Exists so the editor can plot a curve without reaching into a tween instance —
+     * the graph in the Inspector draws every easing this way, named ones included, which is
+     * what lets grabbing the curve of `out-bounce` turn into a custom curve that starts where
+     * the bounce left off rather than somewhere unrelated.
+     */
+    static sampleEasing (easingType, bezier, k) {
+        if (easingType === 'custom') {
+            return Wick.Tween.cubicBezierEase(bezier || Wick.Tween.DEFAULT_BEZIER, k);
+        }
+        var fn = Wick.Tween.prototype._getTweenFunction.call({ easingType: easingType });
+        return fn ? fn(k) : k;
+    }
+
+    /**
+     * A cubic Bézier from (0,0) to (1,1) with control points [x1,y1,x2,y2], evaluated as
+     * progress against time.
+     *
+     * The curve is parametric, so the x the caller has is not the parameter the curve is
+     * written in: find the parameter whose x matches, then read that parameter's y. Newton
+     * converges in a handful of steps for the curves anyone draws, and bisection catches the
+     * ones where it does not — a nearly vertical segment, where the derivative is small
+     * enough that a Newton step overshoots the interval.
+     *
+     * This is the same solve WebKit's UnitBezier does, and it is written the same way in
+     * src/lib.rs so the browser preview and the exported SWF agree. `easing_matches_bezier_js`
+     * over there pins the two together against sampled output from this function.
+     */
+    static cubicBezierEase (bezier, k) {
+        if (k <= 0) return 0;
+        if (k >= 1) return 1;
+
+        var x1 = bezier[0], y1 = bezier[1], x2 = bezier[2], y2 = bezier[3];
+        var cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+        var cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+
+        var sampleX = function (t) { return ((ax * t + bx) * t + cx) * t; };
+        var sampleY = function (t) { return ((ay * t + by) * t + cy) * t; };
+        var slopeX = function (t) { return (3 * ax * t + 2 * bx) * t + cx; };
+
+        var t = k;
+        for (var i = 0; i < 8; i++) {
+            var error = sampleX(t) - k;
+            if (Math.abs(error) < 1e-7) return sampleY(t);
+            var slope = slopeX(t);
+            if (Math.abs(slope) < 1e-6) break;
+            t -= error / slope;
+        }
+
+        var lo = 0, hi = 1;
+        t = k;
+        while (lo < hi) {
+            var x = sampleX(t);
+            if (Math.abs(x - k) < 1e-7) return sampleY(t);
+            if (k > x) lo = t; else hi = t;
+            var next = (hi + lo) / 2;
+            if (next === t) break;
+            t = next;
+        }
+        return sampleY(t);
     }
 
     static _calculateTimeValue (tweenA, tweenB, playheadPosition) {
@@ -58,6 +136,7 @@ Wick.Tween = class extends Wick.Base {
         this._transformation = args.transformation || new Wick.Transformation();
         this.fullRotations = args.fullRotations === undefined ? 0 : args.fullRotations;
         this.easingType = args.easingType || 'none';
+        this.bezier = args.bezier;
         this.tweenMethod = args.tweenMethod || 'normal';
 
         this._originalLayerIndex = -1;
@@ -128,6 +207,7 @@ Wick.Tween = class extends Wick.Base {
         data.transformation = this._transformation.values;
         data.fullRotations = this.fullRotations;
         data.easingType = this.easingType;
+        data.bezier = this._bezier.slice();
         data.tweenMethod = this.tweenMethod;
 
         data.originalLayerIndex = this.layerIndex !== -1 ? this.layerIndex : this._originalLayerIndex;
@@ -142,6 +222,10 @@ Wick.Tween = class extends Wick.Base {
         this._transformation = new Wick.Transformation(data.transformation);
         this.fullRotations = data.fullRotations;
         this.easingType = data.easingType;
+        // Absent from every file written before custom curves existed, and from anything
+        // wickeditor.com writes. The setter falls back to the default, and a file that old
+        // cannot say easingType 'custom' either, so it never reads this at all.
+        this.bezier = data.bezier;
         this.tweenMethod = data.tweenMethod;
 
         this._originalLayerIndex = data.originalLayerIndex;
@@ -189,7 +273,54 @@ Wick.Tween = class extends Wick.Base {
     }
 
     /**
-     * 
+     * The control points of the custom curve, [x1, y1, x2, y2]. Only consulted when
+     * easingType is 'custom'; carried regardless, so switching to a named easing and back
+     * does not lose the curve somebody drew.
+     * @type {number[]}
+     */
+    get bezier () {
+        return this._bezier;
+    }
+
+    set bezier (bezier) {
+        if(!Array.isArray(bezier) || bezier.length !== 4 || bezier.some(n => typeof n !== 'number' || !isFinite(n))) {
+            this._bezier = Wick.Tween.DEFAULT_BEZIER;
+            return;
+        }
+        var clamp = n => Math.max(0, Math.min(1, n));
+        this._bezier = [clamp(bezier[0]), bezier[1], clamp(bezier[2]), bezier[3]];
+    }
+
+    /**
+     * Choose a curve for this segment from where it sits in the motion, and switch to it.
+     *
+     * The rule is the one an animator applies by hand. A segment with nothing before it
+     * starts from rest, so it accelerates. A segment whose far end is the last key comes to
+     * rest, so it decelerates. A segment with motion on both sides is in the middle of
+     * something already moving and should not slow down and speed up again, so it stays
+     * linear. A lone segment does both.
+     *
+     * Easing here governs the span from this tween to the NEXT one, which is why the far end
+     * asks about the key after the next rather than about this one.
+     */
+    autoSmooth () {
+        var tweens = this.parentFrame
+            ? this.parentFrame.tweens.slice().sort((a, b) => a.playheadPosition - b.playheadPosition)
+            : [this];
+        var i = tweens.findIndex(tween => tween === this);
+        var startsFromRest = i <= 0;
+        var comesToRest = i === -1 || i + 2 >= tweens.length;
+
+        this.easingType = 'custom';
+        if(startsFromRest && comesToRest) this.bezier = [0.42, 0, 0.58, 1];
+        else if(startsFromRest) this.bezier = [0.42, 0, 1, 1];
+        else if(comesToRest) this.bezier = [0, 0, 0.58, 1];
+        else this.bezier = [0, 0, 1, 1];
+        return this._bezier;
+    }
+
+    /**
+     *
      */
     get tweenMethod () {
         return this._tweenMethod;
@@ -255,6 +386,10 @@ Wick.Tween = class extends Wick.Base {
 
      /* retrieve Tween.js easing functions by name */
     _getTweenFunction () {
+        if(this.easingType === 'custom') {
+            var bezier = this.bezier || Wick.Tween.DEFAULT_BEZIER;
+            return function (k) { return Wick.Tween.cubicBezierEase(bezier, k); };
+        }
         return {
             'none': TWEEN.Easing.Linear.None,
             'in': TWEEN.Easing.Quadratic.In,

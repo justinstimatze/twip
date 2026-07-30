@@ -36,6 +36,7 @@ import InspectorSoundPreview from './InspectorPreview/InspectorPreviewTypes/Insp
 import InspectorScriptWindow from './InspectorScriptWindow/InspectorScriptWindow';
 import InspectorCheckbox from './InspectorRow/InspectorRowTypes/InspectorCheckbox';
 import InspectorFramePicker from './InspectorFramePicker/InspectorFramePicker';
+import InspectorEasingCurve from './InspectorEasingCurve/InspectorEasingCurve';
 
 /*
  * One property group: a labelled block of rows with a hairline under it. Was
@@ -695,6 +696,26 @@ class Inspector extends Component {
     );
   }
 
+  /*
+   * Sits under the dropdown rather than replacing it. The named curves are presets worth
+   * keeping and they are what a .wick has always been able to say; the graph is what makes
+   * them legible and what lets you draw one that is not on the list.
+   */
+  renderTweenCurve = () => {
+    let curve = this.props.getSelectedTweenCurve();
+    if(!curve) return null;
+    return (
+      <div className={ITEM}>
+        <InspectorEasingCurve
+          easingType={curve.easingType}
+          bezier={curve.bezier}
+          onChange={this.props.setSelectedTweenCurve}
+          onEdit={() => this.setSelectionAttribute('easingType', 'custom')}
+          onSmooth={this.props.autoSmoothSelectedTweens} />
+      </div>
+    );
+  }
+
   renderTweenFullRotations = () => {
     return (
       <div className={ITEM}>
@@ -837,6 +858,7 @@ class Inspector extends Component {
     return (
       <div className="inspector-content">
         {this.renderTweenEasingType()}
+        {this.renderTweenCurve()}
         {this.renderTweenFullRotations()}
         {this.renderTweenMethod()}
       </div>
@@ -849,6 +871,7 @@ class Inspector extends Component {
   renderMultiTween = () => {
     return ( <div className="inspector-content">
       {this.renderTweenEasingType()}
+      {this.renderTweenCurve()}
       {this.renderTweenFullRotations()}
     </div> );
   }

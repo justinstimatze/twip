@@ -903,6 +903,25 @@ Wick.Selection = class extends Wick.Base {
     }
 
     /**
+     * The control points of a custom easing curve, [x1, y1, x2, y2].
+     * @type {number[]}
+     */
+    get bezier () {
+        return this._getSingleAttribute('bezier');
+    }
+
+    set bezier (bezier) {
+        return this._setSingleAttribute('bezier', bezier);
+    }
+
+    /**
+     * Give every selected tween the curve its position in the motion calls for.
+     */
+    autoSmooth () {
+        this.getSelectedObjects('Tween').forEach(tween => tween.autoSmooth());
+    }
+
+    /**
      * The amount of rotations to perform during a tween. Positive value = clockwise rotation.
      * @type {Number}
      */

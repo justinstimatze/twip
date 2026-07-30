@@ -20,6 +20,18 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { launch, URL_ } from './browser.mjs';
 
+/*
+ * What easing the first key gets, per fixture. `custom-easing` is the one that exercises the
+ * divergence: `bezier` is a field wickeditor.com has never written, so the only way to get a
+ * .wick containing one is to author it here, with the engine that ships. The control points
+ * are deliberately lopsided — a symmetric curve would agree with linear at the midpoint,
+ * which is the one sample a compiler test is most likely to take.
+ */
+const EASING = {
+  'editor-tween': { easingType: 'out-bounce' },
+  'custom-easing': { easingType: 'custom', bezier: [0.9, 0.05, 0.95, 0.4] },
+};
+
 const name = process.argv[2] || 'editor-tween';
 const out = path.join(new URL('../../fixtures/', import.meta.url).pathname, `${name}.wick`);
 
@@ -40,7 +52,7 @@ await page.mouse.move(560, 420, { steps: 10 });
 await page.mouse.up();
 await page.waitForTimeout(600);
 
-const built = await page.evaluate(() => {
+const built = await page.evaluate(([easing]) => {
   const e = window.editor;
   const project = e.project;
   const frame = project.activeFrame;
@@ -55,7 +67,8 @@ const built = await page.evaluate(() => {
   project.activeTimeline.playheadPosition = 1;
   frame.createTween();
   if (frame.tweens.length === 0) return { error: 'no tween created' };
-  frame.tweens[0].easingType = 'out-bounce';
+  frame.tweens[0].easingType = easing.easingType;
+  if (easing.bezier) frame.tweens[0].bezier = easing.bezier;
 
   // Second key: move the clip, then capture. Order matters — createTween copies the
   // transform as it finds it.
@@ -75,10 +88,10 @@ const built = await page.evaluate(() => {
     height: project.height,
     paths: frame.paths.length,
     clips: frame.clips.length,
-    tweens: frame.tweens.map((t) => ({ at: t.playheadPosition, easing: t.easingType })),
+    tweens: frame.tweens.map((t) => ({ at: t.playheadPosition, easing: t.easingType, bezier: t.bezier })),
     frameSpan: [frame.start, frame.end],
   };
-});
+}, [EASING[name] || EASING['editor-tween']]);
 
 if (built.error) {
   console.error('could not build the project:', built.error);

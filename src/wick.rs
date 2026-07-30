@@ -80,8 +80,13 @@ pub struct Tween {
     /// tween (negative = counter-clockwise).
     pub full_rotations: i32,
     /// Wick easing curve name governing the segment from this tween to the next.
-    /// Captured now; only linear is applied until the easing table lands (item 6).
+    /// One of `Wick.Tween.VALID_EASING_TYPES`; unknown names ease linearly.
     pub easing: String,
+    /// Control points of a custom cubic-Bézier curve, `[x1, y1, x2, y2]`, read only when
+    /// `easing` is `"custom"`. `None` for every file the upstream wickeditor.com engine
+    /// writes and for everything twip wrote before the graph editor — a file that old
+    /// cannot name the `custom` curve either, so the absence never has to be papered over.
+    pub bezier: Option<[f64; 4]>,
 }
 
 /// One contour in absolute stage pixels (y-down). A path may carry a fill, a
@@ -313,7 +318,24 @@ fn parse_tween(tween: &Value) -> Tween {
             .and_then(Value::as_str)
             .unwrap_or("none")
             .to_string(),
+        bezier: parse_bezier(tween.get("bezier")),
     }
+}
+
+/// A `bezier` field, if it is there and is four numbers. Anything else — absent, the wrong
+/// length, a string where a number should be — is `None` rather than an error: an older file
+/// simply does not have this, and a newer one that has it malformed should fall back to the
+/// named easing beside it rather than refuse to open.
+fn parse_bezier(value: Option<&Value>) -> Option<[f64; 4]> {
+    let array = value?.as_array()?;
+    if array.len() != 4 {
+        return None;
+    }
+    let mut out = [0.0; 4];
+    for (slot, item) in out.iter_mut().zip(array) {
+        *slot = item.as_f64()?;
+    }
+    Some(out)
 }
 
 /// A Clip's `transformation` is an inline `{x, y, scaleX, scaleY, rotation, skew, opacity}`.

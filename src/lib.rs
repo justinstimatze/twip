@@ -455,6 +455,7 @@ struct TweenKey {
     transform: Transform,
     full_rotations: i32,
     easing: String,
+    bezier: Option<[f64; 4]>,
 }
 
 /// What a display-list slot holds across a keyframe's span: either a fixed placement
@@ -471,6 +472,89 @@ enum Item {
 /// `easingType` strings in `VALID_EASING_TYPES`. Back and Bounce return values outside
 /// [0, 1] on purpose (overshoot/undershoot); callers must not clamp. Unknown names fall
 /// back to linear, matching the engine's `easingType || 'none'` default.
+/// Progress through a segment's curve at time `k`, named or drawn.
+///
+/// `"custom"` with control points is the graph editor's curve; `"custom"` without them can
+/// only come from a file that named the curve and lost the points, and eases linearly, which
+/// is what `ease` does with a name it does not know.
+fn ease_curve(easing: &str, bezier: Option<[f64; 4]>, k: f64) -> f64 {
+    match (easing, bezier) {
+        ("custom", Some(points)) => cubic_bezier_ease(points, k),
+        _ => ease(easing, k),
+    }
+}
+
+/// A cubic Bézier from (0,0) to (1,1) with control points `[x1, y1, x2, y2]`, evaluated as
+/// progress against time.
+///
+/// The curve is parametric, so the x the caller has is not the parameter the curve is written
+/// in: find the parameter whose x matches, then read that parameter's y. Newton converges in a
+/// few steps for the curves anyone draws, and bisection catches the ones where it does not —
+/// a nearly vertical segment, where the derivative is small enough that a Newton step
+/// overshoots the interval.
+///
+/// y is unclamped on purpose, exactly as the Back and Bounce curves above are: a control point
+/// above 1 overshoots the target and comes back, and one below 0 winds up first. Callers must
+/// not clamp.
+///
+/// This is a transcription of `Wick.Tween.cubicBezierEase` in the engine, step for step and in
+/// the same order, so the browser preview and the exported SWF draw one curve. Written any
+/// other way the two would agree to about six digits and disagree in the seventh, which is
+/// precisely the kind of drift `easing_matches_bezier_js` exists to refuse.
+fn cubic_bezier_ease(bezier: [f64; 4], k: f64) -> f64 {
+    if k <= 0.0 {
+        return 0.0;
+    }
+    if k >= 1.0 {
+        return 1.0;
+    }
+
+    let [x1, y1, x2, y2] = bezier;
+    let cx = 3.0 * x1;
+    let bx = 3.0 * (x2 - x1) - cx;
+    let ax = 1.0 - cx - bx;
+    let cy = 3.0 * y1;
+    let by = 3.0 * (y2 - y1) - cy;
+    let ay = 1.0 - cy - by;
+
+    let sample_x = |t: f64| ((ax * t + bx) * t + cx) * t;
+    let sample_y = |t: f64| ((ay * t + by) * t + cy) * t;
+    let slope_x = |t: f64| (3.0 * ax * t + 2.0 * bx) * t + cx;
+
+    let mut t = k;
+    for _ in 0..8 {
+        let error = sample_x(t) - k;
+        if error.abs() < 1e-7 {
+            return sample_y(t);
+        }
+        let slope = slope_x(t);
+        if slope.abs() < 1e-6 {
+            break;
+        }
+        t -= error / slope;
+    }
+
+    let (mut lo, mut hi) = (0.0f64, 1.0f64);
+    t = k;
+    while lo < hi {
+        let x = sample_x(t);
+        if (x - k).abs() < 1e-7 {
+            return sample_y(t);
+        }
+        if k > x {
+            lo = t;
+        } else {
+            hi = t;
+        }
+        let next = (hi + lo) / 2.0;
+        if next == t {
+            break;
+        }
+        t = next;
+    }
+    sample_y(t)
+}
+
 fn ease(easing: &str, k: f64) -> f64 {
     match easing {
         // Quadratic
@@ -652,7 +736,7 @@ fn interp_tween(keys: &[TweenKey], pos: f64) -> Transform {
     let b = &keys[i + 1];
     let span = f64::from(b.playhead_abs - a.playhead_abs);
     let raw = (pos - f64::from(a.playhead_abs)) / span;
-    let t = ease(&a.easing, raw);
+    let t = ease_curve(&a.easing, a.bezier, raw);
     let mut end = b.transform;
     end.rotation_deg += 360.0 * f64::from(a.full_rotations);
     lerp_transform(&a.transform, &end, t)
@@ -959,6 +1043,7 @@ fn compile_timeline(
                             transform: tw.transform,
                             full_rotations: tw.full_rotations,
                             easing: tw.easing.clone(),
+                            bezier: tw.bezier,
                         })
                         .collect();
                     items.push(Item::Tween { id, keys });
@@ -2246,6 +2331,81 @@ mod tests {
         );
     }
 
+    /// A curve drawn in the graph editor, carried by a real save, arriving in the movie.
+    ///
+    /// `custom-easing.wick` was authored by `editor/dev/make-fixture.mjs` through the shipping
+    /// engine, so it holds a `bezier` field written by the same code the browser preview eases
+    /// with. That field exists nowhere upstream — this is the whole of the divergence, and
+    /// this test is where it either survives the trip or does not.
+    ///
+    /// The control points [0.9, 0.05, 0.95, 0.4] hold the motion back and let it go late, so
+    /// the curve runs well BELOW the straight line for most of the span. Asserting on a
+    /// signed departure rather than an absolute one is deliberate: `worst > 5.0` alone would
+    /// also pass for out-bounce, for in-back, and for any other easing that merely is not
+    /// linear, so it would not notice `bezier` being dropped and the tween falling back to a
+    /// named curve. Below the line, by a lot, is this curve and not another.
+    #[test]
+    fn compiles_custom_easing_wick() {
+        let bytes = include_bytes!("../fixtures/custom-easing.wick");
+        let swf = compile_wick(bytes).expect("compile a save carrying a drawn curve");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let places: Vec<_> = parsed
+            .tags
+            .iter()
+            .filter_map(|t| match t {
+                Tag::PlaceObject(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+        let n = tween_samples(24, FIXTURE_FPS);
+        assert_eq!(
+            places.len(),
+            n,
+            "one placement per movie frame across the span"
+        );
+
+        let tx = |i: usize| {
+            places[i]
+                .matrix
+                .expect("placement has a matrix")
+                .tx
+                .to_pixels()
+        };
+        let (x0, x1) = (tx(0), tx(n - 1));
+        assert!(
+            (x1 - x0).abs() > 100.0,
+            "the fixture moves the clip a long way: {x0} -> {x1}"
+        );
+
+        // How far behind the straight line the motion runs, at its worst.
+        let mut lag = 0.0_f64;
+        for i in 0..n {
+            let linear = x0 + (x1 - x0) * (i as f64) / (n - 1) as f64;
+            lag = lag.max(linear - tx(i));
+        }
+        assert!(
+            lag > 40.0,
+            "a curve that holds until late should trail the straight line by a wide margin; \
+             worst lag was {lag:.2}px, which is what a dropped bezier looks like"
+        );
+
+        // And the curve the file names is the curve the engine drew, sample for sample.
+        // The placements above are the compiler's own arithmetic; these three numbers come
+        // from `Wick.Tween.cubicBezierEase` running in a browser against this same curve, so
+        // this is the independent statement that the two implementations agree rather than
+        // Rust confirming its own opinion.
+        let curve = [0.9, 0.05, 0.95, 0.4];
+        for (k, want) in [(0.25_f64, 0.024645_f64), (0.5, 0.082697), (0.75, 0.220556)] {
+            let got = cubic_bezier_ease(curve, k);
+            assert!(
+                (got - want).abs() < 1e-6,
+                "the fixture's curve at {k} is {got}, the engine says {want}"
+            );
+        }
+    }
+
     #[test]
     fn compiles_motion_tween_wick() {
         let bytes = include_bytes!("../fixtures/motion-tween.wick");
@@ -2448,6 +2608,78 @@ mod tests {
         assert_eq!(ease("bogus", 0.42), 0.42);
     }
 
+    /// The drawn curve has to be the same curve in both places, or the graph editor shows one
+    /// motion and the exported movie plays another.
+    ///
+    /// Oracle values sampled from `Wick.Tween.cubicBezierEase` running in a browser against
+    /// the built engine; regenerate by evaluating that function at these same seven t. The
+    /// last two curves are the ones worth having: an overshoot, which must be allowed to
+    /// exceed 1 the way out-back does, and a nearly vertical rise, where Newton's derivative
+    /// gets small enough to hand over to bisection. A solver that quietly clamped or gave up
+    /// would still look right on the first six.
+    #[test]
+    fn easing_matches_bezier_js() {
+        let ts = [0.0f64, 0.125, 0.25, 0.5, 0.75, 0.875, 1.0];
+        #[rustfmt::skip]
+        let cases: &[([f64; 4], [f64; 7])] = &[
+            // ease-in-out (the default)
+            ([0.42, 0.00, 0.58, 1.00], [0.000000000000, 0.031114036910, 0.129161900569, 0.500000000000, 0.870838099431, 0.968885963090, 1.000000000000]),
+            // linear as a curve
+            ([0.00, 0.00, 1.00, 1.00], [0.000000000000, 0.125000000008, 0.250000001431, 0.500000000000, 0.749999998569, 0.874999999992, 1.000000000000]),
+            // ease-in
+            ([0.42, 0.00, 1.00, 1.00], [0.000000000000, 0.025984598530, 0.093464650994, 0.315356812506, 0.621861869174, 0.801419984040, 1.000000000000]),
+            // ease-out
+            ([0.00, 0.00, 0.58, 1.00], [0.000000000000, 0.198580015960, 0.378138130826, 0.684643187494, 0.906535349006, 0.974015401470, 1.000000000000]),
+            // CSS ease
+            ([0.25, 0.10, 0.25, 1.00], [0.000000000000, 0.136888414854, 0.408510593016, 0.802403387695, 0.960458978349, 0.990969002600, 1.000000000000]),
+            // overshoot past 1
+            ([0.34, 1.56, 0.64, 1.00], [0.000000000000, 0.488203825824, 0.816289114743, 1.087400670219, 1.059646859960, 1.018962237753, 1.000000000000]),
+            // anticipate below 0
+            ([0.36, -0.64, 0.66, -0.56], [0.000000000000, -0.195105773259, -0.325718175476, -0.331034431570, 0.093135733907, 0.485866987492, 1.000000000000]),
+            // near-vertical, where Newton gives up
+            ([0.00, 0.90, 0.02, 1.00], [0.000000000000, 0.829118930493, 0.919591002821, 0.980180668994, 0.996819874455, 0.999346644135, 1.000000000000]),
+        ];
+        for (bezier, expected) in cases {
+            for (i, &t) in ts.iter().enumerate() {
+                let got = cubic_bezier_ease(*bezier, t);
+                assert!(
+                    (got - expected[i]).abs() < 1e-9,
+                    "cubic_bezier_ease({bezier:?}, {t}) = {got}, the engine says {}",
+                    expected[i]
+                );
+            }
+        }
+
+        // Overshoot is the point of allowing y outside [0, 1]; a clamp here would pass every
+        // sample above and still flatten the motion the author drew.
+        let peak = (0..=100)
+            .map(|i| cubic_bezier_ease([0.34, 1.56, 0.64, 1.0], f64::from(i) / 100.0))
+            .fold(f64::MIN, f64::max);
+        assert!(
+            peak > 1.05,
+            "overshoot curve peaked at {peak}, expected past 1"
+        );
+    }
+
+    /// A tween from a file written before custom curves existed, which is every .wick anyone
+    /// has today. No `bezier` key, so nothing to read; the named easing decides, exactly as it
+    /// did. The failure this refuses is a compiler that treats a missing field as a reason to
+    /// give up on the curve and go linear.
+    #[test]
+    fn a_tween_without_a_bezier_eases_by_name() {
+        for name in ["none", "in-out", "out-bounce", "in-back"] {
+            for t in [0.0f64, 0.25, 0.5, 0.75, 1.0] {
+                assert_eq!(
+                    ease_curve(name, None, t),
+                    ease(name, t),
+                    "{name} at {t} changed when bezier went missing"
+                );
+            }
+        }
+        // And a file naming the curve without carrying its points is linear, not a panic.
+        assert_eq!(ease_curve("custom", None, 0.42), 0.42);
+    }
+
     #[test]
     fn tween_interpolates_clip_placement() {
         use wick::{Clip, Contour, Document, Frame, Layer, Tween};
@@ -2494,6 +2726,7 @@ mod tests {
             },
             full_rotations: 0,
             easing: "none".to_string(),
+            bezier: None,
         };
         let doc = Document {
             width: 200.0,
@@ -2677,6 +2910,7 @@ mod tests {
             transform: Transform { x, ..ident },
             full_rotations: 0,
             easing: easing.to_string(),
+            bezier: None,
         };
         let doc = Document {
             width: 200.0,

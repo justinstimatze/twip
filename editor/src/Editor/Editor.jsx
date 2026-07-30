@@ -1240,6 +1240,9 @@ class Editor extends EditorCore {
                         getAllSoundAssets={this.getAllSoundAssets}
                         getAllSelectionAttributes={this.getAllSelectionAttributes}
                         setSelectionAttribute={this.setSelectionAttribute}
+                        getSelectedTweenCurve={this.getSelectedTweenCurve}
+                        setSelectedTweenCurve={this.setSelectedTweenCurve}
+                        autoSmoothSelectedTweens={this.autoSmoothSelectedTweens}
                         editorActions={this.actionMapInterface.editorActions}
                         selectionIsScriptable={this.selectionIsScriptable}
                         script={this.getSelectedObjectScript()}
