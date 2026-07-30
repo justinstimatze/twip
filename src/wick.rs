@@ -29,6 +29,10 @@ use swf::Color;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Skipped {
     counts: BTreeMap<String, usize>,
+    /// Why, for the kinds that have a reason worth reading. A dropped image is fully
+    /// described by "1 image"; a refused script is not, and "`frobnicate` is not supported
+    /// yet" is the difference between a warning someone can act on and one they cannot.
+    notes: Vec<String>,
 }
 
 impl Skipped {
@@ -36,8 +40,19 @@ impl Skipped {
         *self.counts.entry(what.to_owned()).or_default() += 1;
     }
 
+    /// Note a kind along with the reason for it.
+    pub fn note_why(&mut self, what: &str, why: impl Into<String>) {
+        self.note(what);
+        self.notes.push(why.into());
+    }
+
     pub fn is_empty(&self) -> bool {
         self.counts.is_empty()
+    }
+
+    /// The reasons, for the kinds that carry one.
+    pub fn notes(&self) -> &[String] {
+        &self.notes
     }
 
     /// How many objects were left out, across every kind.
@@ -58,7 +73,8 @@ impl Skipped {
     /// exactly as it was found, since inventing a plural for it would be worse than the
     /// bare repetition.
     pub fn describe(&self) -> String {
-        self.counts
+        let kinds = self
+            .counts
             .iter()
             .map(|(kind, n)| {
                 if *n == 1 || !kind.chars().next().is_some_and(char::is_lowercase) {
@@ -68,7 +84,11 @@ impl Skipped {
                 }
             })
             .collect::<Vec<_>>()
-            .join(", ")
+            .join(", ");
+        if self.notes.is_empty() {
+            return kinds;
+        }
+        format!("{kinds} ({})", self.notes.join("; "))
     }
 }
 

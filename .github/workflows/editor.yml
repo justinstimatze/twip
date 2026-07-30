@@ -276,6 +276,17 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # src/script.rs proves a loop compiles and the golden proves it runs; neither touches
+      # how a person gets a loop into a document. The surface is CodeMirror 6 — a
+      # contenteditable, so `fill` does not reach it and only real keystrokes produce the
+      # update the editor listens for — and this check is what found that a script the
+      # compiler refused reached stderr and nothing else, which under wasm is nowhere.
+      - name: A script typed into the editor is the script that compiles
+        run: pnpm script-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI

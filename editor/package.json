@@ -68,6 +68,7 @@
     "library-check": "node dev/library-check.mjs",
     "toolbar-check": "node dev/toolbar-check.mjs",
     "gradient-check": "node dev/gradient-check.mjs",
+    "script-check": "node dev/script-check.mjs",
     "build-engine": "pnpm --dir engine build && cp -a engine/dist/. public/corelibs/wick-engine/",
     "test-engine": "pnpm --dir engine test",
     "smoke": "node dev/smoke.mjs",

@@ -170,6 +170,7 @@ pnpm wasm-check             # the browser compiles a fixture; bytes must match t
 
 pnpm toolbar-check          # every toolbar control named, and none of them clipped
 pnpm gradient-check         # a gradient can be drawn with the mouse, and it compiles
+pnpm script-check           # a script typed into CodeMirror reaches the movie
 pnpm inspector-check        # every Inspector label fits its row at 200px
 pnpm inspector-tabs-check   # Object/Frame/Doc follow the selection without overriding a
                             #   tab picked by hand

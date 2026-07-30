@@ -961,6 +961,7 @@ fn compile_timeline(
     layers: &[wick::Layer],
     next_id: &mut u16,
     defs: &mut Vec<Tag<'static>>,
+    refused: &mut Vec<String>,
     frame_actions: &mut BTreeMap<u16, Vec<script::Op>>,
     clip_handlers: &mut BTreeMap<u16, Vec<script::Op>>,
     upsample: u16,
@@ -978,14 +979,10 @@ fn compile_timeline(
             // action), so key the actions by the keyframe's start. Multiple layers'
             // scripts on the same start-frame concatenate.
             let (cmds, unrecognized) = recognize_frame_actions(&frame.scripts);
-            if !unrecognized.is_empty() {
-                eprintln!(
-                    "twip: {} uncompiled frame-script statement(s) on frame {}: {}",
-                    unrecognized.len(),
-                    frame.start,
-                    unrecognized.join("; ")
-                );
-            }
+            // Not only stderr. Under wasm there is no terminal to print to, so a script the
+            // compiler could not read would leave the tab with a successful export and no
+            // word about it — the same silence the export report exists to end.
+            refused.extend(unrecognized);
             if !cmds.is_empty() {
                 frame_actions.entry(frame.start).or_default().extend(cmds);
             }
@@ -1016,6 +1013,7 @@ fn compile_timeline(
                     &clip.layers,
                     next_id,
                     defs,
+                    refused,
                     &mut nested_actions,
                     &mut nested_handlers,
                     upsample,
@@ -1256,6 +1254,19 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
 
 /// `compile_document` with the export settings spelled out.
 pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec<u8>> {
+    compile_document_reporting(doc, opts, &mut Vec::new())
+}
+
+/// `compile_document_with`, plus the scripts it could not read.
+///
+/// Separate rather than a changed return type, on the same argument as
+/// [`compile_wick_reporting`]: callers that only want bytes keep working, and the two that
+/// face a person opt in.
+fn compile_document_reporting(
+    doc: &wick::Document,
+    opts: &Options,
+    refused: &mut Vec<String>,
+) -> Result<Vec<u8>> {
     let mut next_id: u16 = 1;
     let mut defs: Vec<Tag> = Vec::new();
     let mut frame_cmds: BTreeMap<u16, Vec<script::Op>> = BTreeMap::new();
@@ -1269,6 +1280,7 @@ pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec
         &doc.layers,
         &mut next_id,
         &mut defs,
+        refused,
         &mut frame_cmds,
         &mut clip_cmds,
         upsample,
@@ -1413,8 +1425,12 @@ pub fn compile_wick_reporting(
     wick_bytes: &[u8],
     opts: &Options,
 ) -> Result<(Vec<u8>, wick::Skipped)> {
-    let doc = wick::parse_wick(wick_bytes)?;
-    let swf = compile_document_with(&doc, opts)?;
+    let mut doc = wick::parse_wick(wick_bytes)?;
+    let mut refused = Vec::new();
+    let swf = compile_document_reporting(&doc, opts, &mut refused)?;
+    for why in refused {
+        doc.skipped.note_why("script", why);
+    }
     Ok((swf, doc.skipped))
 }
 
