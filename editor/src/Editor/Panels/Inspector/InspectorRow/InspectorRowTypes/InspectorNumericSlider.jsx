@@ -46,7 +46,7 @@ class InspectorNumericSlider extends Component {
         </InspectorField>
 
         {/* Slider */}
-        <InspectorField size="medium">
+        <InspectorField>
           <InspectorInput
             inputProps={{...this.props.inputProps, id: idLabel+ "-input"}}
             input={

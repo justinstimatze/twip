@@ -191,6 +191,16 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # The Inspector's label column is sized in percentages of a panel that is 200px wide at
+      # its narrowest, and nobody develops at 200px. This reads the label strings out of
+      # Inspector.jsx and the panel's range out of Editor.jsx, so a label added later is
+      # covered without anyone remembering this exists.
+      - name: Every Inspector label fits its row
+        run: pnpm inspector-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI
