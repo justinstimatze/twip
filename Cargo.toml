@@ -22,6 +22,9 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 serde_json = "1"
 anyhow = "1"
 i_overlay = "7.0.2"
+# Glyph outlines out of the .ttf files a .wick bundles. Ruffle's own choice for the same job,
+# so a font it can render is a font this can read.
+ttf-parser = "0.25"
 # Only pulled in under the `golden` feature — the golden-PNG oracle (tests/golden.rs)
 # uses it to decode ruffle's exported PNGs. Never compiled by a plain build/test.
 image = { version = "0.25", optional = true, default-features = false, features = ["png"] }

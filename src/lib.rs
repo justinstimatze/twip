@@ -6,6 +6,7 @@
 //! shape — the "structural oracle" layer from docs/testing.md). Visual truth is
 //! Ruffle rendering the same bytes.
 
+pub mod font;
 pub mod import;
 pub mod script;
 pub mod wick;
