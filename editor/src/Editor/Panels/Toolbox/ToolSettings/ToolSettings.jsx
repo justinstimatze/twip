@@ -17,443 +17,215 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { Component } from 'react';
+/*
+ * The active tool's options — docs/ui-research.md's "cryptic icon strip → a contextual
+ * toolbar that reflows to the active tool, with labels".
+ *
+ * The reflow was already here and is not what dated it. What dated it was that the strip
+ * said nothing: probing every tool in turn, the whole group held two glyphs and a bare
+ * number field, `innerText` was the empty string, and not one control had an accessible
+ * name. Picking the brush gave you 10 and 20 next to a circle and a squiggle.
+ *
+ * Two things changed. Each control now carries its word — for the numbers the word
+ * REPLACED the icon rather than joining it, which costs nothing, since "Size" and a 24px
+ * glyph are the same width and only one of them can be read. And the twelve
+ * renderXSettings methods became one table, because what a tool offers is data: the old
+ * shape hid that `text` and `eyedropper` render an empty div, and that renderFontSize,
+ * renderFontFamily and renderDropperMode were written, never called, and could not have
+ * worked — fontSize, fontFamily and pixelDropper are not settings the engine has.
+ */
+import React, { useState } from 'react';
 
-import ToolSettingsInput from './ToolSettingsInput/ToolSettingsInput';
-import PopupMenu from 'Editor/Util/PopupMenu/PopupMenu';
-import { ACTIONS_ROW } from '../CanvasActions/CanvasActions';
+import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
+import SettingsNumericSlider from './SettingsNumericSlider/SettingsNumericSlider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/ui/popover';
+import { cn } from '@/lib/utils';
 
-/* Every tool's settings sit in the same centred row; only the contents differ. */
-const SETTINGS_ROW = 'flex h-full items-center justify-center';
+/* What each tool offers, in the order it is offered. A tool absent from here has no
+ * options — text and eyedropper genuinely have none, and an empty group is the honest
+ * rendering of that. */
+const STROKE = { kind: 'number', setting: 'strokeWidth', label: 'Stroke' };
 
-/* The three mode pickers are the same popover with different buttons in it. */
-const MODE_WIDGET = 'm-px flex h-[35px] items-center';
+const TOOL_OPTIONS = {
+  cursor: [{ kind: 'choice', setting: 'cursorTransformMode', label: 'Transform' }],
+  brush: [
+    { kind: 'number', setting: 'brushSize', label: 'Size' },
+    { kind: 'number', setting: 'brushStabilizerWeight', label: 'Smooth' },
+    { kind: 'toggle', setting: 'pressureEnabled', label: 'Pressure', icon: 'brushpressure' },
+    { kind: 'toggle', setting: 'relativeBrushSize', label: 'Relative', icon: 'brushrelativesize' },
+    { kind: 'choice', setting: 'brushMode', label: 'Mode' },
+  ],
+  pencil: [STROKE],
+  eraser: [{ kind: 'number', setting: 'eraserSize', label: 'Size' }],
+  rectangle: [STROKE, { kind: 'number', setting: 'cornerRadius', label: 'Corners' }],
+  ellipse: [STROKE],
+  line: [STROKE],
+  fillbucket: [{ kind: 'number', setting: 'gapFillAmount', label: 'Gap fill' }],
+  gradienttool: [{ kind: 'choice', setting: 'gradientToolMode', label: 'Transform' }],
+};
 
-class ToolSettings extends Component {
-  constructor(props) {
-    super(props);
+/* The values a choice can take. The engine stores these as bare strings — 'skewscale',
+ * 'none' — and the icon was the only thing that ever said what they meant. */
+const CHOICES = {
+  cursorTransformMode: [
+    { value: 'freescale', label: 'Free scale', icon: 'cursortransformmodefreescale' },
+    { value: 'uniform', label: 'Uniform', icon: 'cursortransformmodeuniform' },
+    { value: 'skew', label: 'Skew', icon: 'cursortransformmodeskew' },
+    { value: 'skewscale', label: 'Skew and scale', icon: 'cursortransformmodeskewscale' },
+  ],
+  brushMode: [
+    { value: 'none', label: 'None', icon: 'brushmodenone' },
+    { value: 'inside', label: 'Inside', icon: 'brushmodeinside' },
+    { value: 'outside', label: 'Outside', icon: 'brushmodeoutside' },
+    { value: 'merge', label: 'Merge', icon: 'brushmodemerge' },
+  ],
+  gradientToolMode: [
+    { value: 'none', label: 'None', icon: 'gradienttoolmodenone' },
+    { value: 'uniform', label: 'Uniform', icon: 'gradienttoolmodeuniform' },
+  ],
+};
 
-    this.settingsFunctions = {
-      "cursor": this.renderCursorSettings,
-      "brush": this.renderBrushSettings,
-      "pencil": this.renderPencilSettings,
-      "eraser": this.renderEraserSettings,
-      "rectangle": this.renderRectangleSettings,
-      "ellipse": this.renderEllipseSettings,
-      "line": this.renderLineSettings,
-      "text": this.renderTextSettings,
-      "fillbucket": this.renderFillbucketSettings,
-      "gradienttool": this.renderGradientToolSettings,
-    }
-  }
+/* Named so the group can say whose options these are. */
+const TOOL_NAMES = {
+  cursor: 'Cursor', brush: 'Brush', pencil: 'Pencil', eraser: 'Eraser',
+  rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', pathcursor: 'Path cursor',
+  text: 'Text', fillbucket: 'Fill bucket', eyedropper: 'Eyedropper',
+  gradienttool: 'Gradient',
+};
 
-  render () {
-    return (
-      <div id='settings-panel-container' className='h-full flex items-center justify-center'>
-        {this.renderSettings()}
-      </div>
-    );
-  }
+const CONTROL = 'flex h-[26px] items-center gap-1.5 rounded-sm px-1.5 text-micro '
+  + 'transition-colors focus-visible:outline-2 focus-visible:outline-focus';
 
-  renderSettings = () => {
-    if (this.props.activeTool in this.settingsFunctions) {
-      return this.settingsFunctions[this.props.activeTool]();
-    }
-
-    return (
-      <div className="default"></div>
-    )
-  }
-
-  // Selection contents and properties
-  renderCursorSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderCursorTransformMode()}
-      </div>
-    );
-  }
-
-  renderBrushSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderBrushSize()}
-        {this.renderBrushSmoothing()}
-        {this.renderEnablePressure()}
-        {this.renderEnableRelativeBrushSize()}
-        {this.renderBrushMode()}
-      </div>
-    );
-  }
-
-  renderPencilSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderStrokeWidth()}
-      </div>
-    );
-  }
-
-  renderEraserSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderEraserSize()}
-      </div>
-    );
-  }
-
-  renderRectangleSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderStrokeWidth()}
-        {this.renderCornerRadius()}
-      </div>
-    );
-  }
-
-  renderEllipseSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderStrokeWidth()}
-      </div>
-    );
-  }
-
-  renderLineSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderStrokeWidth()}
-      </div>
-    );
-  }
-
-  renderTextSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {/*this.renderFontSize()*/}
-      </div>
-    );
-  }
-
-  renderFillbucketSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderGapFillAmount()}
-      </div>
-    );
-  }
-
-  renderGradientToolSettings = () => {
-    return (
-      <div className={SETTINGS_ROW}>
-        {this.renderGradientToolTransformMode()}
-      </div>
-    )
-  }
-
-  renderCursorTransformMode = () => {
-    let transformModeIcon = 'cursortransformmodefreescale';
-    let transformMode = this.props.getToolSetting('cursorTransformMode');
-
-    if (transformMode === 'uniform') {
-      transformModeIcon = 'cursortransformmodeuniform';
-    } else if (transformMode === 'skew') {
-      transformModeIcon = 'cursortransformmodeskew';
-    } else if (transformMode === 'skewscale') {
-      transformModeIcon = 'cursortransformmodeskewscale';
-    }
-
-    return (
-        <div id="cursor-transform-modes-popover-button">
-          <ToolSettingsInput
-            name='Transform Modes'
-            icon={transformModeIcon}
-            type='checkbox'
-            value={this.props.showCursorTransformModes}
-            onChange={this.props.toggleCursorTransformModes}/>
-          <PopupMenu
-            isOpen={this.props.showCursorTransformModes && !this.props.previewPlaying}
-            toggle={this.props.toggleCursorTransformModes}
-            target="cursor-transform-modes-popover-button"
-            >
-            <div className={MODE_WIDGET}>
-              <div className={ACTIONS_ROW}>
-                <ToolSettingsInput
-                  name='Freescale'
-                  icon='cursortransformmodefreescale'
-                  type='checkbox'
-                  value={this.props.getToolSetting('cursorTransformMode') === 'freescale'}
-                  onChange={() => this.props.setToolSetting('cursorTransformMode', 'freescale')}/>
-                <ToolSettingsInput
-                  name='Uniform'
-                  icon='cursortransformmodeuniform'
-                  type='checkbox'
-                  value={this.props.getToolSetting('cursorTransformMode') === 'uniform'}
-                  onChange={() => this.props.setToolSetting('cursorTransformMode', 'uniform')}/>
-                <ToolSettingsInput
-                  name='Skew'
-                  icon='cursortransformmodeskew'
-                  type='checkbox'
-                  value={this.props.getToolSetting('cursorTransformMode') === 'skew'}
-                  onChange={() => this.props.setToolSetting('cursorTransformMode', 'skew')}/>
-                <ToolSettingsInput
-                  name='Skew and Scale'
-                  icon='cursortransformmodeskewscale'
-                  type='checkbox'
-                  value={this.props.getToolSetting('cursorTransformMode') === 'skewscale'}
-                  onChange={() => this.props.setToolSetting('cursorTransformMode', 'skewscale')}/>
-              </div>
-            </div>
-          </PopupMenu>
-        </div>
-    )
-  }
-
-  renderGradientToolTransformMode = () => {
-    let transformModeIcon = 'gradienttoolmodenone';
-    let transformMode = this.props.getToolSetting('gradientToolMode');
-
-    if (transformMode === 'uniform') {
-      transformModeIcon = 'gradienttoolmodeuniform';
-    }
-
-    return (
-        <div id="gradient-tool-modes-popover-button">
-          <ToolSettingsInput
-            name='Transform Modes'
-            icon={transformModeIcon}
-            type='checkbox'
-            value={this.props.showGradientToolModes}
-            onChange={this.props.toggleGradientToolModes}/>
-          <PopupMenu
-            isOpen={this.props.showGradientToolModes && !this.props.previewPlaying}
-            toggle={this.props.toggleGradientToolModes}
-            target="gradient-tool-modes-popover-button"
-            >
-            <div className={MODE_WIDGET}>
-              <div className={ACTIONS_ROW}>
-                <ToolSettingsInput
-                  name='None'
-                  icon='gradienttoolmodenone'
-                  type='checkbox'
-                  value={this.props.getToolSetting('gradientToolMode') === 'none'}
-                  onChange={() => this.props.setToolSetting('gradientToolMode', 'none')}/>
-                <ToolSettingsInput
-                  name='Uniform'
-                  icon='gradienttoolmodeuniform'
-                  type='checkbox'
-                  value={this.props.getToolSetting('gradientToolMode') === 'uniform'}
-                  onChange={() => this.props.setToolSetting('gradientToolMode', 'uniform')}/>
-              </div>
-            </div>
-          </PopupMenu>
-        </div>
-    )
-  }
-
-  renderEnablePressure = () => {
-    return (
-      <ToolSettingsInput
-        name='Enable Pressure'
-        icon='brushpressure'
-        type='checkbox'
-        value={this.getToolSetting('pressureEnabled')}
-        onChange={() => this.setToolSetting('pressureEnabled', !this.getToolSetting('pressureEnabled'))}/>
-    )
-  }
-
-  renderEnableRelativeBrushSize = () => {
-    return (
-      <ToolSettingsInput
-        name='Relative Brush Size'
-        icon='brushrelativesize'
-        type='checkbox'
-        value={this.getToolSetting('relativeBrushSize')}
-        onChange={() => this.setToolSetting('relativeBrushSize', !this.getToolSetting('relativeBrushSize'))}/>
-    )
-  }
-
-  renderBrushMode = () => {
-    let brushModeIcon = 'brushmodenone';
-    let brushMode = this.props.getToolSetting('brushMode');
-
-    if (brushMode === 'inside') {
-      brushModeIcon = 'brushmodeinside';
-    } else if (brushMode === 'outside') {
-      brushModeIcon = 'brushmodeoutside';
-    } else if (brushMode === 'merge') {
-      brushModeIcon = 'brushmodemerge';
-    }
-
-    return (
-        <div id="brush-modes-popover-button">
-          <ToolSettingsInput
-            name='Brush Modes'
-            icon={brushModeIcon}
-            type='checkbox'
-            value={this.props.showBrushModes}
-            onChange={this.props.toggleBrushModes}/>
-          <PopupMenu
-            isOpen={this.props.showBrushModes && !this.props.previewPlaying}
-            toggle={this.props.toggleBrushModes}
-            target="brush-modes-popover-button"
-            >
-            <div className={MODE_WIDGET}>
-              <div className={ACTIONS_ROW}>
-                <ToolSettingsInput
-                  name='None'
-                  icon='brushmodenone'
-                  type='checkbox'
-                  value={this.props.getToolSetting('brushMode') === 'none'}
-                  onChange={() => this.props.setToolSetting('brushMode', 'none')}/>
-                <ToolSettingsInput
-                  name='Inside'
-                  icon='brushmodeinside'
-                  type='checkbox'
-                  value={this.props.getToolSetting('brushMode') === 'inside'}
-                  onChange={() => this.props.setToolSetting('brushMode', 'inside')}/>
-                <ToolSettingsInput
-                  name='Outside'
-                  icon='brushmodeoutside'
-                  type='checkbox'
-                  value={this.props.getToolSetting('brushMode') === 'outside'}
-                  onChange={() => this.props.setToolSetting('brushMode', 'outside')}/>
-                <ToolSettingsInput
-                  name='Merge'
-                  icon='brushmodemerge'
-                  type='checkbox'
-                  value={this.props.getToolSetting('brushMode') === 'merge'}
-                  onChange={() => this.props.setToolSetting('brushMode', 'merge')}/>
-              </div>
-            </div>
-          </PopupMenu>
-        </div>
-    )
-  }
-
-  renderCornerRadius = () => {
-    return (
-      <ToolSettingsInput
-        name='Corner Radius'
-        icon='cornerradius'
-        type='numeric'
-        value={this.getToolSetting('cornerRadius')}
-        onChange={(val) => this.setToolSetting('cornerRadius', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('cornerRadius')}/>
-    )
-  }
-
-  renderBrushSmoothing = () => {
-    return (
-      <ToolSettingsInput
-        name='Brush Smoothing'
-        icon='brushsmoothness'
-        type='numeric'
-        value={this.getToolSetting('brushStabilizerWeight')}
-        onChange={(val) => this.setToolSetting('brushStabilizerWeight', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('brushStabilizerWeight')}/>
-    )
-  }
-
-  renderFontSize = () => {
-    return (
-      <ToolSettingsInput
-        name='Font Size'
-        icon='fontsize'
-        type='numeric'
-        value={this.getToolSetting('fontSize')}
-        onChange={(val) => this.setToolSetting('fontSize', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('fontSize')}/>
-    )
-  }
-
-  renderEraserSize = () => {
-    return (
-      <ToolSettingsInput
-        name='Eraser Size'
-        icon='eraser'
-        type='numeric'
-        value={this.getToolSetting('eraserSize')}
-        onChange={(val) => this.setToolSetting('eraserSize', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('eraserSize')}/>
-    )
-  }
-
-  renderStrokeWidth = () => {
-    return (
-      <ToolSettingsInput
-        name='Stroke Width'
-        icon='strokewidth'
-        type='numeric'
-        value={this.getToolSetting('strokeWidth')}
-        onChange={(val) => this.setToolSetting('strokeWidth', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('strokeWidth')}/>
-    )
-  }
-
-  renderDropperMode = () => {
-    return (
-      <ToolSettingsInput
-        name='Pixel'
-        icon='pixel'
-        type='checkbox'
-        value={this.getToolSetting('pixelDropper')}
-        onChange={() => this.setToolSetting('pixelDropper', !this.getToolSetting('pixelDropper'))}/>
-    )
-  }
-
-  renderFontFamily = () => {
-    return (
-      <ToolSettingsInput
-        name='Font'
-        icon='fontfamily'
-        type='dropdown'
-        value={this.getToolSetting('fontFamily')}
-        onChange={(val) => this.setToolSetting('fontFamily', val)}/>
-    )
-  }
-
-  renderBrushSize = () => {
-    return (
-      <ToolSettingsInput
-        name='Brush Size'
-        icon='brushsize'
-        type='numeric'
-        value={this.getToolSetting('brushSize')}
-        onChange={(val) => this.setToolSetting('brushSize', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('brushSize')}/>
-    )
-  }
-
-  renderGapFillAmount = () => {
-    return (
-      <ToolSettingsInput
-        name='Gap Fill Amount'
-        icon='gapfillamount'
-        type='numeric'
-        value={this.getToolSetting('gapFillAmount')}
-        onChange={(val) => this.setToolSetting('gapFillAmount', val)}
-        inputRestrictions={this.props.getToolSettingRestrictions('gapFillAmount')}/>
-    )
-  }
-
-  /**
-   * Returns the value of an editor tool setting.
-   * @param  {string} setting Setting value to retrieve
-   * @return {string|number} Value of requested setting. Returns undefined if setting does no exist.
-   */
-  getToolSetting = (setting) => {
-    return this.props.getToolSetting(setting);
-  }
-
-  /**
-   * Updates the value of a tool setting within the editor.
-   * @param {string} setting  Name of the setting to update.
-   * @param {string|number} newValue Value to update selected tool setting to.
-   */
-  setToolSetting = (setting, newValue) => {
-    this.props.setToolSetting(setting, newValue);
-  }
+/** Whether a tool has anything to set. The toolbar asks so it can skip the rule that
+ *  would otherwise hang off the colour swatches with nothing after it. */
+export function hasToolOptions (tool) {
+  return (TOOL_OPTIONS[tool] ?? []).length > 0;
 }
 
-export default ToolSettings
+/* On/off, with the word beside the mark. A switch rather than a checkbox: nothing here
+ * is submitted, the setting takes effect the moment it flips. */
+function Toggle ({ label, icon, value, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!!value}
+      onClick={() => onChange(!value)}
+      className={cn(
+        CONTROL, 'whitespace-nowrap',
+        value
+          ? 'bg-accent text-accent-content'
+          : 'bg-surface-raised text-content-muted hover:bg-surface-hover hover:text-content',
+      )}
+    >
+      {icon && <ToolIcon name={icon} className="size-4" />}
+      {label}
+    </button>
+  );
+}
+
+/* One of a handful of named modes. The trigger shows the mode you are in rather than a
+ * glyph you have to already know, which is the whole complaint the item names. */
+function Choice ({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((option) => option.value === value) ?? options[0];
+
+  /* A row of options is a row: left and right walk it, and the popover already handles
+     Escape and returning focus to the trigger. */
+  const onKeyDown = (event) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (step === undefined) return;
+    const buttons = Array.from(event.currentTarget.querySelectorAll('[role="menuitemradio"]'));
+    const here = buttons.indexOf(document.activeElement);
+    if (here === -1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    buttons[(here + step + buttons.length) % buttons.length].focus();
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      {/* No aria-label. "Mode: None" would be a nicer string to hear, and it would also
+          replace the accessible name with one the visible text is not a substring of —
+          WCAG's Label in Name, and the thing that breaks voice control. The two words are
+          the name. */}
+      <PopoverTrigger
+        className={cn(CONTROL, 'whitespace-nowrap bg-surface-raised text-content-muted',
+          'hover:bg-surface-hover hover:text-content')}
+      >
+        <ToolIcon name={current.icon} className="size-4" />
+        <span className="text-content-subtle">{label}</span>
+        <span>{current.label}</span>
+      </PopoverTrigger>
+      <PopoverContent className="border border-line bg-surface p-1">
+        <div role="menu" aria-label={label} className="flex items-center gap-1" onKeyDown={onKeyDown}>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={option.value === current.value}
+              onClick={() => { onChange(option.value); setOpen(false); }}
+              className={cn(
+                CONTROL, 'whitespace-nowrap',
+                option.value === current.value
+                  ? 'bg-accent text-accent-content'
+                  : 'text-content-muted hover:bg-surface-hover hover:text-content',
+              )}
+            >
+              <ToolIcon name={option.icon} className="size-4" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export default function ToolSettings ({ activeTool, getToolSetting, setToolSetting, getToolSettingRestrictions }) {
+  const options = TOOL_OPTIONS[activeTool] ?? [];
+  if (options.length === 0) return null;
+
+  return (
+    /* settings-panel-container carries no style; the dev checks find the group by it. */
+    <div
+      id="settings-panel-container"
+      role="group"
+      aria-label={`${TOOL_NAMES[activeTool] ?? activeTool} options`}
+      className="flex shrink-0 items-center gap-1.5"
+    >
+      {options.map((option) => {
+        if (option.kind === 'number') {
+          return (
+            <SettingsNumericSlider
+              key={option.setting}
+              id={`tool-setting-${option.setting}`}
+              label={option.label}
+              value={getToolSetting(option.setting)}
+              onChange={(value) => setToolSetting(option.setting, value)}
+              inputRestrictions={getToolSettingRestrictions(option.setting)} />
+          );
+        }
+        if (option.kind === 'toggle') {
+          return (
+            <Toggle
+              key={option.setting}
+              label={option.label}
+              icon={option.icon}
+              value={getToolSetting(option.setting)}
+              onChange={(value) => setToolSetting(option.setting, value)} />
+          );
+        }
+        return (
+          <Choice
+            key={option.setting}
+            label={option.label}
+            options={CHOICES[option.setting]}
+            value={getToolSetting(option.setting)}
+            onChange={(value) => setToolSetting(option.setting, value)} />
+        );
+      })}
+    </div>
+  );
+}

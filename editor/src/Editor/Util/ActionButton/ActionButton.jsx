@@ -83,9 +83,21 @@ export default function ActionButton (props) {
     }
   }
 
+  /*
+   * An icon-only button has no accessible name. The tooltip is not one: Radix wires it as
+   * aria-describedby, which a screen reader reads AFTER the name — and there was no name, so
+   * every tool button, every canvas action and every tool setting announced itself as
+   * "button". Eighteen of them in the toolbox alone.
+   *
+   * Only when there is no visible text. WCAG's Label in Name says the accessible name has to
+   * contain the visible label, and an aria-label on a button that reads "Add to Canvas" would
+   * replace it — breaking voice control for the one case that did not need help.
+   */
+  let ariaLabel = props.text ? undefined : props.tooltip;
+
   return (
       <WickInput
-        buttonProps={props.buttonProps}
+        buttonProps={{ 'aria-label': ariaLabel, ...props.buttonProps }}
         // ToolButton has always passed id={"tool-button-" + name} and ActionButton has
         // always dropped it, so none of those ids reached the DOM. It only ever fed
         // react-tooltip's data-for pairing, which is gone; forwarding it now gives every

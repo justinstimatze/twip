@@ -56,7 +56,6 @@ import ViewOnly from './Panels/ViewOnly/ViewOnly';
 import EditorWrapper from './EditorWrapper';
 
 import { version } from '../../package.json';
-import classNames from 'classnames';
 
 /*
  * Breakpoints.
@@ -99,9 +98,6 @@ class Editor extends EditorCore {
       codeEditorOpen: false,
       scriptToEdit: "default",
       showCanvasActions: false,
-      showBrushModes: false,
-      showCursorTransformModes: false,
-      showGradientToolModes: false,
       showCodeErrors: false,
       codeError: null,
       outlinerPoppedOut: false,
@@ -627,54 +623,6 @@ class Editor extends EditorCore {
   }
 
   /**
-   * Opens and closes the brush modes popover.
-   * @param {boolean} state - Optional. True will open the brush modes menu, false will close.
-   */
-  toggleBrushModes = (state) => {
-    if (state === undefined || (typeof state !== "boolean")) {
-      state = !this.state.showBrushModes;
-    }
-
-    this.setState({
-      showBrushModes: state,
-      showCursorTransformModes: false,
-      showGradientToolModes: false
-    });
-  }
-
-  /**
-   * Opens and closes the cursor transform modes popover.
-   * @param {boolean} state - Optional. True will open the cursor transform modes menu, false will close.
-   */
-  toggleCursorTransformModes = (state) => {
-    if (state === undefined || (typeof state !== "boolean")) {
-      state = !this.state.showCursorTransformModes;
-    }
-
-    this.setState({
-      showBrushModes: false,
-      showCursorTransformModes: state,
-      showGradientToolModes: false
-    });
-  }
-
-  /**
-   * Opens and closes the gradient modes popover.
-   * @param {boolean} state - Optional. True will open the gradient modes menu, false will close.
-   */
-  toggleGradientToolModes = (state) => {
-    if (state === undefined || (typeof state !== "boolean")) {
-      state = !this.state.showGradientToolModes;
-    }
-
-    this.setState({
-      showBrushModes: false,
-      showCursorTransformModes: false,
-      showGradientToolModes: state
-    });
-  }
-
-  /**
    * Show code errors in the code editor by popping it up.
    * @param  {object[]} errors Array of error objects.
    */
@@ -1097,8 +1045,16 @@ class Editor extends EditorCore {
             <PanelGroup orientation="horizontal" onLayoutChanged={this.onResize}>
               {/* Middle Panel */}
               <Panel minSize="40%">
+                {/*
+                  * The toolbox took its height from a class and the canvas took the rest by
+                  * `calc(100% - 40px)`, in two variants each, which is why a toolbar that
+                  * needed a second row could only get one by hiding what did not fit. Column
+                  * flex instead: the toolbar is as tall as its contents and the canvas is
+                  * whatever is left, with no number written down anywhere.
+                  */}
+                <div className="flex h-full min-h-0 flex-col">
                 {/*Toolbox*/}
-                <div className={classNames("toolbox-container", {'toolbox-container-medium': renderSize === 'medium'})}>
+                <div className="shrink-0">
                   <DockedPanel showOverlay={this.state.previewPlaying}>
                     <Toolbox
                       project={this.state.project}
@@ -1111,23 +1067,16 @@ class Editor extends EditorCore {
                       editorActions={this.actionMapInterface.editorActions}
                       getToolSettingRestrictions={this.getToolSettingRestrictions}
                       showCanvasActions={this.state.showCanvasActions}
-                      showBrushModes={this.state.showBrushModes}
-                      showCursorTransformModes={this.state.showCursorTransformModes}
-                      showGradientToolModes={this.state.showGradientToolModes}
                       toggleCanvasActions={this.toggleCanvasActions}
-                      toggleBrushModes={this.toggleBrushModes}
-                      toggleCursorTransformModes={this.toggleCursorTransformModes}
-                      toggleGradientToolModes={this.toggleGradientToolModes}
                       colorPickerType={this.state.colorPickerType}
                       changeColorPickerType={this.changeColorPickerType}
                       updateLastColors={this.updateLastColors}
                       lastColorsUsed={this.state.lastColorsUsed}
                       keyMap={this.getKeyMap()}
-                      renderSize={renderSize}
                     />
                   </DockedPanel>
                 </div>
-                <div className={classNames("editor-canvas-timeline-panel", {'editor-canvas-timeline-panel-medium': renderSize === 'medium'})}>
+                <div className="min-h-0 flex-1">
                   <PanelGroup orientation="vertical" onLayoutChanged={this.onResize}>
                     {/* Canvas and Popout Outliner */}
                     <Panel minSize={120}>
@@ -1222,6 +1171,7 @@ class Editor extends EditorCore {
                       </DockedPanel>
                     </Panel>
                   </PanelGroup>
+                </div>
                 </div>
               </Panel>
 

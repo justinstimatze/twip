@@ -253,6 +253,18 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # The toolbar's controls were unnamed to the last one — eighteen buttons and every
+      # settings field announced themselves as "button" — and at a 1024px window its right
+      # third was painted off the edge by `overflow: hidden`, so undo, redo and the clipboard
+      # were not there at all. Both halves are cases here, and nothing-is-clipped is the one
+      # that matters: it measures every control against the toolbar's own box, at five widths,
+      # for all twelve tools, which is the only way that class of bug is ever visible.
+      - name: The toolbar names what it holds, and holds all of it
+        run: pnpm toolbar-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI

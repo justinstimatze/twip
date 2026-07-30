@@ -47,14 +47,10 @@ class EditorCore extends Component {
         this.project.toolSettings.setSetting('fillColor', new window.Wick.Color(color));
       };
 
-      // Close the tool popups on a tool change. This started as a crash workaround —
-      // reactstrap's popover looked its anchor up by id and threw when the anchor left
-      // the page (reactstrap#894). Radix takes a null anchor without complaint, so the
-      // crash is gone, but closing is still the right behaviour: a brush-modes popup
-      // hanging over the page after you switch to the eyedropper is just stale.
-      this.toggleBrushModes(false);
-      this.toggleCursorTransformModes(false);
-      this.toggleGradientToolModes(false);
+      // Three lines here used to close the brush/cursor/gradient mode popups, each backed by
+      // its own editor state field and its own toggle method. A tool change swaps out the
+      // whole settings group, so the popup goes with the control it belongs to and the state
+      // was only ever describing something React already knew.
 
       this.projectDidChange({ actionName: "Set Active Tool: " + newTool });
     }
