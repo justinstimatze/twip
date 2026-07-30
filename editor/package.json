@@ -61,6 +61,7 @@
     "drag-check": "node dev/drag-check.mjs",
     "hotkeys-check": "node dev/hotkeys-check.mjs",
     "inspector-check": "node dev/inspector-check.mjs",
+    "a11y-timeline-check": "node dev/a11y-timeline-check.mjs",
     "build-engine": "pnpm --dir engine build && cp -a engine/dist/. public/corelibs/wick-engine/",
     "test-engine": "pnpm --dir engine test",
     "smoke": "node dev/smoke.mjs",

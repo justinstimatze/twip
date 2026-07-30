@@ -25,6 +25,7 @@ import DragDropTypes from 'Editor/DragDropTypes.js';
 import './_timeline.scss';
 
 import { iconDataUri } from '@/ui/icon';
+import TimelineMirror from './TimelineMirror';
 
 /*
  * The canvas timeline's sixteen buttons. They were the last PNGs in the tree, and they were
@@ -104,6 +105,13 @@ class Timeline extends Component {
       <div id="animation-timeline-container" ref={dropRef} aria-label="Timeline">
         { isOver && <div className="drag-drop-overlay" /> }
         <div id="animation-timeline" ref={this.canvasContainer} />
+        {/* The canvas above has no contents an assistive technology can reach. This is the
+            same model, mirrored into a focusable DOM grid. See TimelineMirror.jsx. */}
+        <TimelineMirror
+          project={this.props.project}
+          projectData={this.props.projectData}
+          projectDidChange={this.props.projectDidChange}
+        />
       </div>
     )
   }
