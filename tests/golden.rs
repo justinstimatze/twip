@@ -100,6 +100,15 @@ const CASES: &[Case] = &[
         fixture: "fixtures/skew-tween.wick",
         skipframes: 23,
     },
+    // The one fixture whose stage is not white. Every other one here is, and so is what a
+    // player falls back to when a movie carries no SetBackgroundColor — which is why dropping
+    // the tag entirely, as the compiler did until it emitted one, rendered pixel-identical on
+    // all of them. This case is the only thing in the tree that can tell those two apart.
+    Case {
+        name: "dark-stage",
+        fixture: "fixtures/dark-stage.wick",
+        skipframes: 0,
+    },
     // Mid-span. The clip is rotating 0 -> 180 and scaling 1 -> 2.5 while fading to 0.3, so
     // these three catch the interior at a quarter, a half and three quarters of the way.
     Case {

@@ -44,6 +44,7 @@ fn main() -> std::io::Result<()> {
         height: 400.0,
         // This demo was authored to read at 24; a .wick would carry its own rate.
         framerate: 24.0,
+        background: swf::Color::WHITE,
         layers: vec![Layer { frames }],
     };
 

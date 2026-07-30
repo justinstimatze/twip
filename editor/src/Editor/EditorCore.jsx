@@ -794,6 +794,23 @@ class EditorCore extends Component {
     Object.keys(newSettings).forEach(key => {
       if (validKeys.indexOf(key) === -1) return;
 
+      /*
+       * The colour is the one key that is an object, and both halves of the loop below get it
+       * wrong. Callers hand over an `rgba(...)` string — which is what every colour picker in
+       * the editor reports — and assigning that straight through leaves project.backgroundColor
+       * a string with no .hex or .rgba on it. And two Wick.Colors are never ===, so re-applying
+       * the colour already set counted as a change and spent an undo state on nothing.
+       */
+      if (key === 'backgroundColor') {
+        const next = newSettings[key] instanceof window.Wick.Color
+          ? newSettings[key]
+          : new window.Wick.Color(newSettings[key]);
+        if (this.project.backgroundColor.rgba === next.rgba) return;
+        this.project.backgroundColor = next;
+        updated = true;
+        return;
+      }
+
       let oldVal = this.project[key];
       if (oldVal !== newSettings[key]) {
         this.project[key] = newSettings[key];
@@ -2088,6 +2105,9 @@ class EditorCore extends Component {
       framerate: this.project.framerate,
       width: this.project.width,
       height: this.project.height,
+      // As a string, which is what the picker reads and writes. The Color object itself would
+      // be a new identity every render and defeat the Document tab's draft.
+      backgroundColor: this.project.backgroundColor.rgba,
     };
   }
 

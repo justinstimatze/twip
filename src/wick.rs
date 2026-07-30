@@ -20,6 +20,11 @@ pub struct Document {
     /// Frames per second, straight from the project. The SWF header carries this, so getting
     /// it wrong plays the whole movie at the wrong speed while every frame is still correct.
     pub framerate: f64,
+    /// The stage colour, which becomes a `SetBackgroundColor` tag.
+    ///
+    /// Its alpha is dropped on the way out: the SWF tag is a three-byte RGB record, and there
+    /// is nothing behind a stage for a translucent one to reveal.
+    pub background: Color,
     /// Layers in Wick order — index 0 is frontmost (depth is resolved at compile).
     pub layers: Vec<Layer>,
 }
@@ -182,6 +187,15 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .filter(|f| *f > 0.0)
         .unwrap_or(12.0);
 
+    // White when the key is absent or unreadable, matching the engine's own constructor
+    // default (engine/src/base/Project.js:40) — and matching what a player shows for a movie
+    // with no SetBackgroundColor tag, which is what every .wick compiled before this got.
+    let background = project
+        .get("backgroundColor")
+        .and_then(Value::as_str)
+        .and_then(parse_css_color)
+        .unwrap_or(Color::WHITE);
+
     let objects = root
         .get("objects")
         .and_then(Value::as_object)
@@ -202,6 +216,7 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         width,
         height,
         framerate,
+        background,
         layers,
     })
 }
@@ -484,7 +499,7 @@ fn parse_stroke(props: &serde_json::Map<String, Value>) -> Option<Stroke> {
     })
 }
 
-/// paper.js colors are `[r,g,b]`/`[r,g,b,a]` floats in 0..1, or a hex string.
+/// paper.js colors are `[r,g,b]`/`[r,g,b,a]` floats in 0..1, or a CSS string.
 fn parse_color(v: &Value) -> Color {
     if let Some(arr) = v.as_array() {
         let ch = |i: usize| {
@@ -498,11 +513,59 @@ fn parse_color(v: &Value) -> Color {
         let a = ch(3).unwrap_or(255);
         Color::from_rgb((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b), a)
     } else if let Some(s) = v.as_str() {
-        let hex = u32::from_str_radix(s.trim_start_matches('#'), 16).unwrap_or(0);
-        Color::from_rgb(hex, 255)
+        parse_css_color(s).unwrap_or_else(|| Color::from_rgb(0, 255))
     } else {
         Color::from_rgb(0, 255)
     }
+}
+
+/// The CSS colour strings a `.wick` can hold, which is more than one shape.
+///
+/// Path fills arrive as float arrays, but the project's own `backgroundColor` is whatever
+/// paper.js `toCSS()` produced — `rgb(255,255,255)` in every fixture, `rgba(r,g,b,a)` once a
+/// colour is translucent. Read as hex, `rgb(255,255,255)` is not a number at all, so the
+/// old parser's `unwrap_or(0)` turned every background into black. Nothing noticed because
+/// nothing read the background.
+///
+/// `None` rather than a fallback colour, so callers decide what an unreadable string means:
+/// a path defaults to black, a stage to white.
+pub(crate) fn parse_css_color(s: &str) -> Option<Color> {
+    let s = s.trim();
+
+    if let Some(args) = s
+        .strip_prefix("rgba(")
+        .or_else(|| s.strip_prefix("rgb("))
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        let mut part = args.split(',').map(str::trim);
+        let mut channel = || -> Option<u8> {
+            Some(part.next()?.parse::<f64>().ok()?.round().clamp(0.0, 255.0) as u8)
+        };
+        let (r, g, b) = (channel()?, channel()?, channel()?);
+        // Alpha is 0..1 in CSS and 0..255 here. Absent means opaque, which covers `rgb()`.
+        let a = part
+            .next()
+            .and_then(|t| t.parse::<f64>().ok())
+            .map_or(255, |f| (f * 255.0).round().clamp(0.0, 255.0) as u8);
+        return Some(Color { r, g, b, a });
+    }
+
+    let hex = s.strip_prefix('#').unwrap_or(s);
+    // #rgb is not #00000rgb. Expanding it here rather than letting from_str_radix read it as
+    // one number, which is how `#f00` used to come out a dark blue.
+    let expanded = if hex.len() == 3 {
+        hex.chars().flat_map(|c| [c, c]).collect::<String>()
+    } else {
+        hex.to_string()
+    };
+    if expanded.len() != 6 && expanded.len() != 8 {
+        return None;
+    }
+    let n = u32::from_str_radix(&expanded, 16).ok()?;
+    if expanded.len() == 8 {
+        return Some(Color::from_rgb(n >> 8, (n & 0xff) as u8));
+    }
+    Some(Color::from_rgb(n, 255))
 }
 
 struct Seg {

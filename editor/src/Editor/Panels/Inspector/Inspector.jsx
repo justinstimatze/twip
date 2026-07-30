@@ -1380,7 +1380,13 @@ class Inspector extends Component {
             <InspectorDocument
               className={ITEM}
               settings={this.props.getProjectSettings()}
-              onCommit={this.props.updateProjectSettings} />}
+              onCommit={this.props.updateProjectSettings}
+              colorPicker={{
+                colorPickerType: this.props.colorPickerType,
+                changeColorPickerType: this.props.changeColorPickerType,
+                updateLastColors: this.props.updateLastColors,
+                lastColorsUsed: this.props.lastColorsUsed,
+              }} />}
         </div>
       </div>
     );

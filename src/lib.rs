@@ -1311,11 +1311,18 @@ pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec
     let action_arena = serialize(frame_cmds);
     let clip_arena = serialize(clip_cmds);
 
-    // Definitions first, then the control stream: a DoAction spliced before the
-    // ShowFrame of each frame that carries one, and a PRESS clip action attached to
-    // the initial Place of each clip that carries one. `Tag<'static>` tags coerce to
-    // the arenas' borrow lifetime on push.
-    let mut tags: Vec<Tag> = defs;
+    // The stage colour, first, because that is where a player looks for it: ruffle's reader
+    // scans only the first few tags for SetBackgroundColor and treats a later one as ordinary
+    // stream. Without the tag a movie gets the player's default — white — so every .wick
+    // compiled before this exported onto white however dark its stage was in the editor, and
+    // the editor has offered a Background Color control the whole time.
+    //
+    // Definitions next, then the control stream: a DoAction spliced before the ShowFrame of
+    // each frame that carries one, and a PRESS clip action attached to the initial Place of
+    // each clip that carries one. `Tag<'static>` tags coerce to the arenas' borrow lifetime
+    // on push.
+    let mut tags: Vec<Tag> = vec![Tag::SetBackgroundColor(doc.background)];
+    tags.extend(defs);
     let mut frame_no: u16 = 0;
     for tag in control {
         match tag {
@@ -1730,6 +1737,7 @@ mod tests {
             width: 640.0,
             height: 360.0,
             framerate: 30.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![
                     Frame {
@@ -1833,6 +1841,7 @@ mod tests {
                 width: 100.0,
                 height: 100.0,
                 framerate: rate,
+                background: swf::Color::WHITE,
                 layers: vec![Layer {
                     frames: vec![Frame {
                         start: 1,
@@ -1871,6 +1880,7 @@ mod tests {
             width: 100.0,
             height: 100.0,
             framerate: rate,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -1920,6 +1930,7 @@ mod tests {
             width: 100.0,
             height: 100.0,
             framerate: 12.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![
                     Frame {
@@ -2162,6 +2173,7 @@ mod tests {
             width: 200.0,
             height: 200.0,
             framerate: 12.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -2680,6 +2692,149 @@ mod tests {
         assert_eq!(ease_curve("custom", None, 0.42), 0.42);
     }
 
+    /// The stage colour has to be in the movie, and early in it.
+    ///
+    /// A player that finds no SetBackgroundColor uses its own default, which is white — so
+    /// this was invisible on every fixture in the tree, all of which are white stages, while
+    /// the editor's Background Color control wrote to a field the compiler dropped. Position
+    /// is part of the assertion because ruffle scans only the first few tags for it.
+    #[test]
+    fn the_stage_color_reaches_the_movie() {
+        let json = fixture_json_with_background(Some("rgb(17,34,51)"));
+        let doc = wick::parse_wick(&rewrap_test1(&json)).expect("parse patched test1");
+        assert_eq!(
+            doc.background,
+            swf::Color {
+                r: 17,
+                g: 34,
+                b: 51,
+                a: 255
+            }
+        );
+
+        let swf = compile_document(&doc).expect("compile");
+        let buf = swf::decompress_swf(&swf[..]).expect("decompress");
+        let parsed = swf::parse_swf(&buf).expect("parse");
+
+        let at = parsed
+            .tags
+            .iter()
+            .position(|t| matches!(t, Tag::SetBackgroundColor(_)))
+            .expect("no SetBackgroundColor tag in the movie");
+        let first_show = parsed
+            .tags
+            .iter()
+            .position(|t| matches!(t, Tag::ShowFrame))
+            .expect("no ShowFrame");
+        assert_eq!(at, 0, "the background tag must lead the stream");
+        assert!(at < first_show);
+
+        match &parsed.tags[at] {
+            Tag::SetBackgroundColor(c) => {
+                assert_eq!((c.r, c.g, c.b), (17, 34, 51), "wrong stage colour")
+            }
+            other => panic!("expected SetBackgroundColor, got {other:?}"),
+        }
+    }
+
+    /// A .wick that never said, which is what a hand-written or hand-trimmed one looks like.
+    /// White rather than black: it is the engine's own constructor default, and it is what
+    /// every movie compiled before this tag existed already showed.
+    #[test]
+    fn a_project_without_a_background_is_white() {
+        let doc = wick::parse_wick(&rewrap_test1(&fixture_json_with_background(None)))
+            .expect("parse test1 with no backgroundColor");
+        assert_eq!(doc.background, swf::Color::WHITE);
+
+        // And so is one whose colour is a string nothing can read, rather than the black that
+        // `unwrap_or(0)` on a failed hex parse would have given.
+        let doc = wick::parse_wick(&rewrap_test1(&fixture_json_with_background(Some(
+            "chartreuse",
+        ))))
+        .expect("parse test1 with an unreadable backgroundColor");
+        assert_eq!(doc.background, swf::Color::WHITE);
+    }
+
+    /// Every string shape the format can hold. paper.js `toCSS()` writes `rgb(...)` when the
+    /// colour is opaque and `rgba(...)` when it is not, and hex arrives from hand-editing —
+    /// `#f00` included, which the old hex-only parser read as the number 0xf00 and rendered
+    /// a dark blue.
+    #[test]
+    fn reads_every_css_color_the_format_writes() {
+        let rgba = |r, g, b, a| swf::Color { r, g, b, a };
+        let cases = [
+            ("rgb(255,255,255)", rgba(255, 255, 255, 255)),
+            ("rgb(0, 0, 0)", rgba(0, 0, 0, 255)),
+            ("rgba(17,34,51,0.5)", rgba(17, 34, 51, 128)),
+            ("rgba(17,34,51,1)", rgba(17, 34, 51, 255)),
+            ("#112233", rgba(17, 34, 51, 255)),
+            ("112233", rgba(17, 34, 51, 255)),
+            ("#f00", rgba(255, 0, 0, 255)),
+            ("#11223380", rgba(17, 34, 51, 128)),
+        ];
+        for (text, want) in cases {
+            let got = wick::parse_css_color(text)
+                .unwrap_or_else(|| panic!("{text} did not parse at all"));
+            assert_eq!(got, want, "{text} parsed wrong");
+        }
+        for text in ["chartreuse", "", "rgb(1,2)", "#12345"] {
+            assert!(
+                wick::parse_css_color(text).is_none(),
+                "{text} should not have parsed"
+            );
+        }
+    }
+
+    /// test1.wick's project.json with its `backgroundColor` replaced, or removed for `None`.
+    fn fixture_json_with_background(color: Option<&str>) -> String {
+        use std::io::Read;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(
+            &include_bytes!("../fixtures/test1.wick")[..],
+        ))
+        .expect("open test1.wick");
+        let mut json = String::new();
+        zip.by_name("project.json")
+            .expect("project.json")
+            .read_to_string(&mut json)
+            .expect("read project.json");
+
+        let mut root: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        let project = root
+            .get_mut("project")
+            .and_then(|p| p.as_object_mut())
+            .expect("project object");
+        match color {
+            Some(c) => {
+                project.insert(
+                    "backgroundColor".into(),
+                    serde_json::Value::String(c.into()),
+                );
+            }
+            None => {
+                project.remove("backgroundColor");
+            }
+        }
+        root.to_string()
+    }
+
+    /// Zip a project.json back into something parse_wick will take.
+    fn rewrap_test1(json: &str) -> Vec<u8> {
+        use std::io::Write;
+        let mut out = Vec::new();
+        {
+            let mut w = zip::ZipWriter::new(std::io::Cursor::new(&mut out));
+            w.start_file(
+                "project.json",
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored),
+            )
+            .expect("start project.json");
+            w.write_all(json.as_bytes()).expect("write project.json");
+            w.finish().expect("finish zip");
+        }
+        out
+    }
+
     #[test]
     fn tween_interpolates_clip_placement() {
         use wick::{Clip, Contour, Document, Frame, Layer, Tween};
@@ -2732,6 +2887,7 @@ mod tests {
             width: 200.0,
             height: 200.0,
             framerate: 12.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -2916,6 +3072,7 @@ mod tests {
             width: 200.0,
             height: 200.0,
             framerate: 12.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -3307,6 +3464,7 @@ mod tests {
             width: 200.0,
             height: 200.0,
             framerate: 12.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,
@@ -3526,6 +3684,7 @@ mod tests {
             width: 200.0,
             height: 200.0,
             framerate: 12.0,
+            background: swf::Color::WHITE,
             layers: vec![Layer {
                 frames: vec![Frame {
                     start: 1,

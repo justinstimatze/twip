@@ -241,6 +241,38 @@ record('undo-puts-the-stage-back',
   (await page.evaluate(() => window.editor.project.width)) === beforeDoc.width,
   `width is ${await page.evaluate(() => window.editor.project.width)}, was ${beforeDoc.width} before the edit`);
 
+/*
+ * The stage colour, which is on this tab only because the compiler now emits a
+ * SetBackgroundColor tag for it — before that it reached the editor's canvas and never the
+ * .swf. Set through the panel and read back off the project, then serialized, because the
+ * serialized string is what the compiler parses.
+ */
+await page.evaluate(() => window.editor.updateProjectSettings({ backgroundColor: 'rgba(17,34,51,1)' }));
+await page.waitForTimeout(500);
+const painted = await page.evaluate(() => ({
+  onProject: window.editor.project.backgroundColor.rgba,
+  isColor: window.editor.project.backgroundColor instanceof window.Wick.Color,
+  serialized: window.editor.project.serialize().backgroundColor,
+  onPanel: (document.querySelector('#background-input') || {}).value
+    || (document.querySelector('[id^="inspector-project-background"]') || {}).textContent,
+}));
+/* `rgb(...)` not `rgba(...)`: paper.js toCSS drops the alpha when it is 1, so an opaque
+ * colour normalizes on the way in. Asserted in the normalized form rather than the form it
+ * was set with, because the normalized one is what lands in the file the compiler reads —
+ * and `rgb(r,g,b)` is the shape that used to parse as black, since it is not a hex number. */
+record('the-stage-colour-reaches-the-file',
+  painted.isColor && painted.serialized === 'rgb(17,34,51)'
+  && painted.onProject === painted.serialized,
+  `project holds ${painted.onProject} as a Wick.Color, serialized as "${painted.serialized}"`);
+
+/* Setting the colour it already has is not a change, and must not cost an undo state. */
+const beforeRepaint = await page.evaluate(() => window.editor.project.history.numUndoStates);
+await page.evaluate(() => window.editor.updateProjectSettings({ backgroundColor: 'rgba(17,34,51,1)' }));
+await page.waitForTimeout(400);
+record('repainting-the-same-colour-is-free',
+  (await page.evaluate(() => window.editor.project.history.numUndoStates)) === beforeRepaint,
+  `re-applying the colour already set added ${await page.evaluate(() => window.editor.project.history.numUndoStates) - beforeRepaint} undo state(s)`);
+
 /* Arrow keys walk the rail, and selection follows focus. */
 await tab('object').click();
 await page.waitForTimeout(300);

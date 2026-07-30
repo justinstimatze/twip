@@ -30,6 +30,20 @@ import { launch, URL_ } from './browser.mjs';
 const EASING = {
   'editor-tween': { easingType: 'out-bounce' },
   'custom-easing': { easingType: 'custom', bezier: [0.9, 0.05, 0.95, 0.4] },
+  'dark-stage': { easingType: 'none' },
+};
+
+/*
+ * Per-fixture project settings. `dark-stage` is the one that needs them: every other fixture
+ * in the tree has the default white stage, which is also what a player shows when a movie
+ * carries no SetBackgroundColor tag — so a compiler that dropped the colour entirely, as this
+ * one did until the tag landed, rendered pixel-identical to one that kept it. A dark stage is
+ * the only way the golden oracle can tell those two apart. The fill is set with it so the
+ * shape stays visible against the stage rather than the fixture proving only that the
+ * background changed.
+ */
+const PROJECT = {
+  'dark-stage': { backgroundColor: '#1b1917', fill: '#ef4a2f' },
 };
 
 const name = process.argv[2] || 'editor-tween';
@@ -52,12 +66,19 @@ await page.mouse.move(560, 420, { steps: 10 });
 await page.mouse.up();
 await page.waitForTimeout(600);
 
-const built = await page.evaluate(([easing]) => {
+const built = await page.evaluate(([easing, settings]) => {
   const e = window.editor;
   const project = e.project;
   const frame = project.activeFrame;
   if (!frame) return { error: 'no active frame' };
   if (frame.paths.length === 0) return { error: 'the rectangle tool drew nothing' };
+
+  if (settings) {
+    if (settings.backgroundColor) project.backgroundColor = new window.Wick.Color(settings.backgroundColor);
+    // A CSS string, not a Wick.Color: the setter assigns straight through to the paper item,
+    // and paper coerces an object it does not recognize to black rather than refusing it.
+    if (settings.fill) frame.paths[0].fillColor = settings.fill;
+  }
 
   // Two seconds at the default 12fps.
   frame.end = 24;
@@ -83,6 +104,7 @@ const built = await page.evaluate(([easing]) => {
   project.view.render();
   return {
     engine: project.metadata ? project.metadata.wickengine : '(no metadata yet)',
+    background: project.backgroundColor.rgba,
     framerate: project.framerate,
     width: project.width,
     height: project.height,
@@ -91,7 +113,7 @@ const built = await page.evaluate(([easing]) => {
     tweens: frame.tweens.map((t) => ({ at: t.playheadPosition, easing: t.easingType, bezier: t.bezier })),
     frameSpan: [frame.start, frame.end],
   };
-}, [EASING[name] || EASING['editor-tween']]);
+}, [EASING[name] || EASING['editor-tween'], PROJECT[name] || null]);
 
 if (built.error) {
   console.error('could not build the project:', built.error);
