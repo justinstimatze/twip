@@ -47,11 +47,12 @@ fn main() -> Result<()> {
     // as the warning it is. Not an error: the movie is fine, it is just smaller than the
     // document — and refusing to compile a project because one title card cannot come along
     // would be the worse of the two failures.
+    // `describe` names what was actually left behind, and since scripts started reporting a
+    // reason it says why too. The list of unsupported features that used to hang off the end
+    // here named gradients for a week after they gained a reader — a second copy of that list,
+    // maintained by remembering to.
     if !skipped.is_empty() {
-        eprintln!(
-            "warning: {} not in the movie — gradients, text, images and audio have no reader yet",
-            skipped.describe(),
-        );
+        eprintln!("warning: {} not in the movie", skipped.describe());
     }
     Ok(())
 }

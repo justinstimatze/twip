@@ -41,6 +41,22 @@ cargo build --all-targets || fail=1
 step "test"
 cargo test || fail=1
 
+# tools/twipdoc is a separate Go module (the document tier — see docs/agent-interface.md).
+# Gated here rather than in its own workflow because its strongest test compiles fixtures with
+# the twip binary this same suite just built: a Go change that corrupts a document shows up as
+# a movie that differs, and that check only exists where both languages are present.
+step "twipdoc (go)"
+if command -v go >/dev/null 2>&1; then
+    (cd tools/twipdoc && go vet ./... && go test ./...) || fail=1
+elif [[ -n "${CI:-}" ]]; then
+    # Loud on CI. A silent skip there means the Go tests quietly stop running and the suite
+    # still reports green — the failure nobody finds, because nothing is red.
+    echo "  go missing on CI — the twipdoc tests did not run"
+    fail=1
+else
+    echo "  go not installed — skipping (install Go to run the twipdoc tests)"
+fi
+
 echo
 if [[ $fail -ne 0 ]]; then
     echo "✗ checks FAILED"

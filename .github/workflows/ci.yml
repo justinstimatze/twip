@@ -30,6 +30,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # tools/twipdoc is a separate Go module that check.sh runs. Pinned rather than left to
+      # whatever the runner image ships, because its go.mod names a recent minimum.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/twipdoc/go.mod
+          cache-dependency-path: tools/twipdoc/go.sum
+
       # The exact same suite the local pre-commit hook runs — one script, so local
       # and CI strictness can't drift. clippy (deny warnings) is the gate; fmt is advisory.
       - name: Checks (fmt advisory, clippy, build, test)

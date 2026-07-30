@@ -39,3 +39,6 @@ reference/wick-editor/
 # wasm build output (dev/build-wasm.sh) — the crate has its own target dir because it is
 # excluded from the root workspace.
 /wasm/target/
+
+# twipdoc built in place (the checked-in build target is /target)
+/tools/twipdoc/twipdoc
