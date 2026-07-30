@@ -70,6 +70,7 @@ Export works three ways, and the editor picks whichever exists: an in-process Ru
 | [`docs/wick-format.md`](docs/wick-format.md) | what a `.wick` file contains and what it takes to compile one — there is no spec, so this is it |
 | [`docs/testing.md`](docs/testing.md) | the five test layers, and why there is no editor-versus-player pixel diff |
 | [`docs/ui-research.md`](docs/ui-research.md) | the survey of post-Flash tools the interface was designed against |
+| [`docs/flash8-parity.md`](docs/flash8-parity.md) | everything Flash 8 could do, read off the SWF spec, with what twip does and does not |
 
 ## Rough edges
 
