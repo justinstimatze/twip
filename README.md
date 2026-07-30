@@ -73,7 +73,7 @@ Export works three ways, and the editor picks whichever exists: an in-process Ru
 
 ## Rough edges
 
-Known, and worth saying before you find them. The interface is mid-redesign: `TabbedInterface` underlines every tab rather than the active one, so inactive tabs read as links, and the Inspector's rows still use the inherited 30/70 label-to-field split, which is generous at 250px and wrong at 400. `TabbedInterface` also pairs children to tabs by array index, so a host that offers a subset of the export types renders empty tab bodies.
+Named here rather than left for you to trip over. The interface is mid-redesign: every tab in `TabbedInterface` carries a bottom rule, so the active one is set apart by colour alone and the inactive ones still read a little like links. The Inspector's rows use the inherited 30/70 label-to-field split, which is generous at 250px and wrong at 400.
 
 The compiler skips gradients, text, audio, filters and images rather than guessing at them — see Status above. Everything else the editor can draw, it compiles.
 
