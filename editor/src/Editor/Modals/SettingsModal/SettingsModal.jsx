@@ -56,7 +56,7 @@ class SettingsModal extends Component {
           Settings
         </div>
         <div className="settings-modal-body">
-          <TabbedInterface tabNames={["Project", "Shortcuts", "Editor"]} >
+          <TabbedInterface label="Settings" tabNames={["Project", "Shortcuts", "Editor"]} >
             <ProjectSettings
               project={this.props.project}
               updateProjectSettings={this.props.updateProjectSettings}
@@ -100,7 +100,7 @@ class SettingsModal extends Component {
           Settings
         </div>
         <div className="settings-modal-body">
-          <TabbedInterface tabNames={["Project", "Editor"]} >
+          <TabbedInterface label="Settings" tabNames={["Project", "Editor"]} >
             <ProjectSettings
               isMobile={true}
               project={this.props.project}

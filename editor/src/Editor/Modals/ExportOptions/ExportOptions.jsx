@@ -516,6 +516,7 @@ class ExportOptions extends Component {
               aria-label="project name" />
           </div>
           <TabbedInterface
+            label="Export format"
             tabNames={tabNames}
             onTabSelect={this.setSubTab}>
               { this.renderSWFInfo() }
@@ -547,6 +548,7 @@ class ExportOptions extends Component {
               aria-label="project name" />
           </div>
           <TabbedInterface
+            label="Export format"
             tabNames={["GIF", "Video"]}
             onTabSelect={this.setSubTab}>
             {this.renderStandaloneVideoObject(this.renderGifObject)}

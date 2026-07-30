@@ -50,7 +50,7 @@ class BuiltinLibrary extends Component {
           <div className="builtin-library-modal-title">
             Builtin Library (Beta)
           </div>
-          <TabbedInterface tabNames={["Clips", "Sounds"]} >
+          <TabbedInterface label="Asset library" tabNames={["Clips", "Sounds"]} >
             <div className="builtin-library-asset-grid">{wickobjects.assets.map(this.renderBuiltinAsset)}</div>
             <div className="builtin-library-asset-grid">{sounds.assets.map(this.renderSoundAsset)}</div>
           </TabbedInterface>
