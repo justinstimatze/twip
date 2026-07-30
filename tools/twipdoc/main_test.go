@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +70,38 @@ func TestDoubleDashEndsTheFlags(t *testing.T) {
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "-weird-name.wick" {
 		t.Errorf("positionals are %v", fs.Args())
+	}
+}
+
+// The compiler is identified by a literal from its own usage text, which lives in another
+// language's source file and can be reworded without anything here noticing. If it is, twipdoc
+// stops recognising the real compiler and starts reporting that it cannot find one — so the two
+// copies of that string are checked against each other rather than trusted to stay in step.
+func TestTheUsageMarkStillNamesTheCompiler(t *testing.T) {
+	src, err := os.ReadFile("../../src/main.rs")
+	if err != nil {
+		t.Skipf("no compiler source to check against: %v", err)
+	}
+	if !strings.Contains(string(src), usageMark) {
+		t.Errorf("src/main.rs no longer contains %q, so twipdoc cannot recognise the compiler", usageMark)
+	}
+}
+
+// Identifying a candidate must not run it. The desktop app is on PATH under the same name and
+// is a GUI: a probe that executes to find out opens a window every time it guesses wrong.
+func TestIdentifyingABinaryDoesNotRunIt(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "ran")
+	script := filepath.Join(dir, "twip")
+	body := "#!/bin/sh\ntouch " + marker + "\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if isCompiler(script) {
+		t.Error("a shell script was accepted as the compiler")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("isCompiler executed the candidate")
 	}
 }
 

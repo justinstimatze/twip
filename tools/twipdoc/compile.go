@@ -48,9 +48,14 @@ func twipBinary() (string, error) {
 
 	var candidates []string
 	// Walk up looking for a cargo target dir, so this works from anywhere inside the checkout.
+	// Debug counts as well as release: `cargo build` leaves one there and it compiles the same
+	// movie, only slower. Taking release only meant CI — which builds debug — found no compiler
+	// at all and skipped the tests that need one, quietly and in green.
 	if dir, err := os.Getwd(); err == nil {
 		for {
-			candidates = append(candidates, filepath.Join(dir, "target", "release", "twip"))
+			for _, profile := range []string{"release", "debug"} {
+				candidates = append(candidates, filepath.Join(dir, "target", profile, "twip"))
+			}
 			parent := filepath.Dir(dir)
 			if parent == dir {
 				break
@@ -79,16 +84,47 @@ func twipBinary() (string, error) {
 	return "", fmt.Errorf("no twip binary: set TWIP_BIN, or `cargo build --release`")
 }
 
-// isCompiler asks a candidate to identify itself. Run with no arguments the CLI prints its
-// usage and exits; the desktop app of the same name starts a window and never returns, so the
-// timeout is part of the answer rather than a safety net around it.
+// usageMark is a literal from the compiler CLI's own usage text (`src/main.rs`). The desktop
+// app links the twip *library*, not that binary's `main`, so the string is in one and not the
+// other. TestTheUsageMarkStillNamesTheCompiler fails if the two ever drift apart.
+const usageMark = "twip [--no-upsample] <in.wick>"
+
+// isCompiler identifies a candidate by reading it, never by running it.
+//
+// The first version asked each candidate to print its usage. That works, and it also opens a
+// window every time it meets the desktop app — which is on PATH, is named twip, and is a GUI.
+// Running an unknown binary to find out what it is has the order backwards: by the time it
+// answers, it has already done whatever it does.
 func isCompiler(path string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, path)
-	cmd.Stdin = strings.NewReader("")
-	out, _ := cmd.CombinedOutput() // Usage goes out with a non-zero status; the text is the tell.
-	return strings.Contains(string(out), "in.wick")
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	needle := []byte(usageMark)
+	buf := make([]byte, 1<<20)
+	// Carry the tail of each chunk into the next, so a match lying across a chunk boundary is
+	// still found rather than missed once every megabyte.
+	keep := len(needle) - 1
+	var carry []byte
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			window := append(carry, buf[:n]...)
+			if bytes.Contains(window, needle) {
+				return true
+			}
+			if len(window) > keep {
+				carry = append([]byte(nil), window[len(window)-keep:]...)
+			} else {
+				carry = window
+			}
+		}
+		if err != nil {
+			return false
+		}
+	}
 }
 
 // Compile runs the compiler and returns its report.

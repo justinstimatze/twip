@@ -11,6 +11,20 @@ import (
 
 const fixtures = "../../fixtures"
 
+// requireBinary decides whether a missing compiler is an excuse or a failure.
+//
+// Skipping is right on a machine that has not built the Rust side. It is wrong on CI, where the
+// build ran three steps earlier — there, a missing binary means the tests that need one did not
+// run, and a skip reports that as green. This suite's strongest case is one of those, and it
+// skipped on CI for exactly one commit before anyone looked at the clock.
+func requireBinary(t *testing.T, err error) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf("no twip binary on CI, so the tests that compile did not run: %v", err)
+	}
+	t.Skipf("no twip binary: %v", err)
+}
+
 func allFixtures(t *testing.T) []string {
 	t.Helper()
 	paths, err := filepath.Glob(filepath.Join(fixtures, "*.wick"))
@@ -65,7 +79,7 @@ func TestRoundTripPreservesTheValueGraph(t *testing.T) {
 func TestARoundTrippedDocumentCompilesToTheSameMovie(t *testing.T) {
 	bin, err := twipBinary()
 	if err != nil {
-		t.Skipf("no twip binary: %v", err)
+		requireBinary(t, err)
 	}
 	dir := t.TempDir()
 	for _, path := range allFixtures(t) {
@@ -202,7 +216,7 @@ func TestAddLayerProducesALayerWithAFrame(t *testing.T) {
 func TestAddedLayerSurvivesTheCompiler(t *testing.T) {
 	bin, err := twipBinary()
 	if err != nil {
-		t.Skipf("no twip binary: %v", err)
+		requireBinary(t, err)
 	}
 	d := openFixture(t, "test1.wick")
 	if _, err := d.AddLayer("", -1); err != nil {
