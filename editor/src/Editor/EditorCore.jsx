@@ -811,11 +811,16 @@ class EditorCore extends Component {
         return;
       }
 
+      /*
+       * Assign, then ask whether the project moved — rather than whether the request differed
+       * from what was there. The engine's setters clamp (width and height to 1..200000,
+       * framerate to 1..9999, see engine/src/base/Project.js) and ignore a non-number
+       * entirely, so a request the model refuses used to still count as a change and spend an
+       * undo state on a value nobody could see. Typing 0 into a 1px-wide stage was the case.
+       */
       let oldVal = this.project[key];
-      if (oldVal !== newSettings[key]) {
-        this.project[key] = newSettings[key];
-        updated = true;
-      }
+      this.project[key] = newSettings[key];
+      if (this.project[key] !== oldVal) updated = true;
     });
 
     if (updated) {

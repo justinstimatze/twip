@@ -273,6 +273,63 @@ record('repainting-the-same-colour-is-free',
   (await page.evaluate(() => window.editor.project.history.numUndoStates)) === beforeRepaint,
   `re-applying the colour already set added ${await page.evaluate(() => window.editor.project.history.numUndoStates) - beforeRepaint} undo state(s)`);
 
+/*
+ * The resolution presets, which came over from the Settings modal's Project tab when that tab
+ * was folded into this one. The field is a report on the project, not a control with its own
+ * memory: it names the preset the current size matches, changes the size when you pick one,
+ * and falls back to Custom the moment the size stops matching (the case after this).
+ */
+const presetField = () => page.evaluate(() => {
+  const label = Array.from(document.querySelectorAll('[role="tabpanel"] label'))
+    .find((l) => l.textContent === 'Preset');
+  const row = label && label.parentElement;
+  return row ? row.textContent.replace('Preset', '').trim() : null;
+});
+const startSize = await page.evaluate(() => `${window.editor.project.width}x${window.editor.project.height}`);
+const named = await presetField();
+await page.evaluate(() => {
+  const label = Array.from(document.querySelectorAll('[role="tabpanel"] label'))
+    .find((l) => l.textContent === 'Preset');
+  label.parentElement.querySelector('button, [role="combobox"]').click();
+});
+await page.waitForTimeout(400);
+await page.locator('[role="option"]:has-text("1080p")').first().click();
+await page.waitForTimeout(700);
+const sized = await page.evaluate(() => ({
+  width: window.editor.project.width,
+  height: window.editor.project.height,
+}));
+record('a-preset-resizes-the-stage',
+  named === 'Default' && sized.width === 1920 && sized.height === 1080
+  && (await presetField()) === '1080p',
+  `${startSize} read as "${named}", picking 1080p gave ${sized.width}x${sized.height} `
+  + `and the field followed to "${await presetField()}"`);
+
+/* And typing a size the presets do not name puts it back to Custom, so the field never claims
+ * a resolution the stage does not have. */
+await retype(page.locator('#width-input'), '640');
+await page.keyboard.press('Tab');
+await page.waitForTimeout(700);
+record('an-odd-size-reads-as-custom',
+  (await presetField()) === 'Custom'
+  && (await page.evaluate(() => window.editor.project.width)) === 640,
+  `640 wide reads as "${await presetField()}"`);
+
+/* Nothing left of the modal tab this came from. */
+const settingsTabs = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+  window.editor.openModal('SettingsModal');
+  await sleep(500);
+  const names = Array.from(document.querySelectorAll('.tabbed-interface-main-tab'))
+    .map((t) => t.textContent.trim());
+  window.editor.closeActiveModal();
+  await sleep(300);
+  return names;
+});
+record('settings-is-about-the-editor-now',
+  settingsTabs.length === 2 && !settingsTabs.includes('Project'),
+  `the Settings modal offers ${settingsTabs.join(' / ')}`);
+
 /* Arrow keys walk the rail, and selection follows focus. */
 await tab('object').click();
 await page.waitForTimeout(300);

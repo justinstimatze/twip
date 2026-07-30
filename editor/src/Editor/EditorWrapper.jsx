@@ -77,7 +77,6 @@ export default function EditorWrapper(props) {
                     project={props.editor.project}
                     createClipFromSelection={props.editor.createClipFromSelection}
                     createButtonFromSelection={props.editor.createButtonFromSelection}
-                    updateProjectSettings={props.editor.updateProjectSettings}
                     exportProjectAsGif={props.editor.exportProjectAsAnimatedGIF}
                     exportProjectAsVideo={props.editor.exportProjectAsVideo}
                     exportProjectAsStandaloneZip={props.editor.exportProjectAsStandaloneZip}

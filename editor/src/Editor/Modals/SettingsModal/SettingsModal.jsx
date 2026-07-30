@@ -20,31 +20,20 @@
 import React, { Component } from 'react';
 import WickModal from 'Editor/Modals/WickModal/WickModal';
 import TabbedInterface from 'Editor/Util/TabbedInterface/TabbedInterface';
-import ProjectSettings from './ProjectSettings/ProjectSettings';
 import EditorSettings from './EditorSettings/EditorSettings';
 import KeyboardShortcuts from './KeyboardShortcuts/KeyboardShortcuts';
 
 import './_settingsmodal.scss';
 import classNames from 'classnames';
+
+/*
+ * Settings is about the editor now, not about the document. The Project tab that used to lead
+ * it — name, framerate, size, background, resolution presets — is the Inspector's Doc tab,
+ * where it can be read while the stage it describes is visible. Two places to set the stage
+ * width was the whole argument for deleting SimpleProjectSettings; leaving this one standing
+ * would have made that argument twice and acted on it once.
+ */
 class SettingsModal extends Component {
-  renderProjectSettings = () => {
-    return (
-      <ProjectSettings
-        project={this.props.project}
-        updateProjectSettings={this.props.updateProjectSettings} />
-    );
-  }
-
-  renderShortcuts = () => {
-    return (
-      <KeyboardShortcuts
-        addCustomHotKeys={this.props.addCustomHotKeys}
-        resetCustomHotKeys={this.props.resetCustomHotKeys}
-        customHotKeys={this.props.customHotKeys}
-        keyMap={this.props.keyMap} />
-    )
-  }
-
   renderDesktop = () => {
     return (
       <WickModal
@@ -56,15 +45,7 @@ class SettingsModal extends Component {
           Settings
         </div>
         <div className="settings-modal-body">
-          <TabbedInterface label="Settings" tabNames={["Project", "Shortcuts", "Editor"]} >
-            <ProjectSettings
-              project={this.props.project}
-              updateProjectSettings={this.props.updateProjectSettings}
-              colorPickerType={this.props.colorPickerType}
-              changeColorPickerType={this.props.changeColorPickerType}
-              updateLastColors={this.props.updateLastColors}
-              toggle={this.props.toggle}
-              lastColorsUsed={this.props.lastColorsUsed}/>
+          <TabbedInterface label="Settings" tabNames={["Shortcuts", "Editor"]} >
             <KeyboardShortcuts
               addCustomHotKeys={this.props.addCustomHotKeys}
               resetCustomHotKeys={this.props.resetCustomHotKeys}
@@ -99,26 +80,18 @@ class SettingsModal extends Component {
         <div className="settings-modal-title">
           Settings
         </div>
+        {/* No tab rail: with Project gone this is one panel, and a tablist of one is a
+            heading wearing tab roles. */}
         <div className="settings-modal-body">
-          <TabbedInterface label="Settings" tabNames={["Project", "Editor"]} >
-            <ProjectSettings
-              isMobile={true}
-              project={this.props.project}
-              updateProjectSettings={this.props.updateProjectSettings}
-              colorPickerType={this.props.colorPickerType}
-              changeColorPickerType={this.props.changeColorPickerType}
-              updateLastColors={this.props.updateLastColors}
-              lastColorsUsed={this.props.lastColorsUsed}/>
-            <EditorSettings 
-              isMobile={true}
-              colorPickerType={this.props.colorPickerType}
-              changeColorPickerType={this.props.changeColorPickerType}
-              updateLastColors={this.props.updateLastColors}
-              lastColorsUsed={this.props.lastColorsUsed}
-              getToolSetting={this.props.getToolSetting}
-              setToolSetting={this.props.setToolSetting}
-              getToolSettingRestrictions={this.props.getToolSettingRestrictions}/>
-          </TabbedInterface>
+          <EditorSettings
+            isMobile={true}
+            colorPickerType={this.props.colorPickerType}
+            changeColorPickerType={this.props.changeColorPickerType}
+            updateLastColors={this.props.updateLastColors}
+            lastColorsUsed={this.props.lastColorsUsed}
+            getToolSetting={this.props.getToolSetting}
+            setToolSetting={this.props.setToolSetting}
+            getToolSettingRestrictions={this.props.getToolSettingRestrictions}/>
         </div>
       </WickModal>
     );
