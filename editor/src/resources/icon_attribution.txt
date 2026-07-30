@@ -12,9 +12,5 @@ What is left:
       Wick Editor's mascot, by Wicklets LLC. Not twip's mark — see src/ui/mark.jsx for that.
       It appears only in the credits panel (Modals/EditorInfo), which is where it belongs.
 
-  object-icons/*.png
-      Wick Editor's object glyphs, kept solely as drag-preview bitmaps: the HTML5 drag API
-      wants a loaded <img> and will not take an inline SVG. See OutlinerObject.jsx.
-
   public/builtinlibrary/icons/music.png    'Music Player' by Smashicons
   public/builtinlibrary/icons/sound.png    'Sound Waves' by Darius Dan

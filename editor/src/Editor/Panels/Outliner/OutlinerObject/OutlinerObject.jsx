@@ -10,26 +10,33 @@ import OutlinerWidget from '../OutlinerWidget/OutlinerWidget'
 
 import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
 
-import layerImage from 'resources/object-icons/layer.png';
-import frameImage from 'resources/object-icons/frame.png';
-import pathImage from 'resources/object-icons/path.png';
-import buttonImage from 'resources/object-icons/button.png';
-import clipImage from 'resources/object-icons/clip.png';
-import textImage from 'resources/object-icons/text.png';
-import imageImage from 'resources/object-icons/image.png';
+import { iconDataUri } from '@/ui/icon';
 
 // Row icons come from the shared set now; these seven names map onto it.
 let icons = {layer: 'layer-object', frame: 'frame', path: 'path-object', button: 'button-object',
   clip: 'clip-object', text: 'text-object', image: 'image-object'};
 
 /*
- * The drag previews stay raster. The HTML5 drag-and-drop API takes a real loaded <img> for
- * setDragImage and will not accept an inline SVG node, and react-dnd's fallback — a snapshot
- * of the drag source — is a blank rectangle here, because the source is the invisible
- * selector button overlaying the row. Seven PNGs whose only job is to be a bitmap.
+ * The drag preview needs a real loaded <img> — setDragImage will not take an inline SVG node,
+ * and react-dnd's fallback is a snapshot of the drag source, which here is the invisible
+ * selector button overlaying the row, so the fallback is a blank rectangle.
+ *
+ * This used to mean seven PNGs whose only job was to be a bitmap. It does not: `iconDataUri`
+ * already exists for the identical constraint one panel over, where the canvas timeline blits
+ * its icons with ctx.drawImage, and an SVG data URI loads into an Image and draws vector-sharp.
+ * Sixteen buttons there stopped being PNGs for this reason and these seven were simply never
+ * connected to it.
+ *
+ * The colour has to be resolved rather than `currentColor`, because a data URI is its own
+ * document with nothing to inherit from — same reason, same fix as Timeline.jsx.
  */
-let images = {layer: layerImage, frame: frameImage, path: pathImage, button: buttonImage,
-  clip: clipImage, text: textImage, image: imageImage};
+const PREVIEW_SIZE = 48;
+const previewUri = (name) => {
+  if (!name) return undefined;
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-content').trim() || '#e7e4e0';
+  return iconDataUri(name, { color, size: PREVIEW_SIZE }) ?? undefined;
+};
 import classNames from 'classnames';
 export const OutlinerObject = ({clearSelection, selectObjects, 
   editScript, playhead, depth, maxDepth, display, highlighted, 
@@ -161,15 +168,16 @@ export const OutlinerObject = ({clearSelection, selectObjects,
   const typeIcon = data.classname === 'Path' ? 
                     icons[data.pathType] : 
                     icons[data.classname.toLowerCase()];
-  const typeDragImage = data.classname === 'Path' ? 
-                    images[data.pathType] : 
-                    images[data.classname.toLowerCase()];
+  const typeDragImage = previewUri(typeIcon);
   
   drop(ref)
 
   return (
   <>
-  <DragPreviewImage connect={preview} src={typeDragImage}/>
+  {/* No element at all rather than one with an undefined src: react-dnd assigns src straight
+      onto an Image, so `undefined` becomes a request for "undefined" and a console 404. An
+      unknown classname falls back to react-dnd's own preview, as it did before. */}
+  {typeDragImage && <DragPreviewImage connect={preview} src={typeDragImage}/>}
   <div 
   ref={ref}
   className={classNames("outliner-object-container", 
