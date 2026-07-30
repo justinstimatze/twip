@@ -128,14 +128,36 @@ per-frame include/exclude); the symbol/Library concept (modernize the panel to a
 thumbnail grid).
 
 ### Drop or modernize (the "outdated" tells)
+
+Five of the six are in the editor now. Each shipped with a browser check that pins the
+behaviour the recommendation was actually asking for, named in the right-hand column — that
+is where to look for what the change turned out to mean, since in every case building it
+found something the survey could not have.
+
 1. **Modal dialogs** (the fork's MakeAnimated/MakeInteractive/export/settings) → non-modal inline
-   panels / contextual toolbars. The #1 legacy signal.
+   panels / contextual toolbars. The #1 legacy signal. — **open.** The project-settings half is
+   done: two duplicate settings surfaces are gone and the document's properties live in the
+   Inspector's Doc tab. MakeAnimated, MakeInteractive and the export modals are untouched.
 2. **Convert-to-symbol-then-tween** → auto-keyframing (Rive default, Hype Record): move an object on
    canvas with the timeline in animate state, get a keyframe at the playhead. Highest-leverage change.
+   — **done**, `pnpm autokey-check`. The half that needed guarding turned out to be the OFF half:
+   dragging a shape while composing a still must not quietly start an animation.
 3. **Flat property inspector** → tabbed, context-aware (Animate's Tools/Object/Frame/Doc).
+   — **done**, `pnpm inspector-tabs-check`. The tab that earns the split is Frame: with a clip
+   selected it still answers about the frame under the playhead, which one flat panel could not
+   do at all. Tool options stayed in the toolbar rather than becoming a fourth tab — brush size
+   belongs next to the brush.
 4. **Cryptic right-side icon strip** → a contextual toolbar that reflows to the active tool, with labels.
+   — **done**, `pnpm toolbar-check`. Cryptic was the smaller half: the group held no words at all
+   and no control had an accessible name, and below ~1300px the right third of the bar was painted
+   off the edge rather than wrapped.
 5. **Easing dropdown** → a graph/curve editor with draggable Bézier + an auto-smooth option.
-6. **Library-as-list** → thumbnail grid with search.
+   — **done**, `pnpm easing-check`. It writes a `bezier` field no other Wick reader knows, so both
+   halves are checked: the drawn curve reaches the file the compiler reads, and a document without
+   the field — every `.wick` that exists — still eases exactly as it did.
+6. **Library-as-list** → thumbnail grid with search. — **done**, `pnpm library-check`. Two of the
+   five asset kinds get a real picture and that is the honest ceiling: a waveform is a decode per
+   tile and a clip preview is a full project render.
 
 ### Modern patterns a 2026 newcomer expects
 Design/Animate mode split; auto-keyframing at the playhead; direct manipulation on canvas sets keys;
