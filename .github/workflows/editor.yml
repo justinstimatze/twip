@@ -242,6 +242,17 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # The library shows the assets rather than their filenames, which is only worth anything
+      # if the tile holds the asset's own bytes — an icon standing in for a picture looks
+      # correct in a screenshot and tells you nothing about which sprite is which. The other
+      # half is the keyboard: the grid is one tab stop with arrows inside it, and arrowing must
+      # not select, since selecting here spends an undo state.
+      - name: The library shows what it holds
+        run: pnpm library-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI

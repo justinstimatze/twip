@@ -17,94 +17,134 @@
  * along with Wick Editor.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { Component } from 'react';
+/*
+ * One asset, as a tile.
+ *
+ * docs/ui-research.md lists "library-as-list → thumbnail grid with search" among the things
+ * that date the interface. The search half was already here; this is the other half, and the
+ * case it exists for is narrow and real: images imported from a camera or a sprite sheet are
+ * named DSC_0413 and frame_07, so a list of names is a list of things you cannot tell apart.
+ *
+ * Two of the five kinds get a real picture, and they are exactly those two. An ImageAsset and
+ * an SVGAsset each hold a data URI an <img> can read, so the tile shows the asset itself. A
+ * FontAsset shows its own letterforms, which is the only preview a typeface has. Sounds and
+ * clips get their icon, because the alternatives are not worth what they cost — a waveform is
+ * a decode per tile, and a clip preview is a full project render (Project.generateImageSequence
+ * mutates the project and appends to the document to do it). An icon on those is not a
+ * placeholder for something better; it is what the tile has to say.
+ *
+ * No buttons in here. The tile is a role="option" and an option with controls inside it is a
+ * malformed listbox — Add and Delete live in the panel's footer, where they also have room
+ * for a word rather than a glyph.
+ */
+import React from 'react';
 import { useDrag } from 'react-dnd';
-import './_asset.scss';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
-import ActionButton from 'Editor/Util/ActionButton/ActionButton';
-import classNames from 'classnames';
-class Asset extends Component {
-  getIcon(classname) {
-    if (classname === "ImageAsset") {
-      return "image";
-    } else if (classname === "SoundAsset") {
-      return "sound";
-    } else if (classname === "ClipAsset") {
-      return "clip";
-    } else if (classname === "ButtonAsset") {
-      return "button";
-    } else if (classname === "FontAsset") {
-      return "font"
-    } else if (classname === "SVGAsset") {
-      return "svg"
-    }  else {
-      return "asset";
-    }
-  }
+import { cn } from '@/lib/utils';
 
-  renderAddButton = () => {
-    if (this.props.asset.classname === 'SoundAsset') {
-      return <span className="asset-button add">
-          <ActionButton classsName="add" color="green" text="Add to Frame" action={() => this.props.addSoundToActiveFrame(this.props.asset)}/>
-        </span>
-    } else {
-      return  <span className="asset-button add">
-        <ActionButton classsName="add" color="green" text="Add to Canvas" action={this.addToCanvas}/>
-      </span>
-    }
-  }
+const ICONS = {
+  ImageAsset: 'image',
+  SoundAsset: 'sound',
+  ClipAsset: 'clip',
+  ButtonAsset: 'button',
+  FontAsset: 'font',
+  SVGAsset: 'svg',
+};
 
-  addToCanvas = () => {
-    let draggedItem = this.props.asset;
-    if(draggedItem.files && draggedItem.files.length > 0) {
-      // Dropped a file from native filesystem
-      if(draggedItem.files[0].name.endsWith('.wick')) {
-        // Wick Project (.wick file)
-        var file = draggedItem.files[0];
-        this.props.importProjectAsWickFile(file);
-      } else {
-        // Assets (images, sounds, etc)
-        this.props.createAssets(draggedItem.files, []);
-      }
-    } else {
-      // Dropped an asset from the asset library
-      this.props.createImageFromAsset(draggedItem.uuid, 0, 0, true);
-    }
-  }
+/* What the tile calls this thing out loud, since "asset" is not a kind of anything. */
+const KINDS = {
+  ImageAsset: 'image',
+  SoundAsset: 'sound',
+  ClipAsset: 'clip',
+  ButtonAsset: 'button',
+  FontAsset: 'font',
+  SVGAsset: 'vector',
+};
 
-  render() {
-    const { dragRef } = this.props;
+/* The kinds whose `src` is something a browser will draw. A SoundAsset has a src too, and it
+ * is audio — asking an <img> for it produces a broken-image glyph, not a fallback. */
+const DRAWABLE = ['ImageAsset', 'SVGAsset'];
 
-    let icon = this.getIcon(this.props.asset.classname);
+export function thumbnailSrc (asset) {
+  return DRAWABLE.indexOf(asset.classname) === -1 ? null : asset.src;
+}
 
+function Preview ({ asset }) {
+  const src = thumbnailSrc(asset);
+  if (src) {
     return (
-      <div ref={dragRef} className={classNames("asset-item", {"asset-selected": this.props.isSelected})}>
-      <button 
-        className="select"
-        onClick={this.props.onClick}>
-        <div className="asset-name-text">
-          <span><ToolIcon className="asset-icon" name={icon}/></span>
-          <span>{this.props.asset.name}</span>
-        </div>
-      </button>
-      {this.props.isSelected &&
-      <div className="asset-buttons-container">
-        {this.renderAddButton()}
-        <span className="asset-button delete">
-          <ActionButton 
-            classsName="delete" 
-            color="red" 
-            icon="delete-black" 
-            action={() => {
-              this.props.clearSelection();
-              this.props.selectObjects([this.props.asset]);
-              this.props.deleteSelectedObjects();}}/>
-        </span>
-      </div>}
-      </div>
-    )
+      <img
+        src={src}
+        alt=""
+        /* contain rather than cover, because the tile is square and assets are not: a
+           letterboxed sprite is legible and a cropped one is a different picture. Full width
+           and height rather than max-, so small assets scale UP to fill the tile — a 32px
+           sprite left at its natural size reads as a dot floating in a box, and identifying
+           it at a glance is the only thing this picture is for. */
+        className="h-full w-full object-contain"
+        draggable={false} />
+    );
   }
+
+  if (asset.classname === 'FontAsset' && asset.fontFamily) {
+    return (
+      <span
+        className="text-[20px] leading-none text-content"
+        style={{ fontFamily: `'${asset.fontFamily}', sans-serif` }}
+        aria-hidden="true">
+        Ag
+      </span>
+    );
+  }
+
+  return <ToolIcon name={ICONS[asset.classname] || 'asset'} className="h-6 w-6" />;
+}
+
+function Asset ({ asset, isSelected, isFocused, onClick, dragRef }) {
+  const kind = KINDS[asset.classname] || 'asset';
+
+  return (
+    <div
+      ref={dragRef}
+      role="option"
+      aria-selected={isSelected}
+      /* The name is truncated on screen and the kind is a picture, so both go in the label —
+         this is the only place a screen reader is told either. */
+      aria-label={`${asset.name}, ${kind}`}
+      title={asset.name}
+      tabIndex={isFocused ? 0 : -1}
+      onClick={onClick}
+      className={cn(
+        'flex cursor-grab flex-col items-center gap-1 rounded-sm border p-1 transition-colors',
+        'focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2',
+        isSelected
+          ? 'border-selected bg-surface-hover'
+          : 'border-transparent hover:border-line-strong hover:bg-surface-hover',
+      )}
+    >
+      {/* A checked bed rather than a flat one, so a transparent PNG reads as transparent
+          instead of as whatever colour the panel happens to be. Two adjacent surface tones
+          rather than surface against line: the check has to be readable when you look for it
+          and invisible when you are looking at the picture on top of it, and at this size a
+          hairline-contrast check competes with the thumbnail for the eye. */}
+      <div
+        className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-xs bg-surface-sunken"
+        style={{
+          backgroundImage:
+            'linear-gradient(45deg, var(--color-surface) 25%, transparent 25%, transparent 75%, var(--color-surface) 75%),'
+            + 'linear-gradient(45deg, var(--color-surface) 25%, transparent 25%, transparent 75%, var(--color-surface) 75%)',
+          backgroundSize: '10px 10px',
+          backgroundPosition: '0 0, 5px 5px',
+        }}
+      >
+        <Preview asset={asset} />
+      </div>
+      <span className="w-full truncate text-center text-[10px] leading-3 text-content-muted">
+        {asset.name}
+      </span>
+    </div>
+  );
 }
 
 /*

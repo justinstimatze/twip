@@ -1315,10 +1315,7 @@ class Editor extends EditorCore {
                         selectObjects={this.selectObjects}
                         clearSelection={this.clearSelection}
                         isObjectSelected={this.isObjectSelected}
-                        createAssets={this.createAssets} 
-                        importProjectAsWickFile={this.importProjectAsWickFile}
                         createImageFromAsset={this.createImageFromAsset}
-                        toast={this.toast}
                         deleteSelectedObjects={this.deleteSelectedObjects}
                         addSoundToActiveFrame={this.addSoundToActiveFrame}
                       />

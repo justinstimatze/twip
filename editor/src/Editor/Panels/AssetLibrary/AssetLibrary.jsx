@@ -33,7 +33,17 @@ class AssetLibrary extends Component {
 
     this.state = {
       filterText: '',
+      /*
+       * Which tile the keyboard is on. Deliberately not the selection: selectObjects goes
+       * through projectDidChange, which pushes an undo state, so arrowing across ten assets
+       * the way a listbox normally does — selection following focus — would bury the history
+       * under ten entries that changed nothing. Same rule the timeline mirror follows: moving
+       * around is not editing. Enter or Space is what selects.
+       */
+      focusIndex: 0,
     }
+
+    this.gridRef = React.createRef();
   }
 
   openFileDialog = (uuid) => {
@@ -57,26 +67,122 @@ class AssetLibrary extends Component {
     });
   }
 
-  makeNode = (assetObject, i) => {
+  select = (assetObject) => {
+    this.props.clearSelection();
+    this.props.selectObjects([assetObject]);
+  }
+
+  /*
+   * `focus` is passed in already clamped rather than read from state here. Filtering and
+   * deleting both shorten the list under a focusIndex that outlives them, and an index past
+   * the end leaves every tile at tabIndex -1 — a grid the Tab key cannot enter at all, which
+   * looks like nothing being wrong.
+   */
+  makeNode = (focus) => (assetObject, i) => {
     return (
       <Asset
-       key={i}
-       asset={assetObject}
-       isSelected={this.props.isObjectSelected(assetObject)}
-       onClick={() => {
-         this.props.clearSelection();
-         this.props.selectObjects([assetObject]);
-      }}
-        createAssets={this.props.createAssets}
-        importProjectAsWickFile={this.props.importProjectAsWickFile}
-        createImageFromAsset={this.props.createImageFromAsset}
-        toast={this.props.toast}
-        deleteSelectedObjects={this.props.deleteSelectedObjects}
-        clearSelection={this.props.clearSelection}
-        selectObjects={this.props.selectObjects}
-        addSoundToActiveFrame={this.props.addSoundToActiveFrame}
+        key={assetObject.uuid}
+        asset={assetObject}
+        isSelected={this.props.isObjectSelected(assetObject)}
+        isFocused={i === focus}
+        onClick={() => {
+          this.setState({ focusIndex: i });
+          this.select(assetObject);
+        }}
       />
     )
+  }
+
+  /*
+   * Arrow keys across a grid whose column count nobody knows.
+   *
+   * The tiles are laid out by `auto-fill`, so how many fit is a function of the width the
+   * user dragged the panel to — there is no column count in this component to do arithmetic
+   * with. Reading the geometry back is both simpler and correct for any width: up and down
+   * look for the nearest tile on an adjacent row, measured by how far its left edge is from
+   * the current one.
+   */
+  moveFocus = (assets, event) => {
+    const tiles = this.gridRef.current
+      ? Array.from(this.gridRef.current.querySelectorAll('[role="option"]'))
+      : [];
+    if (!tiles.length) return;
+
+    const from = Math.min(this.state.focusIndex, tiles.length - 1);
+    const here = tiles[from].getBoundingClientRect();
+    let next = null;
+
+    if (event.key === 'ArrowLeft') next = from - 1;
+    else if (event.key === 'ArrowRight') next = from + 1;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tiles.length - 1;
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      const down = event.key === 'ArrowDown';
+      let best = null;
+      tiles.forEach((tile, i) => {
+        const box = tile.getBoundingClientRect();
+        const onAnotherRow = down ? box.top > here.top + 1 : box.top < here.top - 1;
+        if (!onAnotherRow) return;
+        const cost = Math.abs(box.left - here.left) + Math.abs(box.top - here.top) * 100;
+        if (!best || cost < best.cost) best = { i, cost };
+      });
+      next = best ? best.i : from;
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      this.select(assets[from]);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    } else {
+      return;
+    }
+
+    /* Both: preventDefault stops Home/End and the arrows scrolling the panel, and
+     * stopPropagation keeps them off the editor's nudge-the-selection shortcut. */
+    event.preventDefault();
+    event.stopPropagation();
+
+    const clamped = Math.max(0, Math.min(tiles.length - 1, next));
+    this.setState({ focusIndex: clamped });
+    tiles[clamped].focus();
+  }
+
+  /*
+   * What you can do with the asset you picked. These were inside the row before, which a tile
+   * has no room for and a role="option" may not contain. Only while something is selected, so
+   * the grid keeps the height the rest of the time.
+   */
+  renderActions = (assets) => {
+    const selected = assets.filter(this.props.isObjectSelected);
+    if (selected.length !== 1) return null;
+    const asset = selected[0];
+    const sound = asset.classname === 'SoundAsset';
+
+    return (
+      <div className="flex h-8 shrink-0 items-center gap-1 border-t border-line bg-surface-sunken px-1.5">
+        <div className="min-w-0 flex-1">
+          <ActionButton
+            color="green"
+            id="asset-action-add"
+            text={sound ? 'Add to Frame' : 'Add to Canvas'}
+            action={() => {
+              if (sound) this.props.addSoundToActiveFrame(asset);
+              else this.props.createImageFromAsset(asset.uuid, 0, 0, true);
+            }} />
+        </div>
+        <div className="h-5 w-5">
+          <ActionButton
+            color="red"
+            id="asset-action-delete"
+            icon="delete-black"
+            tooltip={`Delete ${asset.name}`}
+            action={() => {
+              this.props.clearSelection();
+              this.props.selectObjects([asset]);
+              this.props.deleteSelectedObjects();
+            }} />
+        </div>
+      </div>
+    );
   }
 
   /**
@@ -122,6 +228,7 @@ class AssetLibrary extends Component {
     let filteredAssets = this.filterArray(this.props.assets);
     let sortedFilteredAssets = this.sortAssets(filteredAssets);
     let filtering = this.state.filterText.length > 0;
+    let focus = Math.max(0, Math.min(this.state.focusIndex, sortedFilteredAssets.length - 1));
     return(
       <div className="asset-library docked-pane flex h-full w-full flex-col overflow-hidden border-r border-b border-line bg-surface" aria-label="Asset Library">
         {this.renderTitle()}
@@ -147,8 +254,21 @@ class AssetLibrary extends Component {
                     : 'Drop images or sounds here, or use + to add one.'}
                 </PanelEmpty>
               )
-              : sortedFilteredAssets.map(this.makeNode)}
+              : (
+                /* auto-fill at a 64px floor: two columns at the sidebar's 200px minimum,
+                   three or four once it is dragged wider, and no breakpoint to maintain. */
+                <div
+                  ref={this.gridRef}
+                  role="listbox"
+                  aria-label="Assets"
+                  className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-1.5 p-1.5"
+                  onKeyDown={(e) => this.moveFocus(sortedFilteredAssets, e)}
+                >
+                  {sortedFilteredAssets.map(this.makeNode(focus))}
+                </div>
+              )}
           </div>
+          {this.renderActions(sortedFilteredAssets)}
         </div>
       </div>
     )
