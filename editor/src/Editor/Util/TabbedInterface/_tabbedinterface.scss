@@ -42,16 +42,27 @@ $header-height: 30px;
     overflow: auto; 
 }
 
+/*
+ * Every tab used to carry a visible 2px rule, which made the row read as a list of links and
+ * left colour as the only thing separating the active one from the rest. The survey's rule is
+ * that no state is encoded by colour alone, so the rule is transparent when inactive — the
+ * border stays in the box model, so nothing shifts by a pixel when the selection moves — and
+ * `.selected` below turns it on and lifts the text to white. Presence and colour, two cues.
+ */
 .tabbed-interface-main-tab {
     background: none;
-    border: none;
-    margin-left: 15px; 
+    margin-left: 15px;
     background-color: $editor-modal-gray;
     border: none;
-    border-bottom: 2px solid #484747; //$editor-popout-secondary; 
-    color: #CFCFCF; //$editor-popout-tertiary-text; 
+    border-bottom: 2px solid transparent;
+    color: #CFCFCF; //$editor-popout-tertiary-text;
     font-size: 16px;
     cursor: pointer;
+}
+
+.tabbed-interface-main-tab:hover {
+    color: #e7e4e0;
+    border-bottom-color: #484747;
 }
 
 .tabbed-interface-main-tab:first-child {

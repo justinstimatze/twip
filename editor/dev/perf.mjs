@@ -25,6 +25,11 @@
  *   node dev/perf.mjs --shapes 400             # ceiling for the scaling tests
  *   node dev/perf.mjs --max-transfer-kb 1600   # the one budget
  *   node dev/perf.mjs --write-fixture          # dump the largest document to tmp/ for hyperfine
+ *   node dev/perf.mjs --json tmp/before.json   # record a baseline to diff a rewrite against
+ *
+ * `--json` exists for one job: capturing the numbers a rewrite has to beat, before the rewrite.
+ * The record carries the commit and the machine's CPU count, because comparing a baseline to a
+ * run on different hardware compares the hardware. Take the before and after on one box.
  *
  * Chrome only, deliberately: `performance.memory` and the CDP heap profiler are how you get
  * an honest retention number, and dev/browser.mjs already drives Chrome and nothing else.
@@ -33,6 +38,8 @@
  */
 import { launch, URL_ } from './browser.mjs';
 import { writeFile, mkdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { cpus } from 'node:os';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
@@ -41,6 +48,11 @@ const opt = (name, dflt) => {
   const i = args.indexOf(`--${name}`);
   return i === -1 ? dflt : Number(args[i + 1]);
 };
+const str = (name) => {
+  const i = args.indexOf(`--${name}`);
+  return i === -1 ? null : args[i + 1];
+};
+const JSON_OUT = str('json');
 
 const MAX_SHAPES = opt('shapes', 200);
 const MAX_TRANSFER_KB = opt('max-transfer-kb', 2048);
@@ -301,6 +313,29 @@ if (flag('write-fixture')) {
   // tmp/ is gitignored: this is a generated benchmark input, not a fixture anything asserts on.
   console.log(`\nwrote ${out} (${bytes.length} bytes)`);
   console.log(`  hyperfine 'target/release/twip ${path.relative(ROOT, out)} /dev/null'`);
+}
+
+if (JSON_OUT) {
+  let commit = null;
+  try { commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim(); }
+  catch { /* not a checkout, or no git — the record is still useful, just unanchored */ }
+  const record = {
+    url: URL_,
+    commit,
+    cpus: cpus().length,
+    node: process.version,
+    // Not Date.now() for cleverness — a baseline you cannot date is a baseline you stop trusting.
+    at: new Date().toISOString(),
+    firstLoad: { ...(nav || {}), strokeLandsMs: interactiveAt },
+    transfer: { wireBytes: totalTransfer, decodedBytes: totalDecoded, requests: res.length },
+    drawing: { strokes: STROKES, p50: pct(strokeMs, 50), p95: pct(strokeMs, 95), longTasks: lt },
+    scrubbing: { steps: scrub.length, p50: pct(scrub, 50), p95: pct(scrub, 95), worst: Math.max(...scrub) },
+    memory: { beforeBytes: heapBefore, afterBytes: heapAfter, paths: shapesNow, buildMs },
+    compile: { warmupMs, rows: rows.map(({ b64, ...r }) => r) },
+  };
+  await mkdir(path.dirname(path.resolve(ROOT, JSON_OUT)), { recursive: true });
+  await writeFile(path.resolve(ROOT, JSON_OUT), JSON.stringify(record, null, 2));
+  console.log(`\nwrote ${JSON_OUT} at ${commit ?? 'unknown commit'}, ${record.cpus} cpus`);
 }
 
 await browser.close();
