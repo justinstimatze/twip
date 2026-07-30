@@ -184,6 +184,56 @@ console.log(`  ${scrub.length} playhead steps  p50 ${ms(pct(scrub, 50))}  p95 ${
 console.log(`  over one frame    ${scrub.filter((d) => d > 16.7).length} steps past 16.7ms, ${scrub.filter((d) => d > 50).length} past 50ms`);
 
 /*
+ * What the timeline costs to draw, which is a different question from what the stage costs
+ * and was not being asked. The section above times `view.render()` — the stage — and the
+ * timeline is a separate surface: 3,733 lines of canvas GUI under `engine/src/gui/`, mounted
+ * by Timeline.jsx and redrawn by `guiElement.draw()`, which clears the whole canvas and walks
+ * the element tree from the root every time anything changes.
+ *
+ * So the cost scales with layers × frames whether or not anything moved, and that is the
+ * number a DOM rewrite has to answer for. Recorded here BEFORE the rewrite, at sizes that
+ * bracket a real document, because a redraw that is comfortable at 4×32 and quadratic at
+ * 20×400 looks identical from a chair.
+ *
+ * Rows are built up and never torn down, so each measures a timeline holding exactly that
+ * much. Per-cell is the column to read: flat is linear, rising is the shape that eventually
+ * makes a long document unscrollable.
+ */
+console.log('\n== timeline redraw ==');
+const TIMELINE_SIZES = [[2, 32], [4, 64], [8, 128], [16, 256], [24, 400]];
+const timelineRows = [];
+for (const [layers, frames] of TIMELINE_SIZES) {
+  const row = await page.evaluate(([wantLayers, wantFrames]) => {
+    const p = window.editor.project;
+    const t = p.activeTimeline;
+    while (t.layers.length < wantLayers) t.addLayer(new window.Wick.Layer());
+    for (const layer of t.layers) {
+      const frame = layer.frames[0];
+      if (frame && frame.end < wantFrames) frame.end = wantFrames;
+    }
+    p.guiElement.draw();               // once to settle any lazy build, then measure
+    const per = [];
+    for (let i = 0; i < 12; i++) {
+      const t0 = performance.now();
+      p.guiElement.draw();
+      per.push(performance.now() - t0);
+    }
+    per.sort((a, b) => a - b);
+    return { layers: t.layers.length, frames: wantFrames, median: per[Math.floor(per.length / 2)], worst: per[per.length - 1] };
+  }, [layers, frames]);
+  row.cells = row.layers * row.frames;
+  timelineRows.push(row);
+  console.log(`  ${String(row.layers).padStart(2)} layers x ${String(row.frames).padStart(3)} frames`
+    + `  = ${String(row.cells).padStart(5)} cells   median ${ms(row.median).padStart(7)}`
+    + `  worst ${ms(row.worst).padStart(7)}   ${(row.median * 1000 / row.cells).toFixed(2)}us per cell`);
+}
+{
+  const last = timelineRows[timelineRows.length - 1];
+  const budget = last.median > 16.7 ? `past one frame at ${last.cells} cells` : `inside one frame at ${last.cells} cells`;
+  console.log(`  a redraw is ${budget} — every edit, every playhead step, every scroll`);
+}
+
+/*
  * Retention per shape, measured either side of an explicit collection. Reading
  * usedJSHeapSize without forcing GC measures how lazy the collector was feeling, not what the
  * document holds — and a leak that only shows after an hour of drawing is exactly the kind
@@ -330,6 +380,7 @@ if (JSON_OUT) {
     transfer: { wireBytes: totalTransfer, decodedBytes: totalDecoded, requests: res.length },
     drawing: { strokes: STROKES, p50: pct(strokeMs, 50), p95: pct(strokeMs, 95), longTasks: lt },
     scrubbing: { steps: scrub.length, p50: pct(scrub, 50), p95: pct(scrub, 95), worst: Math.max(...scrub) },
+    timelineRedraw: { rows: timelineRows },
     memory: { beforeBytes: heapBefore, afterBytes: heapAfter, paths: shapesNow, buildMs },
     compile: { warmupMs, rows: rows.map(({ b64, ...r }) => r) },
   };
