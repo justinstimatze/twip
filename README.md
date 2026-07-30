@@ -71,6 +71,7 @@ Export works three ways, and the editor picks whichever exists: an in-process Ru
 | [`docs/testing.md`](docs/testing.md) | the five test layers, and why there is no editor-versus-player pixel diff |
 | [`docs/ui-research.md`](docs/ui-research.md) | the survey of post-Flash tools the interface was designed against |
 | [`docs/flash8-parity.md`](docs/flash8-parity.md) | everything Flash 8 could do, read off the SWF spec, with what twip does and does not |
+| [`docs/agent-interface.md`](docs/agent-interface.md) | how a program should drive twip, and why the seams fall where they do |
 
 ## Rough edges
 
