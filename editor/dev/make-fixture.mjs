@@ -73,6 +73,60 @@ await page.goto(URL_, { waitUntil: 'networkidle', timeout: 60_000 });
 // The engine mounts imperatively from componentDidMount, same wait the other dev scripts use.
 await page.waitForTimeout(2500);
 
+if (name === 'script-logic') {
+  /*
+   * Two frames and one script, arranged so the picture answers a question about the script.
+   *
+   * Frame 1 is flare-red and carries a loop, a counter and a condition; frame 2 is ice-blue
+   * and carries nothing. The `stop()` only runs if the loop ran three times and `n == 3`
+   * came out true, so rendering frame 2 shows red when the script worked and blue when it
+   * did not. A structural assertion cannot tell those apart — both compile to a DoAction
+   * either way — which is the whole reason this fixture is a picture.
+   */
+  const built = await page.evaluate(() => {
+    const paper = window.paper;
+    const project = window.editor.project;
+    const layer = project.activeTimeline.activeLayer;
+
+    const box = (colour) => {
+      const item = new paper.Path.Rectangle(new paper.Rectangle(220, 140, 280, 200));
+      item.fillColor = colour;
+      return new window.Wick.Path({ path: item });
+    };
+
+    const first = project.activeFrame;
+    first.end = 1;
+    first.addPath(box('#ef4a2f'));
+    first.updateScript('default', [
+      'var n = 0;',
+      'while (n < 3) { n++; }',
+      'if (n == 3) { stop(); }',
+    ].join('\n'));
+
+    const second = new window.Wick.Frame({ start: 2, end: 2 });
+    layer.addFrame(second);
+    second.addPath(box('#64b6df'));
+
+    project.view.render();
+    return {
+      frames: layer.frames.length,
+      script: first.getScript('default') ? first.getScript('default').src : null,
+    };
+  });
+  if (built.error || !built.script) {
+    console.error('could not build the project:', built.error || 'no script on frame 1');
+    await browser.close();
+    process.exit(1);
+  }
+  const b64 = await page.evaluate(() => new Promise((resolve) =>
+    window.Wick.WickFile.toWickFile(window.editor.project, resolve, 'base64')));
+  const comma = b64.indexOf(',');
+  await writeFile(out, Buffer.from(comma === -1 ? b64 : b64.slice(comma + 1), 'base64'));
+  console.log(`${built.frames} frames, script on frame 1 -> ${out}`);
+  await browser.close();
+  process.exit(0);
+}
+
 if (name === 'gradients') {
   const built = await page.evaluate((specs) => {
     const paper = window.paper;

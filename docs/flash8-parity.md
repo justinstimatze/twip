@@ -171,18 +171,29 @@ last two being Flash 8's headline video feature.
 
 | Capability | Tags | twip |
 |---|---|---|
-| Frame actions (AVM1 bytecode) | `DoAction` | ◐ four commands |
+| Frame actions (AVM1 bytecode) | `DoAction` | ◐ a JS subset |
 | Initialisation actions for a sprite | `DoInitAction` | ○ |
 | Clip event handlers | `PlaceObject2` CLIPACTIONS | ◐ press only |
 | AS3 / AVM2 | `DoAbc`, `DoAbc2`, `SymbolClass` | ✗ |
 
-twip recognises `stop()`, `play()`, `gotoAndPlay(n)` and `gotoAndStop(n)` by pattern-matching
-the script source and emits the matching AVM1 actions. Everything else in a script is ignored.
+Frame scripts go through a real compiler now (`src/script.rs`): a lexer, a Pratt parser and
+an AVM1 code generator. What it covers is arithmetic, comparison and logical expressions,
+variables, assignment and its compound forms, `if`/`else`, `while`, and the four built-in
+calls. TypeScript annotations are accepted and erased, so `var n: number = 0` compiles.
 
-AVM1's instruction set is an ECMAScript-3 machine — `DefineFunction2` with closures and
-registers, `GetMember`/`SetMember`, `NewObject`, `InitArray`, prototype `Extends`. A
-JavaScript- or TypeScript-shaped language compiles onto it directly, which is exactly what
-Macromedia's AS2 compiler did.
+What it does not cover — functions, objects, arrays, member access, computed goto targets —
+it refuses by name, per script rather than per statement. Half a script is the worse failure:
+a `while` whose body did not parse would run forever.
+
+This is possible at all because AVM1 *is* an ECMAScript-3 machine. Its instruction set is
+`GetVariable`/`SetVariable`, `Add2`, `Less2`, `If`, `Jump`, and — for later stages —
+`DefineFunction2` with closures and registers, `GetMember`/`SetMember`, `NewObject`,
+`InitArray`, prototype `Extends`. So the mapping is a translation rather than an emulation,
+which is exactly what Macromedia's AS2 compiler was doing.
+
+Two things AVM1 lacks that the compiler rewrites rather than approximates: there is no
+`<=` or `!=` action, so those become `!(a > b)` and `!(a == b)`; and `If` branches when its
+condition is **true**, so every `if` and `while` emits a `Not` first.
 
 ## 11. Authoring-side, with no tag of its own
 

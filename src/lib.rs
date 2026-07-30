@@ -7,17 +7,15 @@
 //! Ruffle rendering the same bytes.
 
 pub mod import;
+pub mod script;
 pub mod wick;
 
 use anyhow::Result;
 use std::collections::BTreeMap;
-use swf::avm1::types::{Action, GotoFrame, GotoLabel};
-use swf::avm1::write::Writer as Avm1Writer;
 use swf::{
     ClipAction, ClipActions, ClipEventFlag, Color, ColorTransform, Compression, FillStyle, Fixed8,
     Fixed16, Header, LineStyle, Matrix, PlaceObject, PlaceObjectAction, Point, PointDelta,
-    Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, SwfStr, Tag, Twips,
-    write_swf,
+    Rectangle, Shape, ShapeFlag, ShapeRecord, ShapeStyles, StyleChangeData, Tag, Twips, write_swf,
 };
 use wick::{Contour, Script};
 
@@ -915,153 +913,37 @@ fn place_placement(action: PlaceObjectAction, p: &Placement, depth: u16) -> Tag<
     }))
 }
 
-/// A recognized frame command — the small vocabulary of Wick frame-script JS that
-/// twip compiles to AVM1. General JS→AVM1 is a permanent non-goal (docs/wick-format.md), so
-/// anything outside this set is left uncompiled (see [`recognize_frame_actions`]).
-/// Frame numbers are already 0-indexed for SWF (Wick/Flash `gotoAnd*(n)` is 1-indexed).
-#[derive(Debug, Clone, PartialEq)]
-enum FrameCmd {
-    Stop,
-    Play,
-    /// `gotoAndStop(n)` — SWF `GotoFrame` moves the playhead and stops.
-    GotoFrame(u16),
-    /// `gotoAndPlay(n)` — `GotoFrame` then `Play`.
-    GotoAndPlay(u16),
-    /// `gotoAndStop("label")` / `gotoAndPlay("label")`; bool = keep playing.
-    GotoLabel(String, bool),
-}
-
-/// Scan the scripts whose `name` is in `events` for the recognized command subset,
-/// returning the commands in source order plus any non-empty statements that were
-/// not recognized (callers warn about these; visuals still export).
-fn recognize_actions(scripts: &[Script], events: &[&str]) -> (Vec<FrameCmd>, Vec<String>) {
-    let mut cmds = Vec::new();
-    let mut unrecognized = Vec::new();
-    for script in scripts {
-        if !events.contains(&script.name.as_str()) {
+/// Compile the scripts whose `name` is in `events`, returning their ops in source order plus
+/// a message for each script that could not be compiled.
+///
+/// Per script rather than per statement, because [`script::compile`] refuses a whole script
+/// on the first thing it does not understand — half a script is worse than none when the
+/// half that failed was a loop's body or a condition.
+fn compile_actions(scripts: &[Script], events: &[&str]) -> (Vec<script::Op>, Vec<String>) {
+    let mut ops = Vec::new();
+    let mut refused = Vec::new();
+    for s in scripts {
+        if !events.contains(&s.name.as_str()) || s.src.trim().is_empty() {
             continue;
         }
-        for stmt in split_statements(&script.src) {
-            match parse_stmt(&stmt) {
-                Some(cmd) => cmds.push(cmd),
-                None => unrecognized.push(stmt),
-            }
+        match script::compile(&s.src) {
+            Ok(compiled) => ops.extend(compiled),
+            Err(why) => refused.push(format!("{}: {}", s.name, why.message)),
         }
     }
-    (cmds, unrecognized)
+    (ops, refused)
 }
 
-/// Frame actions: recognized commands in a keyframe's `default`/`load` scripts.
-/// Both names mean "at this frame" for this static subset (SWF has no per-tick
-/// frame script, so a `stop()` in either compiles the same).
-fn recognize_frame_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
-    recognize_actions(scripts, &["default", "load"])
+/// Frame actions: a keyframe's `default`/`load` scripts. Both names mean "at this frame"
+/// here — SWF has no per-tick frame script, so a `stop()` in either compiles the same.
+fn recognize_frame_actions(scripts: &[Script]) -> (Vec<script::Op>, Vec<String>) {
+    compile_actions(scripts, &["default", "load"])
 }
 
-/// Clip click handlers: recognized commands in a clip's `mousepressed`/`mouseclick`
-/// scripts. Both map to a SWF `PRESS` clip event (docs/wick-format.md) — twip does
-/// not distinguish press from click for the recognized command set.
-fn recognize_clip_actions(scripts: &[Script]) -> (Vec<FrameCmd>, Vec<String>) {
-    recognize_actions(scripts, &["mousepressed", "mouseclick"])
-}
-
-/// Split JS source into trimmed, non-empty statements: drop `//` line comments,
-/// then split on newlines and `;`. Good enough for the flat command subset twip
-/// recognizes; it does not attempt to parse general JavaScript.
-fn split_statements(src: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in src.lines() {
-        let code = match line.find("//") {
-            Some(i) => &line[..i],
-            None => line,
-        };
-        for part in code.split(';') {
-            let t = part.trim();
-            if !t.is_empty() {
-                out.push(t.to_string());
-            }
-        }
-    }
-    out
-}
-
-/// Match one statement against the recognized vocabulary (with an optional `this.`
-/// receiver). Returns `None` for anything else.
-fn parse_stmt(stmt: &str) -> Option<FrameCmd> {
-    let s = stmt.strip_prefix("this.").unwrap_or(stmt).trim();
-    match s {
-        "stop()" => return Some(FrameCmd::Stop),
-        "play()" => return Some(FrameCmd::Play),
-        _ => {}
-    }
-    if let Some(arg) = call_arg(s, "gotoAndPlay") {
-        return goto_arg(arg, true);
-    }
-    if let Some(arg) = call_arg(s, "gotoAndStop") {
-        return goto_arg(arg, false);
-    }
-    None
-}
-
-/// If `s` is exactly `name( <arg> )`, return the trimmed `<arg>`.
-fn call_arg<'a>(s: &'a str, name: &str) -> Option<&'a str> {
-    let rest = s.strip_prefix(name)?.trim_start();
-    let inner = rest.strip_prefix('(')?.strip_suffix(')')?;
-    Some(inner.trim())
-}
-
-/// Interpret a `gotoAnd*` argument: a quoted `"label"`/`'label'` → [`FrameCmd::GotoLabel`],
-/// or a positive integer frame (1-indexed → 0-indexed SWF). `play` picks play vs stop.
-fn goto_arg(arg: &str, play: bool) -> Option<FrameCmd> {
-    let quoted = |q: char| arg.len() >= 2 && arg.starts_with(q) && arg.ends_with(q);
-    if quoted('"') || quoted('\'') {
-        let label = &arg[1..arg.len() - 1];
-        if label.is_empty() {
-            return None;
-        }
-        return Some(FrameCmd::GotoLabel(label.to_string(), play));
-    }
-    let n: u32 = arg.parse().ok()?;
-    let frame = n.saturating_sub(1).min(u16::MAX as u32) as u16;
-    Some(if play {
-        FrameCmd::GotoAndPlay(frame)
-    } else {
-        FrameCmd::GotoFrame(frame)
-    })
-}
-
-/// Serialize recognized frame commands to an AVM1 action-record buffer for a
-/// `DoAction` tag. The writer does NOT append `Action::End` — this does (per the
-/// swf crate's action-list convention). Returns an empty buffer for no commands.
-fn frame_action_bytes(cmds: &[FrameCmd]) -> Vec<u8> {
-    let mut buf = Vec::new();
-    if cmds.is_empty() {
-        return buf;
-    }
-    let mut w = Avm1Writer::new(&mut buf, 8);
-    // Writing to a Vec is infallible; ignore the io::Result.
-    for cmd in cmds {
-        let _ = match cmd {
-            FrameCmd::Stop => w.write_action(&Action::Stop),
-            FrameCmd::Play => w.write_action(&Action::Play),
-            FrameCmd::GotoFrame(f) => w.write_action(&Action::GotoFrame(GotoFrame { frame: *f })),
-            FrameCmd::GotoAndPlay(f) => w
-                .write_action(&Action::GotoFrame(GotoFrame { frame: *f }))
-                .and_then(|()| w.write_action(&Action::Play)),
-            FrameCmd::GotoLabel(label, play) => {
-                let r = w.write_action(&Action::GotoLabel(GotoLabel {
-                    label: SwfStr::from_utf8_str(label),
-                }));
-                if *play {
-                    r.and_then(|()| w.write_action(&Action::Play))
-                } else {
-                    r
-                }
-            }
-        };
-    }
-    let _ = w.write_action(&Action::End);
-    buf
+/// Clip click handlers: a clip's `mousepressed`/`mouseclick` scripts. Both map to a SWF
+/// `PRESS` clip event (docs/wick-format.md); twip does not distinguish press from click.
+fn recognize_clip_actions(scripts: &[Script]) -> (Vec<script::Op>, Vec<String>) {
+    compile_actions(scripts, &["mousepressed", "mouseclick"])
 }
 
 /// Compile a timeline (a list of layers) into its control-tag stream (Place/Remove/
@@ -1079,8 +961,8 @@ fn compile_timeline(
     layers: &[wick::Layer],
     next_id: &mut u16,
     defs: &mut Vec<Tag<'static>>,
-    frame_actions: &mut BTreeMap<u16, Vec<FrameCmd>>,
-    clip_handlers: &mut BTreeMap<u16, Vec<FrameCmd>>,
+    frame_actions: &mut BTreeMap<u16, Vec<script::Op>>,
+    clip_handlers: &mut BTreeMap<u16, Vec<script::Op>>,
     upsample: u16,
 ) -> Vec<Tag<'static>> {
     let num_layers = layers.len();
@@ -1125,8 +1007,8 @@ fn compile_timeline(
                 // A nested clip's frame scripts / click handlers belong inside its
                 // DefineSprite body, which would force the whole (currently 'static)
                 // tag pipeline to hold borrowed tags — deferred. Collect + warn.
-                let mut nested_actions: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
-                let mut nested_handlers: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+                let mut nested_actions: BTreeMap<u16, Vec<script::Op>> = BTreeMap::new();
+                let mut nested_handlers: BTreeMap<u16, Vec<script::Op>> = BTreeMap::new();
                 // The same factor as the root: a sprite's timeline advances one frame per
                 // movie frame, so a nested clip left at 1x would run at a fraction of the
                 // speed its document says once the root is upsampled.
@@ -1376,8 +1258,8 @@ pub fn compile_document(doc: &wick::Document) -> Result<Vec<u8>> {
 pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec<u8>> {
     let mut next_id: u16 = 1;
     let mut defs: Vec<Tag> = Vec::new();
-    let mut frame_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
-    let mut clip_cmds: BTreeMap<u16, Vec<FrameCmd>> = BTreeMap::new();
+    let mut frame_cmds: BTreeMap<u16, Vec<script::Op>> = BTreeMap::new();
+    let mut clip_cmds: BTreeMap<u16, Vec<script::Op>> = BTreeMap::new();
     let upsample = if opts.upsample {
         upsample_factor(doc.framerate)
     } else {
@@ -1403,14 +1285,9 @@ pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec
     if upsample > 1 {
         let k = u32::from(upsample);
         let shift = |f: u16| -> u16 { (u32::from(f) * k).min(u32::from(u16::MAX)) as u16 };
-        let retarget = |cmds: Vec<FrameCmd>| -> Vec<FrameCmd> {
-            cmds.into_iter()
-                .map(|c| match c {
-                    FrameCmd::GotoFrame(f) => FrameCmd::GotoFrame(shift(f)),
-                    FrameCmd::GotoAndPlay(f) => FrameCmd::GotoAndPlay(shift(f)),
-                    other => other,
-                })
-                .collect()
+        let retarget = |mut ops: Vec<script::Op>| -> Vec<script::Op> {
+            script::retarget(&mut ops, k);
+            ops
         };
         frame_cmds = frame_cmds
             .into_iter()
@@ -1433,10 +1310,10 @@ pub fn compile_document_with(doc: &wick::Document, opts: &Options) -> Result<Vec
     // borrowed tags assembled below (all local to this function, so the borrow is
     // sound without a codebase-wide lifetime): `action_arena` keyed by frame number,
     // `clip_arena` by character id.
-    let serialize = |m: BTreeMap<u16, Vec<FrameCmd>>| -> BTreeMap<u16, Vec<u8>> {
+    let serialize = |m: BTreeMap<u16, Vec<script::Op>>| -> BTreeMap<u16, Vec<u8>> {
         m.into_iter()
             .filter_map(|(k, cmds)| {
-                let bytes = frame_action_bytes(&cmds);
+                let bytes = script::emit(&cmds);
                 (!bytes.is_empty()).then_some((k, bytes))
             })
             .collect()
@@ -1544,6 +1421,7 @@ pub fn compile_wick_reporting(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use swf::avm1::types::{Action, GotoFrame};
 
     /// Movie frames a document of `doc_frames` frames at `rate` compiles to.
     ///
@@ -4038,18 +3916,18 @@ mod tests {
                 src: src.to_string(),
             }])
         };
-        assert_eq!(s("stop();").0, vec![FrameCmd::Stop]);
-        assert_eq!(s("play()").0, vec![FrameCmd::Play]);
-        assert_eq!(s("gotoAndPlay(5);").0, vec![FrameCmd::GotoAndPlay(4)]);
-        assert_eq!(s("gotoAndStop(1);").0, vec![FrameCmd::GotoFrame(0)]);
+        assert_eq!(s("stop();").0, vec![script::Op::Stop]);
+        assert_eq!(s("play()").0, vec![script::Op::Play]);
+        assert_eq!(s("gotoAndPlay(5);").0, vec![script::Op::GotoAndPlay(4)]);
+        assert_eq!(s("gotoAndStop(1);").0, vec![script::Op::GotoFrame(0)]);
         assert_eq!(
             s("gotoAndPlay(\"intro\");").0,
-            vec![FrameCmd::GotoLabel("intro".to_string(), true)]
+            vec![script::Op::GotoLabel("intro".to_string(), true)]
         );
         // Comments and blank lines are ignored; multiple statements accumulate.
         assert_eq!(
             s("// jump back\nstop(); play();").0,
-            vec![FrameCmd::Stop, FrameCmd::Play]
+            vec![script::Op::Stop, script::Op::Play]
         );
         // A script that is only recognized on the wrong event name is not a frame action.
         assert!(
@@ -4061,8 +3939,12 @@ mod tests {
             .is_empty(),
             "mousepressed is a milestone-B clip event, not a frame action"
         );
-        // The unrecognized bucket carries the leftover statement.
-        assert_eq!(s("frobnicate(9)").1, vec!["frobnicate(9)".to_string()]);
+        // What it cannot compile it names, with the script it came from — a whole script
+        // rather than a statement, since a half-compiled one is the worse failure.
+        let refused = s("frobnicate(9)").1;
+        assert_eq!(refused.len(), 1);
+        assert!(refused[0].starts_with("default: "), "{refused:?}");
+        assert!(refused[0].contains("frobnicate"), "{refused:?}");
     }
 
     // --- Item 10 milestone B: clip PRESS click handlers -----------------------
@@ -4093,8 +3975,8 @@ mod tests {
             }])
             .0
         };
-        assert_eq!(mk("mousepressed"), vec![FrameCmd::GotoAndPlay(0)]);
-        assert_eq!(mk("mouseclick"), vec![FrameCmd::GotoAndPlay(0)]);
+        assert_eq!(mk("mousepressed"), vec![script::Op::GotoAndPlay(0)]);
+        assert_eq!(mk("mouseclick"), vec![script::Op::GotoAndPlay(0)]);
         // A frame-event script is not a clip action.
         assert!(
             mk("default").is_empty(),

@@ -109,6 +109,18 @@ const CASES: &[Case] = &[
         fixture: "fixtures/dark-stage.wick",
         skipframes: 0,
     },
+    // The only case here whose subject is a script rather than a shape, and the reason it is
+    // a picture: frame 1 is red and carries `var n = 0; while (n < 3) { n++; } if (n == 3)
+    // { stop(); }`, frame 2 is blue and carries nothing. Rendered at frame 2, red means the
+    // loop ran three times and the comparison came out true; blue means the script did
+    // nothing. Both compile to a DoAction either way, so no structural assertion can tell
+    // them apart — changing `== 3` to `== 4` turns this image blue, which is what makes it
+    // a measurement of the script and not of the layout.
+    Case {
+        name: "script-logic",
+        fixture: "fixtures/script-logic.wick",
+        skipframes: 1,
+    },
     // Three rectangles, three gradients: linear, radial, and radial with a highlight. This is
     // the case that has to be a rendered image rather than a structural assertion. A gradient
     // reaches the file as a fixed square plus a matrix, so a wrong matrix produces a
