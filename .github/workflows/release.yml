@@ -1,15 +1,19 @@
 name: release
 
-# Manual only, and that is a licensing decision rather than caution about the build.
+# Pushing a v-tag publishes a release. Dispatching runs the same build without one.
 #
-# The .deb bundles the GPLv3 editor, and its /usr/share/doc/twip/copyright carries a GPLv3
-# section 6 written offer naming this repository as the corresponding source. While the
-# repository is private that offer cannot be honoured, so a published artifact would put GPLv3
-# code in someone's hands with no route to the source it promises. Publish the repository
-# first; then this can move to `on: push: tags:` if a tag-triggered release is wanted.
+# Manual-only was a licensing decision rather than caution about the build: the .deb bundles
+# the GPLv3 editor and its /usr/share/doc/twip/copyright carries a GPLv3 section 6 written
+# offer naming this repository as the corresponding source, so while the repository was
+# private that offer could not be honoured. It is public now, which is what this waited for.
+# The guard below stays anyway — it is one `if` against shipping GPLv3 code with no route to
+# the source it promises, and the condition it checks is one a repository setting can flip
+# back at any time without anyone touching this file.
 #
 # See LICENSING.md.
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -113,17 +117,45 @@ jobs:
           path: editor/src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
 
+      # Two ways in, one tag out: a pushed tag names itself, a dispatch names one or leaves it
+      # blank to build without releasing.
+      - name: Which tag, if any
+        id: which
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish a release
-        if: inputs.tag != ''
+        if: steps.which.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.which.outputs.tag }}
         run: |
           if [ "${{ github.repository_visibility }}" = "private" ]; then
             echo "Refusing to publish: the repository is private, and the package ships a"
             echo "GPLv3 section 6 offer naming it as the corresponding source. See LICENSING.md."
             exit 1
           fi
-          gh release create "${{ inputs.tag }}" \
-            editor/src-tauri/target/release/bundle/deb/*.deb \
-            --title "${{ inputs.tag }}" \
-            --notes "Desktop build. Corresponding source is this repository; see LICENSING.md."
+          NOTES="Linux desktop build (.deb). Other platforms are not built because the runners
+          cost more than the demand for them so far — open an issue if you want one.
+
+          The compiler itself is \`cargo install --git https://github.com/justinstimatze/twip\`
+          on any platform Rust targets.
+
+          Corresponding source is this repository; see LICENSING.md."
+          # A re-pushed tag, or a release drafted by hand before the build finished, must not
+          # fail the run — upload into the existing release instead. --clobber so the second
+          # run's .deb replaces the first's rather than colliding with it.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists; uploading into it"
+            gh release upload "$TAG" \
+              editor/src-tauri/target/release/bundle/deb/*.deb --clobber
+          else
+            gh release create "$TAG" \
+              editor/src-tauri/target/release/bundle/deb/*.deb \
+              --title "$TAG" \
+              --notes "$NOTES"
+          fi

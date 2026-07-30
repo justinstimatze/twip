@@ -38,11 +38,21 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| "out.swf".to_string());
 
     let wick_bytes = std::fs::read(input).with_context(|| format!("read {input}"))?;
-    let swf =
-        twip::compile_wick_with(&wick_bytes, &opts).with_context(|| format!("compile {input}"))?;
+    let (swf, skipped) = twip::compile_wick_reporting(&wick_bytes, &opts)
+        .with_context(|| format!("compile {input}"))?;
     std::fs::write(&output, &swf).with_context(|| format!("write {output}"))?;
 
     println!("compiled {} -> {} ({} bytes)", input, output, swf.len());
+    // On stderr, so a script piping the success line still gets one line, and so this reads
+    // as the warning it is. Not an error: the movie is fine, it is just smaller than the
+    // document — and refusing to compile a project because one title card cannot come along
+    // would be the worse of the two failures.
+    if !skipped.is_empty() {
+        eprintln!(
+            "warning: {} not in the movie — gradients, text, images and audio have no reader yet",
+            skipped.describe(),
+        );
+    }
     Ok(())
 }
 

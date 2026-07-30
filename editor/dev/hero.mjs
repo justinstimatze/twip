@@ -6,7 +6,7 @@
  * It draws with the real tools through real mouse events rather than loading a prepared
  * document, for the same reason dev/make-fixture.mjs does: a picture of the editor holding
  * something it cannot actually produce would be a lie that no test would catch. Everything on
- * this canvas came out of the toolbox on the left.
+ * this canvas came out of the toolbar.
  *
  * Writes docs/hero.png, which is committed and is the one image in the README — not into
  * dev/.visual/ with the throwaway captures. Re-run it when the chrome changes, and look at
@@ -86,11 +86,40 @@ await tool('tool-button-brush');
 await fill('#64B6DF');
 await stroke([[520, 600], [600, 560], [690, 620], [780, 570], [860, 610]]);
 
-// Land on the cursor so the toolbox does not photograph mid-mode, and click empty stage so
-// nothing carries a selection box into the shot.
+/*
+ * Two assets, drawn here rather than shipped, so the library photographs as a grid of
+ * pictures instead of as its empty state. It is a panel whose whole point is that you can
+ * tell one sprite from another at a glance, and a screenshot of the drop-files prompt makes
+ * that point exactly backwards.
+ */
+await page.evaluate(async () => {
+  const png = (name, colour) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 48;
+    const g = c.getContext('2d');
+    g.fillStyle = colour;
+    g.beginPath(); g.arc(24, 24, 18, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#110f0e';
+    g.fillRect(14, 20, 6, 6); g.fillRect(28, 20, 6, 6);
+    return new Promise((r) => c.toBlob((b) => r(new File([b], name, { type: 'image/png' }))));
+  };
+  const files = await Promise.all([png('frame_01.png', '#ef4a2f'), png('frame_02.png', '#64b6df')]);
+  await new Promise((resolve) => {
+    window.editor.createAssets(files, [], resolve);
+    setTimeout(resolve, 10_000);
+  });
+});
+await page.waitForTimeout(1200);
+
+/*
+ * Land on the cursor with the ellipse selected. The old shot deselected first, for a clean
+ * stage — but the Inspector is a tabbed panel now and an empty one photographs as its
+ * nothing-selected message, which is a picture of the editor doing nothing. A selection
+ * rectangle is what an editor in use looks like.
+ */
 await tool('tool-button-cursor');
-await page.mouse.click(300, 700);
-await page.waitForTimeout(300);
+await page.mouse.click(600, 420);
+await page.waitForTimeout(400);
 
 /* Count what actually landed. A dropped shape is invisible in a green run — the script
    finishes, the PNG is written, and the picture is just missing something. Ask the engine. */

@@ -1078,7 +1078,8 @@ class EditorCore extends Component {
    * The one compile path both SWF entry points share: previewProjectAsSWF plays the
    * result in Ruffle, exportProjectAsSWF writes it to disk. See compileWickToSWF for
    * the Tauri-vs-bridge split.
-   * @returns {Promise<Blob>} resolves to the .swf, rejects with a reportable Error.
+   * @returns {Promise<{blob: Blob, skipped: string}>} the .swf and what it left behind,
+   *   rejecting with a reportable Error.
    */
   compileProjectToSWFBlob = () => {
     return new Promise((resolve, reject) => {
@@ -1104,10 +1105,11 @@ class EditorCore extends Component {
     let toastID = this.toast('Compiling project to SWF...', 'info', {autoClose: false});
 
     this.compileProjectToSWFBlob()
-      .then(swfBlob => {
+      .then(({blob: swfBlob, skipped}) => {
         if (this.state.swfPreviewUrl) window.URL.revokeObjectURL(this.state.swfPreviewUrl);
         let swfUrl = window.URL.createObjectURL(swfBlob);
         this.updateToast(toastID, {type: 'success', text: "Compiled to SWF."});
+        this.warnAboutSkipped(skipped);
         this.setState({swfPreviewUrl: swfUrl});
         this.openModal('SwfPreview');
         this.hideWaitOverlay();
@@ -1134,9 +1136,10 @@ class EditorCore extends Component {
     let toastID = this.toast('Exporting SWF...', 'info', {autoClose: false});
 
     this.compileProjectToSWFBlob()
-      .then(swfBlob => {
+      .then(({blob: swfBlob, skipped}) => {
         let success = () => {
           this.updateToast(toastID, {type: 'success', text: "Exported SWF."});
+          this.warnAboutSkipped(skipped);
           this.hideWaitOverlay();
         };
         let fail = () => {
@@ -1187,7 +1190,10 @@ class EditorCore extends Component {
   }
 
   /**
-   * Compile .wick bytes (Uint8Array) to a .swf Blob, by whichever of three routes exists.
+   * Compile .wick bytes (Uint8Array) to `{blob, skipped}`, by whichever of three routes
+   * exists. `skipped` is one line naming what the document holds and the movie does not,
+   * or '' when the two agree — every route reports it, because the route someone is on is
+   * not a reason to be told less. See twip::wick::Skipped.
    *
    * Under the Tauri desktop shell it is an in-process Rust call (the compile_swf command).
    * In a browser it is the same compiler as wasm, running in the tab. Failing that — a
@@ -1199,17 +1205,46 @@ class EditorCore extends Component {
    */
   compileWickToSWF = (wickBytes) => {
     const upsample = this.swfUpsampleEnabled();
+    const swf = (bytes) => new Blob([bytes], {type: 'application/x-shockwave-flash'});
 
     if (window.__TAURI__ && window.__TAURI__.core) {
-      return window.__TAURI__.core.invoke('compile_swf', {wick: Array.from(wickBytes), upsample})
-        .then(swf => new Blob(
-          [swf instanceof ArrayBuffer ? swf : new Uint8Array(swf)],
-          {type: 'application/x-shockwave-flash'}));
+      const core = window.__TAURI__.core;
+      const wick = Array.from(wickBytes);
+      /* Two commands rather than one, because compile_swf answers over a raw byte channel
+         with no room for a second value — see wick_report in src-tauri/src/lib.rs. */
+      return Promise.all([
+        core.invoke('compile_swf', {wick, upsample}),
+        core.invoke('wick_report', {wick}).catch(() => ''),
+      ]).then(([bytes, skipped]) => ({
+        blob: swf(bytes instanceof ArrayBuffer ? bytes : new Uint8Array(bytes)),
+        skipped,
+      }));
     }
 
     return this.loadTwipWasm().then(
-      compile => new Blob([compile(wickBytes, upsample)], {type: 'application/x-shockwave-flash'}),
+      compile => {
+        const out = compile(wickBytes, upsample);
+        return {blob: swf(out.swf), skipped: out.skipped};
+      },
       () => this.compileWickViaBridge(wickBytes, upsample));
+  }
+
+  /**
+   * Say what the export left behind, when it left anything behind.
+   *
+   * The compiler has no reader for text, images, sounds or gradients, and it drops them
+   * rather than guessing — but until this it dropped them without a word. The export
+   * succeeded, the .swf played, and the only evidence that the title card was gone was that
+   * it was gone, which reads as "I did something wrong" rather than "twip cannot do that
+   * yet". A warning toast beside the success one, and only when there is something to say.
+   *
+   * It does not autoClose. This is the one message in an export worth reading, and the
+   * success toast next to it is already carrying the news that nothing went wrong.
+   */
+  warnAboutSkipped = (skipped) => {
+    if (!skipped) return;
+    this.toast(`Not in the SWF: ${skipped}. The compiler has no reader for these yet.`,
+      'warning', {autoClose: false});
   }
 
   /**
@@ -1237,7 +1272,10 @@ class EditorCore extends Component {
     return fetch(url, {method: 'POST', body: new Blob([wickBytes])})
       .then(res => {
         if (!res.ok) return res.text().then(t => { throw new Error(t || ('HTTP ' + res.status)); });
-        return res.blob();
+        /* The bridge puts the report in a header; an older bridge sends none, and '' is the
+           same answer as "nothing was skipped" from this side. */
+        const skipped = res.headers.get('X-Twip-Skipped') || '';
+        return res.blob().then(blob => ({blob, skipped}));
       })
       .catch(err => {
         if (err instanceof TypeError) {

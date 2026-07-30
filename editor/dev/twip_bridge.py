@@ -52,6 +52,10 @@ CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    # A cross-origin reader sees only the safelisted response headers unless the server says
+    # otherwise, so without this the editor gets the SWF and no report — silently, which is
+    # the exact failure the report exists to end.
+    "Access-Control-Expose-Headers": "X-Twip-Skipped",
 }
 
 
@@ -106,10 +110,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             with open(out, "rb") as f:
                 swf = f.read()
+            # The CLI writes "warning: 2 text objects not in the movie (...)" to stderr on a
+            # successful compile. The editor wants the list, not the sentence around it.
+            skipped = ""
+            for line in proc.stderr.splitlines():
+                if line.startswith("warning: ") and " not in the movie" in line:
+                    skipped = line[len("warning: "):].split(" not in the movie")[0]
         self.send_response(200)
         self._cors()
         self.send_header("Content-Type", "application/x-shockwave-flash")
         self.send_header("Content-Length", str(len(swf)))
+        if skipped:
+            self.send_header("X-Twip-Skipped", skipped)
         self.end_headers()
         self.wfile.write(swf)
         self.log_message("compiled %d wick bytes -> %d swf bytes", len(wick), len(swf))

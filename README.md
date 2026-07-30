@@ -4,7 +4,7 @@
 
 A personal nostalgia project — not a product. Flash is gone, its editor is abandonware, and the thing it did well — drawing and animating vectors and shipping them as a small file that just plays — has no clean modern replacement. twip is an attempt to get that feeling back without pretending Flash never had problems.
 
-![The twip editor: a toolbox down the left, a stage holding three drawn shapes, an inspector and asset library on the right, and a frame timeline across the bottom.](docs/hero.png)
+![The twip editor: a labelled toolbar across the top, a white stage holding a selected red circle, an orange rectangle and a blue brush stroke, a tabbed inspector and a thumbnail asset library down the right, and a frame timeline across the bottom.](docs/hero.png)
 
 It runs in a browser tab at **[twip.ink](https://twip.ink)** — the editor, the compiler built
 to wasm, and Ruffle, all in the page. No account, no upload, no server side: the `.wick` and
@@ -73,9 +73,21 @@ Export works three ways, and the editor picks whichever exists: an in-process Ru
 
 ## Rough edges
 
-Named here rather than left for you to trip over. The interface is mid-redesign: every tab in `TabbedInterface` carries a bottom rule, so the active one is set apart by colour alone and the inactive ones still read a little like links. The Inspector's rows use the inherited 30/70 label-to-field split, which is generous at 250px and wrong at 400.
+Named here rather than left for you to trip over.
 
-The compiler skips gradients, text, audio, filters and images rather than guessing at them — see Status above. Everything else the editor can draw, it compiles.
+The compiler skips gradients, text, audio, filters and images rather than guessing at them —
+see Status above. Everything else the editor can draw, it compiles. **It now says so:** an
+export that had to leave something behind names it, in the terminal and in the editor, because
+a movie missing its title card and a success message beside it reads as your mistake rather
+than as twip's limit.
+
+The editor's modal dialogs are the last of [`docs/ui-research.md`](docs/ui-research.md)'s six
+"outdated tells" still standing — Make Animated, Make Interactive and the export dialogs are
+still modals, where the rest of that list became panels, tabs and a contextual toolbar.
+
+Only Linux gets a packaged desktop build. Not a technical limit: macOS and Windows runners cost
+more than the demand for them so far. Open an issue if you want one. The compiler itself
+installs anywhere Rust targets, with the `cargo install --git` line above.
 
 ## Credit
 

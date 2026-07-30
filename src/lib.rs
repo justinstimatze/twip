@@ -1391,7 +1391,21 @@ pub fn compile_wick(wick_bytes: &[u8]) -> Result<Vec<u8>> {
 
 /// `compile_wick` with the export settings spelled out.
 pub fn compile_wick_with(wick_bytes: &[u8], opts: &Options) -> Result<Vec<u8>> {
-    compile_document_with(&wick::parse_wick(wick_bytes)?, opts)
+    Ok(compile_wick_reporting(wick_bytes, opts)?.0)
+}
+
+/// Compile, and say what the document held that the movie does not.
+///
+/// The separate entry point rather than a changed return type: every caller that only wants
+/// bytes keeps working, and the two that face a person — the CLI and the export button —
+/// opt in. See [`wick::Skipped`] for why silence was the wrong default.
+pub fn compile_wick_reporting(
+    wick_bytes: &[u8],
+    opts: &Options,
+) -> Result<(Vec<u8>, wick::Skipped)> {
+    let doc = wick::parse_wick(wick_bytes)?;
+    let swf = compile_document_with(&doc, opts)?;
+    Ok((swf, doc.skipped))
 }
 
 #[cfg(test)]
@@ -1770,6 +1784,7 @@ mod tests {
                     },
                 ],
             }],
+            skipped: Default::default(),
         };
 
         let swf_bytes = compile_document(&doc).expect("compile");
@@ -1852,6 +1867,7 @@ mod tests {
                         tweens: vec![],
                     }],
                 }],
+                skipped: Default::default(),
             };
             let swf = compile_document(&doc).expect("compile");
             let buf = swf::decompress_swf(&swf[..]).expect("decompress");
@@ -1897,6 +1913,7 @@ mod tests {
                     tweens: vec![],
                 }],
             }],
+            skipped: Default::default(),
         };
 
         let ceiling = Fixed8::MAX.to_f64();
@@ -1951,6 +1968,7 @@ mod tests {
                     },
                 ],
             }],
+            skipped: Default::default(),
         };
 
         let swf = compile_document(&doc).expect("compile document");
@@ -2184,6 +2202,7 @@ mod tests {
                     tweens: vec![],
                 }],
             }],
+            skipped: Default::default(),
         };
 
         let swf = compile_document(&doc).expect("compile nested clip");
@@ -2755,6 +2774,91 @@ mod tests {
         assert_eq!(doc.background, swf::Color::WHITE);
     }
 
+    /// The export names what it left behind.
+    ///
+    /// This is the case for a whole class of quiet failure rather than for four particular
+    /// classnames. The editor ships a text tool, a gradient tool, image import and sound
+    /// import; the compiler reads none of them; and until this, drawing with any of them and
+    /// pressing export produced a movie missing that work, a success message, and nothing
+    /// else. The gradient was worse than missing — a colour array whose first element is the
+    /// word "gradient" read as channel zero, so a sunset compiled to opaque black.
+    ///
+    /// The compile still succeeds, which is the other half. Refusing a project because one
+    /// title card cannot come along is the worse of the two failures.
+    #[test]
+    fn the_export_says_what_it_left_behind() {
+        let bytes = rewrap_test1(&fixture_json_with_unsupported());
+        let doc = wick::parse_wick(&bytes).expect("parse test1 with unsupported content");
+
+        assert_eq!(
+            doc.skipped.kinds().collect::<Vec<_>>(),
+            vec![("gradient", 1), ("image", 1), ("sound", 1), ("text object", 1)],
+        );
+        assert_eq!(doc.skipped.total(), 4);
+        assert_eq!(
+            doc.skipped.describe(),
+            "1 gradient, 1 image, 1 sound, 1 text object",
+        );
+
+        // Reported through the entry point the CLI and the export button actually call, and
+        // the movie is still a movie.
+        let (swf, skipped) =
+            compile_wick_reporting(&bytes, &Options::default()).expect("compile anyway");
+        assert!(swf.len() > 100, "still produced a movie: {} bytes", swf.len());
+        assert_eq!(skipped, doc.skipped);
+
+        // A document the compiler can carry whole says nothing at all — the warning has to
+        // stay rare enough to mean something.
+        let clean = wick::parse_wick(include_bytes!("../fixtures/test1.wick")).expect("parse");
+        assert!(clean.skipped.is_empty(), "{}", clean.skipped.describe());
+        assert_eq!(clean.skipped.describe(), "");
+    }
+
+    /// Plurals, since the report is read by a person and `1 text objects` is a typo with a
+    /// stack trace. A name the walk read off the document keeps whatever form it arrived in.
+    #[test]
+    fn the_report_counts_in_english() {
+        let bytes = rewrap_test1(&fixture_json_with_unsupported());
+        let mut json: serde_json::Value =
+            serde_json::from_slice(&{
+                use std::io::Read;
+                let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes[..])).expect("zip");
+                let mut s = Vec::new();
+                zip.by_name("project.json")
+                    .expect("project.json")
+                    .read_to_end(&mut s)
+                    .expect("read");
+                s
+            })
+            .expect("parse");
+
+        // A second text object, so one kind is plural and the rest are not.
+        let objects = json
+            .get_mut("objects")
+            .and_then(|o| o.as_object_mut())
+            .expect("objects");
+        objects.insert(
+            "text-uuid-2".into(),
+            serde_json::json!({ "classname": "Path", "json": ["PointText", {}] }),
+        );
+        let frame_uuid = objects
+            .iter()
+            .find(|(_, v)| v.get("classname").and_then(|c| c.as_str()) == Some("Frame"))
+            .map(|(k, _)| k.clone())
+            .expect("a Frame");
+        objects[&frame_uuid]["children"]
+            .as_array_mut()
+            .expect("children")
+            .push(serde_json::json!("text-uuid-2"));
+
+        let doc = wick::parse_wick(&rewrap_test1(&serde_json::to_string(&json).expect("json")))
+            .expect("parse");
+        assert_eq!(
+            doc.skipped.describe(),
+            "1 gradient, 1 image, 1 sound, 2 text objects",
+        );
+    }
+
     /// Every string shape the format can hold. paper.js `toCSS()` writes `rgb(...)` when the
     /// colour is opaque and `rgba(...)` when it is not, and hex arrives from hand-editing —
     /// `#f00` included, which the old hex-only parser read as the number 0xf00 and rendered
@@ -2818,6 +2922,77 @@ mod tests {
     }
 
     /// Zip a project.json back into something parse_wick will take.
+    /// test1's project.json with a text object, a placed image, an attached sound and a
+    /// gradient fill added to its first frame — the four things the editor can make and the
+    /// compiler cannot carry.
+    ///
+    /// Synthesized rather than authored through the editor, because the point is the shapes
+    /// the format uses, and those are stable: a text object and an image are both Wick
+    /// `Path`s distinguished by the class inside `json`, a sound is a UUID on the frame, and
+    /// a gradient is a paper.js colour array whose leading element is a word.
+    fn fixture_json_with_unsupported() -> String {
+        use std::io::Read;
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(
+            &include_bytes!("../fixtures/test1.wick")[..],
+        ))
+        .expect("open test1.wick");
+        let mut json = String::new();
+        zip.by_name("project.json")
+            .expect("project.json")
+            .read_to_string(&mut json)
+            .expect("read project.json");
+
+        let mut root: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        let objects = root
+            .get_mut("objects")
+            .and_then(|o| o.as_object_mut())
+            .expect("objects map");
+
+        let frame_uuid = objects
+            .iter()
+            .find(|(_, v)| v.get("classname").and_then(|c| c.as_str()) == Some("Frame"))
+            .map(|(k, _)| k.clone())
+            .expect("test1 has a Frame");
+
+        // A gradient fill goes on a path that is otherwise fine, so the case also pins that
+        // the shape leaves rather than arriving painted black.
+        let path_uuid = objects
+            .iter()
+            .find(|(_, v)| v.get("classname").and_then(|c| c.as_str()) == Some("Path"))
+            .map(|(k, _)| k.clone())
+            .expect("test1 has a Path");
+        // The real shape, read off paper.js's own Color._serialize in the vendored engine:
+        // a non-RGB colour is its type name followed by its components, so a gradient fill is
+        // ["gradient", <gradient>, <origin>, <destination>] — no "Color" wrapper.
+        objects[&path_uuid]["json"][1]["fillColor"] = serde_json::json!([
+            "gradient", ["Gradient", { "stops": [] }], [0.0, 0.0], [1.0, 1.0]
+        ]);
+
+        for (uuid, class) in [("text-uuid", "PointText"), ("raster-uuid", "Raster")] {
+            objects.insert(
+                uuid.into(),
+                serde_json::json!({
+                    "classname": "Path",
+                    "json": [class, { "content": "hello", "point": [10.0, 10.0] }],
+                }),
+            );
+        }
+
+        let frame = objects
+            .get_mut(&frame_uuid)
+            .and_then(|f| f.as_object_mut())
+            .expect("frame object");
+        frame.insert("sound".into(), serde_json::json!("some-sound-asset-uuid"));
+        let kids = frame
+            .get_mut("children")
+            .and_then(|c| c.as_array_mut())
+            .expect("frame children");
+        kids.push(serde_json::json!("text-uuid"));
+        kids.push(serde_json::json!("raster-uuid"));
+
+        serde_json::to_string(&root).expect("reserialize")
+    }
+
     fn rewrap_test1(json: &str) -> Vec<u8> {
         use std::io::Write;
         let mut out = Vec::new();
@@ -2898,6 +3073,7 @@ mod tests {
                     tweens: vec![key(1, 0.0), key(5, 100.0)],
                 }],
             }],
+            skipped: Default::default(),
         };
 
         let swf = compile_document(&doc).expect("compile tween");
@@ -3083,6 +3259,7 @@ mod tests {
                     tweens: vec![key(1, 0.0, "out-back"), key(5, 100.0, "none")],
                 }],
             }],
+            skipped: Default::default(),
         };
 
         // Upsampling off: the subject here is what the easing function returns at t=0.5, and
@@ -3478,6 +3655,7 @@ mod tests {
                     }],
                 }],
             }],
+            skipped: Default::default(),
         }
     }
 
@@ -3695,6 +3873,7 @@ mod tests {
                     scripts: Vec::new(),
                 }],
             }],
+            skipped: Default::default(),
         };
 
         let swf = compile_document(&doc).expect("compile");

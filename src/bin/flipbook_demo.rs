@@ -46,6 +46,7 @@ fn main() -> std::io::Result<()> {
         framerate: 24.0,
         background: swf::Color::WHITE,
         layers: vec![Layer { frames }],
+        skipped: Default::default(),
     };
 
     let bytes = twip::compile_document(&doc).expect("compile flipbook document");

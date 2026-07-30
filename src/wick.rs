@@ -10,8 +10,67 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::io::{Cursor, Read};
 use swf::Color;
+
+/// What a document held that did not reach the movie.
+///
+/// The compiler has no reader for text, images, sounds or gradients, and leaving them out is
+/// the right answer — a guess at a gradient is a confident wrong one, which is the same
+/// reason `import` refuses to infer tween curves back out of matrices. Leaving them out
+/// *silently* is the part that costs someone an afternoon: the export succeeds, the `.swf`
+/// plays, and the only sign that the title card is missing is that it is missing.
+///
+/// So the walk counts what it declined. Every drop site reports through here, and the kinds
+/// are read off the document rather than enumerated in advance, so a `.wick` holding
+/// something no one anticipated is reported by whatever name it gave itself instead of
+/// vanishing into a `_ => {}`.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Skipped {
+    counts: BTreeMap<String, usize>,
+}
+
+impl Skipped {
+    fn note(&mut self, what: &str) {
+        *self.counts.entry(what.to_owned()).or_default() += 1;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.counts.is_empty()
+    }
+
+    /// How many objects were left out, across every kind.
+    pub fn total(&self) -> usize {
+        self.counts.values().sum()
+    }
+
+    /// Each kind and how many of it, by name. Ordered, so two runs over one document read
+    /// the same and a test can assert on the whole thing.
+    pub fn kinds(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.counts.iter().map(|(k, n)| (k.as_str(), *n))
+    }
+
+    /// One line for a terminal or a toast: `2 text objects, 1 gradient fill`.
+    ///
+    /// Plural by adding an s, which is why every name this can hold is a noun that takes
+    /// one. A name the walk read off the document — a class no one anticipated — is left
+    /// exactly as it was found, since inventing a plural for it would be worse than the
+    /// bare repetition.
+    pub fn describe(&self) -> String {
+        self.counts
+            .iter()
+            .map(|(kind, n)| {
+                if *n == 1 || !kind.chars().next().is_some_and(char::is_lowercase) {
+                    format!("{n} {kind}")
+                } else {
+                    format!("{n} {kind}s")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
 
 /// A parsed document: stage size (pixels), playback rate, and the timeline's layers.
 pub struct Document {
@@ -27,6 +86,8 @@ pub struct Document {
     pub background: Color,
     /// Layers in Wick order — index 0 is frontmost (depth is resolved at compile).
     pub layers: Vec<Layer>,
+    /// What the walk found and could not carry. Empty for every fixture in this repo.
+    pub skipped: Skipped,
 }
 
 /// One timeline layer: a sequence of keyframes.
@@ -211,14 +272,28 @@ pub fn parse_wick(bytes: &[u8]) -> Result<Document> {
         .find(|v| classname(v) == Some("Timeline"))
         .ok_or_else(|| anyhow!("root Clip has no Timeline"))?;
 
-    let layers = parse_timeline(timeline, objects)?;
+    let mut skipped = Skipped::default();
+    let layers = parse_timeline(timeline, objects, &mut skipped)?;
     Ok(Document {
         width,
         height,
         framerate,
         background,
         layers,
+        skipped,
     })
+}
+
+/// What to call a paper.js or Wick class in a sentence aimed at whoever drew it. Anything
+/// not named here keeps the name the document gave it, which is better than "unsupported
+/// object" and is the case that keeps this list from having to be complete.
+fn human(classname: &str) -> &str {
+    match classname {
+        "PointText" => "text object",
+        "Raster" => "image",
+        "SoundAsset" => "sound",
+        other => other,
+    }
 }
 
 type Objects = serde_json::Map<String, Value>;
@@ -231,7 +306,7 @@ fn child_objects<'a>(v: &Value, objects: &'a Objects) -> impl Iterator<Item = &'
 }
 
 /// Parse a Timeline object into its layers (Wick order; index 0 = frontmost).
-fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
+fn parse_timeline(timeline: &Value, objects: &Objects, skipped: &mut Skipped) -> Result<Vec<Layer>> {
     let mut layers = Vec::new();
     for layer_obj in child_objects(timeline, objects) {
         if classname(layer_obj) != Some("Layer") {
@@ -250,18 +325,28 @@ fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
             let mut contours = Vec::new();
             let mut clips = Vec::new();
             let mut tweens = Vec::new();
+            // A sound is a UUID on the frame rather than a child of it (engine
+            // Frame._serialize writes `data.sound`), so it is the one attachment that has to
+            // be looked for by name — nothing in the child walk below would ever see it.
+            if frame_obj.get("sound").and_then(Value::as_str).is_some() {
+                skipped.note(human("SoundAsset"));
+            }
             for child in child_objects(frame_obj, objects) {
                 match classname(child) {
                     Some("Path") => {
-                        if let Some(contour) = path_to_contour(child)? {
+                        if let Some(contour) = path_to_contour(child, skipped)? {
                             contours.push(contour);
                         }
                     }
                     // Button is a Clip subclass; its extra state (states, script) is
                     // ignored for now — it still renders as its clip timeline.
-                    Some("Clip" | "Button") => clips.push(parse_clip(child, objects)?),
+                    Some("Clip" | "Button") => clips.push(parse_clip(child, objects, skipped)?),
                     Some("Tween") => tweens.push(parse_tween(child)),
-                    _ => {}
+                    // Everything else on a frame is either editor state with nothing to
+                    // draw, or something with no reader here. Only the second is worth
+                    // saying, and the difference is that the first has a name this knows.
+                    Some("Selection") | None => {}
+                    Some(other) => skipped.note(human(other)),
                 }
             }
             // Wick may serialize tweens out of order; the interpolator wants them by playhead.
@@ -281,12 +366,12 @@ fn parse_timeline(timeline: &Value, objects: &Objects) -> Result<Vec<Layer>> {
 }
 
 /// Parse a Clip object: its placement transform plus its own (recursive) timeline.
-fn parse_clip(clip: &Value, objects: &Objects) -> Result<Clip> {
+fn parse_clip(clip: &Value, objects: &Objects, skipped: &mut Skipped) -> Result<Clip> {
     let transform = parse_transform(clip);
     let timeline = child_objects(clip, objects)
         .find(|v| classname(v) == Some("Timeline"))
         .ok_or_else(|| anyhow!("Clip has no Timeline"))?;
-    let layers = parse_timeline(timeline, objects)?;
+    let layers = parse_timeline(timeline, objects, skipped)?;
     Ok(Clip {
         transform,
         layers,
@@ -374,10 +459,11 @@ fn parse_transform(clip: &Value) -> crate::Transform {
     }
 }
 
-fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
+fn path_to_contour(path: &Value, skipped: &mut Skipped) -> Result<Option<Contour>> {
     // Path.json = [class, props] (raw paper.js exportJSON). class is "Path" for a
-    // single path or "CompoundPath" for a brush stroke with holes; Raster/PointText
-    // are later phases.
+    // single path or "CompoundPath" for a brush stroke with holes. A text object and a
+    // placed image are also Wick `Path`s — "PointText" and "Raster" inside the json —
+    // which is why the editor lets you make both and the movie has neither.
     let json = path
         .get("json")
         .and_then(Value::as_array)
@@ -387,13 +473,37 @@ fn path_to_contour(path: &Value) -> Result<Option<Contour>> {
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow!("Path props missing"))?;
     match json.first().and_then(Value::as_str) {
-        Some("Path") => single_path_to_contour(props),
-        Some("CompoundPath") => compound_to_contour(props),
-        _ => Ok(None),
+        Some("Path") => single_path_to_contour(props, skipped),
+        Some("CompoundPath") => compound_to_contour(props, skipped),
+        Some(other) => {
+            skipped.note(human(other));
+            Ok(None)
+        }
+        None => {
+            skipped.note("unreadable path");
+            Ok(None)
+        }
     }
 }
 
-fn single_path_to_contour(props: &serde_json::Map<String, Value>) -> Result<Option<Contour>> {
+/// Read a style colour off a props map, counting it if it is there and cannot be read.
+fn styled_color(
+    props: &serde_json::Map<String, Value>,
+    key: &str,
+    skipped: &mut Skipped,
+) -> Option<Color> {
+    let raw = props.get(key)?;
+    let color = read_color(raw);
+    if color.is_none() {
+        skipped.note(&unreadable_color(raw));
+    }
+    color
+}
+
+fn single_path_to_contour(
+    props: &serde_json::Map<String, Value>,
+    skipped: &mut Skipped,
+) -> Result<Option<Contour>> {
     let segs = props
         .get("segments")
         .and_then(Value::as_array)
@@ -406,11 +516,8 @@ fn single_path_to_contour(props: &serde_json::Map<String, Value>) -> Result<Opti
     let points = flatten_segments(segs, closed);
 
     // A fill needs a closed area (>=3 points); a stroke can be a bare 2-point line.
-    let fill = props
-        .get("fillColor")
-        .map(parse_color)
-        .filter(|_| points.len() >= 3);
-    let stroke = parse_stroke(props).filter(|_| points.len() >= 2);
+    let fill = styled_color(props, "fillColor", skipped).filter(|_| points.len() >= 3);
+    let stroke = parse_stroke(props, skipped).filter(|_| points.len() >= 2);
     if fill.is_none() && stroke.is_none() {
         return Ok(None);
     }
@@ -428,7 +535,10 @@ fn single_path_to_contour(props: &serde_json::Map<String, Value>) -> Result<Opti
 /// The child rings are collected as outer + holes; the compiler planarizes them so
 /// the holes render empty. Orientation is left to the planarizer, so which child is
 /// "outer" here does not matter.
-fn compound_to_contour(props: &serde_json::Map<String, Value>) -> Result<Option<Contour>> {
+fn compound_to_contour(
+    props: &serde_json::Map<String, Value>,
+    skipped: &mut Skipped,
+) -> Result<Option<Contour>> {
     let children = props
         .get("children")
         .and_then(Value::as_array)
@@ -452,8 +562,8 @@ fn compound_to_contour(props: &serde_json::Map<String, Value>) -> Result<Option<
     }
 
     // A brush stroke is a solid fill; strokes on a CompoundPath are unusual but honored.
-    let fill = props.get("fillColor").map(parse_color);
-    let stroke = parse_stroke(props);
+    let fill = styled_color(props, "fillColor", skipped);
+    let stroke = parse_stroke(props, skipped);
     if fill.is_none() && stroke.is_none() {
         return Ok(None);
     }
@@ -470,8 +580,8 @@ fn compound_to_contour(props: &serde_json::Map<String, Value>) -> Result<Option<
 /// Pull a stroke off a paper.js Path's props, or `None` if it has no `strokeColor`.
 /// paper.js omits style keys left at their defaults, so width/cap/join fall back to
 /// paper's own defaults (1px, butt, miter, miterLimit 10).
-fn parse_stroke(props: &serde_json::Map<String, Value>) -> Option<Stroke> {
-    let color = props.get("strokeColor").map(parse_color)?;
+fn parse_stroke(props: &serde_json::Map<String, Value>, skipped: &mut Skipped) -> Option<Stroke> {
+    let color = styled_color(props, "strokeColor", skipped)?;
     let width = props
         .get("strokeWidth")
         .and_then(Value::as_f64)
@@ -499,23 +609,50 @@ fn parse_stroke(props: &serde_json::Map<String, Value>) -> Option<Stroke> {
     })
 }
 
-/// paper.js colors are `[r,g,b]`/`[r,g,b,a]` floats in 0..1, or a CSS string.
-fn parse_color(v: &Value) -> Color {
+/// paper.js colors are `[r,g,b]`/`[r,g,b,a]` floats in 0..1, or a CSS string — and, for a
+/// gradient, an array whose first element is the word "gradient" rather than a number.
+///
+/// `None` for anything else, which is the whole point of the signature. The old total
+/// version read a gradient's leading string as a channel, got 0 from `as_f64`, and painted
+/// the shape opaque black: a sunset became a silhouette, the export said nothing, and
+/// nothing in the file recorded that a colour had ever been asked for. Absent and counted
+/// beats present and wrong.
+fn read_color(v: &Value) -> Option<Color> {
     if let Some(arr) = v.as_array() {
         let ch = |i: usize| {
             arr.get(i)
                 .and_then(Value::as_f64)
                 .map(|f| (f * 255.0).round().clamp(0.0, 255.0) as u8)
         };
-        let r = ch(0).unwrap_or(0);
-        let g = ch(1).unwrap_or(0);
-        let b = ch(2).unwrap_or(0);
+        // All three channels, not just the first: a value that is an array but not a colour
+        // array must fail here rather than default its way to black.
+        let (r, g, b) = (ch(0)?, ch(1)?, ch(2)?);
         let a = ch(3).unwrap_or(255);
-        Color::from_rgb((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b), a)
-    } else if let Some(s) = v.as_str() {
-        parse_css_color(s).unwrap_or_else(|| Color::from_rgb(0, 255))
-    } else {
-        Color::from_rgb(0, 255)
+        return Some(Color::from_rgb(
+            (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b),
+            a,
+        ));
+    }
+    parse_css_color(v.as_str()?)
+}
+
+/// What to call a colour that could not be read, in the export's own report.
+///
+/// paper.js writes a non-RGB colour as its own type name followed by its components
+/// (`Color._serialize`: `/^(gray|rgb)$/.test(this._type) ? components : [this._type].concat(...)`),
+/// so `["gradient", ...]`, `["hsl", h, s, l]`, and so on. Reading the type back out costs two
+/// lines and turns "unreadable color" into "1 hsl color", which is the difference between a
+/// warning someone can act on and one they can only be puzzled by.
+///
+/// Gradients are the case that matters — the editor has a tool for them — but every non-RGB
+/// paper colour lands here, and every one of them used to compile to something wrong rather
+/// than to nothing: a gradient to opaque black, an hsl to black, a one-component gray to dark
+/// red. None of those were reported either.
+fn unreadable_color(v: &Value) -> String {
+    match v.as_array().and_then(|a| a.first()).and_then(Value::as_str) {
+        Some("gradient") => "gradient".to_owned(),
+        Some(kind) => format!("{kind} color"),
+        None => "unreadable color".to_owned(),
     }
 }
 

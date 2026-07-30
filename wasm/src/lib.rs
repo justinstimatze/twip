@@ -14,20 +14,36 @@ pub fn start() {
     console_error_panic_hook::set_once();
 }
 
+/// What a compile produced, and what it had to leave behind.
+///
+/// `getter_with_clone` so both reach JS as plain properties — `result.swf`, `result.skipped`
+/// — rather than as methods a caller has to know to invoke.
+#[wasm_bindgen(getter_with_clone)]
+pub struct Compiled {
+    /// The movie.
+    pub swf: Box<[u8]>,
+    /// One line naming what the document held and the movie does not, or `""` when the two
+    /// agree. See `twip::wick::Skipped`.
+    pub skipped: String,
+}
+
 /// Compile serialized `.wick` bytes to `.swf` bytes.
 ///
-/// Reaches JS as `compile_wick(Uint8Array, upsample?) -> Uint8Array`, throwing on a compile
+/// Reaches JS as `compile_wick(Uint8Array, upsample?) -> Compiled`, throwing on a compile
 /// error with the compiler's own message. `{:#}` rather than `{}` so anyhow's context chain
 /// survives — "unsupported tween easing" alone does not say which frame.
 ///
 /// `upsample` is optional and defaults to true, so the JS side can keep calling this with one
 /// argument and get the same bytes it got before the knob existed.
 #[wasm_bindgen]
-pub fn compile_wick(wick: &[u8], upsample: Option<bool>) -> Result<Box<[u8]>, JsError> {
+pub fn compile_wick(wick: &[u8], upsample: Option<bool>) -> Result<Compiled, JsError> {
     let opts = twip::Options {
         upsample: upsample.unwrap_or(true),
     };
-    twip::compile_wick_with(wick, &opts)
-        .map(Vec::into_boxed_slice)
+    twip::compile_wick_reporting(wick, &opts)
+        .map(|(swf, skipped)| Compiled {
+            swf: swf.into_boxed_slice(),
+            skipped: skipped.describe(),
+        })
         .map_err(|e| JsError::new(&format!("{e:#}")))
 }

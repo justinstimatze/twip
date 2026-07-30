@@ -327,7 +327,7 @@ for (const n of STEPS) {
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
 
     const t1 = performance.now();
-    const blob = await window.editor.compileWickToSWF(bytes);
+    const { blob } = await window.editor.compileWickToSWF(bytes);
     const compileMs = performance.now() - t1;
     return { saveMs, compileMs, wick: bytes.length, swf: blob.size, b64 };
   });

@@ -21,6 +21,21 @@ fn compile_swf(wick: Vec<u8>, upsample: Option<bool>) -> Result<tauri::ipc::Resp
         .map_err(|e| format!("{:#}", e))
 }
 
+/// One line naming what the document holds that the movie will not, or `""` when the two
+/// agree. See `twip::wick::Skipped` for why the export says so rather than staying quiet.
+///
+/// Separate from `compile_swf`, and parsing a second time, because `compile_swf` answers
+/// through `ipc::Response` — a raw byte channel with no room for a second value, and the
+/// reason a megabyte movie does not cross the IPC boundary as a JSON array of a million
+/// numbers. Parsing is the cheap half of a compile (no shapes emitted, no planarization),
+/// and this runs once per press of a button, so paying it twice is the smaller cost.
+#[tauri::command]
+fn wick_report(wick: Vec<u8>) -> Result<String, String> {
+    twip::wick::parse_wick(&wick)
+        .map(|doc| doc.skipped.describe())
+        .map_err(|e| format!("{:#}", e))
+}
+
 /// Ask for a destination, then write the bytes there.
 ///
 /// Every export in the editor funnels through `window.saveFileFromWick`, whose browser
@@ -52,7 +67,7 @@ async fn save_file(name: String, data: Vec<u8>) -> Result<Option<String>, String
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![compile_swf, save_file])
+        .invoke_handler(tauri::generate_handler![compile_swf, wick_report, save_file])
         .run(tauri::generate_context!())
         .expect("error while running twip-editor");
 }

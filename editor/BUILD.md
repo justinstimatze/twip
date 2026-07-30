@@ -154,14 +154,35 @@ cannot address another client's surface.
 
 ## Checks
 
+Every one of these runs in `.github/workflows/editor.yml` on any push that touches the editor,
+so a red one here is a red one there. They need `pnpm wasm`, `pnpm build`, a release `twip`
+binary, and a server on `$SMOKE_URL` (`pnpm preview`); `dev/run-dev.sh` sets that up.
+
 ```
-pnpm notices:check    # notices-npm.json still matches the lockfile
-pnpm test-engine      # the engine's 547-case mocha suite, headless
+pnpm notices:check          # notices-npm.json still matches the lockfile
+pnpm icons:check            # every icon name the source asks for has a drawing
+pnpm test-engine            # the engine's mocha suite, headless
 pnpm build
-pnpm smoke --sweep    # load the page at every breakpoint, read the console
-pnpm interact         # click through the popovers, tooltips, code editor, view-only mode
-pnpm wasm-check       # the browser compiles a fixture; bytes must match the CLI's
-pnpm visual           # screenshot 20 scenes and diff against a blessed baseline
+
+pnpm smoke --sweep          # load the page at every breakpoint, read the console
+pnpm interact               # popovers, tooltips, the code editor, view-only mode
+pnpm wasm-check             # the browser compiles a fixture; bytes must match the CLI's
+
+pnpm toolbar-check          # every toolbar control named, and none of them clipped
+pnpm inspector-check        # every Inspector label fits its row at 200px
+pnpm inspector-tabs-check   # Object/Frame/Doc follow the selection without overriding a
+                            #   tab picked by hand
+pnpm library-check          # the asset grid shows the assets, and arrows cross it
+pnpm tabs-check             # the tab rails are real tablists and answer to arrows
+pnpm a11y-timeline-check    # the timeline's DOM mirror still matches the engine
+pnpm hotkeys-check          # fourteen shortcut behaviours, recorded pre-tinykeys
+pnpm autokey-check          # dragging keys a frame, and only when auto-key is on
+pnpm easing-check           # a drawn curve reaches the file, and a file without one
+                            #   still eases as it did
+pnpm drag-check             # the Outliner drag that edits the document
+
+pnpm visual                 # screenshot 20 scenes and diff against a blessed baseline
+pnpm perf                   # save + compile timings as the document grows
 ```
 
 `wasm-check` is the only one that presses the button twip exists for. It hands
