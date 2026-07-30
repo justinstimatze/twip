@@ -1,17 +1,11 @@
 name: desktop
 
-# Keeps a current .deb available without anyone remembering to build one.
+# Keeps a current .deb available without anyone remembering to build one. Install the newest
+# with scripts/install-desktop.sh.
 #
-# The desktop app is the third artifact in this repo where "the code exists" and "the code is
-# what's running" are separable facts, and it was the only one with no trigger at all: twip.ink
-# redeploys on every push, the goldens run on every push, and the .deb was built by hand. It
-# drifted 46 commits behind main — through the whole rebrand — and the only thing that noticed
-# was opening it and seeing the old face.
-#
-# Path-filtered because the build takes about ten minutes, which is too long to spend on a
-# commit that cannot change what the app does. The compiler's sources are in the filter and
-# that is not over-inclusion: the shell links the twip crate directly and compiles in-process,
-# so a change to src/ changes the app.
+# Path-filtered because the build takes about ten minutes, too long to spend on a commit that
+# cannot change what the app does. src/ is in the filter and that is not over-inclusion: the
+# shell links the twip crate directly and compiles in-process, so a change there changes the app.
 #
 # This only ever produces an artifact. Publishing is release.yml's job and happens on a v-tag,
 # because the package carries a GPLv3 section 6 written offer — see LICENSING.md.

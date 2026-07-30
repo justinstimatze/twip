@@ -1,10 +1,8 @@
 #!/bin/bash
 # install-desktop.sh — put the current desktop app on this machine.
 #
-# desktop.yml builds a .deb on every push to main that could change the app. This fetches the
-# newest one and installs it, which is the half that makes the automatic build worth having:
-# an artifact nobody can reach without three clicks in the Actions tab is not much better than
-# no artifact.
+# desktop.yml builds a .deb on pushes to main that could change the app; this fetches the newest
+# one and installs it.
 #
 #   scripts/install-desktop.sh            # fetch the newest build from CI
 #   scripts/install-desktop.sh --local    # build from the working tree instead
@@ -20,7 +18,9 @@ for arg in "$@"; do
     case "$arg" in
         --local)   LOCAL=1 ;;
         --dry-run) DRY=1 ;;
-        -h|--help) sed -n '2,14p' "$0" | sed 's/^# \?//'; exit 0 ;;
+        # The header comment is the help text. Read to the end of the block rather than to a
+        # line number, so editing the header cannot start spilling code into --help.
+        -h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"; exit 0 ;;
         *) echo "unknown argument: $arg" >&2; exit 2 ;;
     esac
 done
