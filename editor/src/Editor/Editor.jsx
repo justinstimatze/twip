@@ -128,6 +128,9 @@ class Editor extends EditorCore {
         forward: "rgba(255, 0, 0, .3)",
       },
       onionSkinningWasOn: false,
+      // Mirrors localStorage so the toolbar button re-renders when it changes; the engine
+      // reads Wick.Project.autoKey, which componentDidMount syncs from the same place.
+      autoKey: window.localStorage.getItem('twip:auto-key') === 'on',
       localSavedFiles: [], // Files to display in savedProjects Modal.
       // Held in state rather than read from window.innerWidth during render, so that
       // componentDidUpdate can see the transition and tell the engine about it.
@@ -302,6 +305,10 @@ class Editor extends EditorCore {
   componentDidMount = () => {
     console.log("Project Mounted");
     this.hidePreloader();
+    // The mode outlives the session it was set in, so hand it to the engine before anything
+    // can be dragged. Static on Wick.Project rather than on this project, so it also
+    // survives loading a file and undoing past the point it was switched on.
+    window.Wick.Project.autoKey = this.autoKeyEnabled();
     this.syncViewOnlyMode();
     this.onWindowResize();
     if(!this.tryToParseProjectURL()) {
@@ -1143,6 +1150,8 @@ class Editor extends EditorCore {
                             <CanvasTransforms
                               onionSkinEnabled={this.project.onionSkinEnabled}
                               toggleOnionSkin={this.toggleOnionSkin}
+                              autoKeyEnabled={this.state.autoKey}
+                              toggleAutoKey={this.toggleAutoKey}
                               zoomIn={this.zoomIn}
                               zoomOut={this.zoomOut}
                               recenterCanvas={this.recenterCanvas}

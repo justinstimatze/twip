@@ -1951,6 +1951,34 @@ class EditorCore extends Component {
   }
 
   /**
+   * Whether moving something writes a keyframe at the playhead.
+   *
+   * Off until asked for, which is the one place this departs from docs/ui-research.md's
+   * "auto-key by default". At frame 1 of an empty document every drag is composition, not
+   * animation, and auto-key's first key is also what wraps loose paths into a clip — so
+   * on-by-default means the first time anyone nudges a shape they have silently made a
+   * symbol and started an animation they did not ask for. The research is right that the
+   * *gesture* should be dragging rather than F6; a mode is what makes dragging safe to
+   * overload. Turning it on is one click and it stays on across sessions.
+   *
+   * Held in localStorage rather than in the project for the reason the engine's static
+   * accessor gives: it describes how you are working, not what you drew.
+   */
+  autoKeyEnabled = () => {
+    return window.localStorage.getItem('twip:auto-key') === 'on';
+  }
+
+  toggleAutoKey = () => {
+    const on = !this.autoKeyEnabled();
+    window.localStorage.setItem('twip:auto-key', on ? 'on' : 'off');
+    window.Wick.Project.autoKey = on;
+    this.setState({ autoKey: on });
+    this.toast(on
+      ? 'Auto-key on — moving something sets a keyframe at the playhead'
+      : 'Auto-key off', 'info');
+  }
+
+  /**
    * Return all possible sound assets.
    */
   getAllSoundAssets = () => {

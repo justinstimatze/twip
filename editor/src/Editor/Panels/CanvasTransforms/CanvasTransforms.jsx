@@ -12,14 +12,26 @@ class CanvasTransforms extends Component {
   }
 
   renderTransformButton(options) {
+    const isActive = options.isActive ? options.isActive : () => this.props.activeToolName === options.name;
     return (
       <ActionButton
         color="tool"
-        isActive={ options.isActive ? options.isActive : () => this.props.activeToolName === options.name }
+        isActive={isActive}
         id={"canvas-transform-button-" + options.name}
         tooltip={options.tooltip}
         tooltipPlace={"top"}
         tooltipHotkey={this.getHotkey(options.tooltipHotkey)}
+        /*
+         * These six are icon-only buttons, so without this they reach a screen reader as
+         * "button" and nothing else — the tooltip is a hover affordance and never becomes an
+         * accessible name. The label was always sitting right there in `tooltip`. Two of them
+         * are switches rather than actions, and aria-pressed is what carries the on/off that
+         * `active-button` only says in colour.
+         */
+        buttonProps={{
+          'aria-label': options.tooltip,
+          'aria-pressed': options.isActive ? isActive() : undefined,
+        }}
         action={options.action}
         icon={options.name}
         className={classNames("canvas-transform-button", options.className)}
@@ -32,6 +44,16 @@ class CanvasTransforms extends Component {
   renderTransformations = () => {
     return (
       <div className='transforms-container'>
+        {/* Beside onion skinning because they are the same kind of switch: neither draws
+            anything, both change what the timeline means while you work. */}
+        {this.renderTransformButton({
+          action: this.props.toggleAutoKey,
+          name: 'autokey',
+          tooltip: 'Auto-Key',
+          className: 'canvas-transform-item',
+          isActive: (() => this.props.autoKeyEnabled),
+          tooltipHotkey: 'toggle-auto-key'
+        })}
         {this.renderTransformButton({
           action:this.props.toggleOnionSkin,
           name:'onionskinning',

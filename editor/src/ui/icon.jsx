@@ -391,6 +391,15 @@ export const ICONS = {
     <path d="m14 12 3-3 3 3-3 3z" {...S} />
     <path d="M10.5 12h3" />
   </>,
+  /*
+   * A keyframe inside a record ring. The diamond is the same solid the timeline draws a key
+   * with — `tween` above is two of them — and the ring is the borrowed half of the metaphor:
+   * this is the mode where moving something records a key, which is what Hype calls Record.
+   */
+  autokey: <>
+    <circle cx="12" cy="12" r="8.2" />
+    <path d="m12 8 4 4-4 4-4-4z" {...S} />
+  </>,
 
   // ---- objects and assets ----
   'path-object': <>

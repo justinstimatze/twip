@@ -211,6 +211,15 @@ jobs:
           PLAYWRIGHT_CHANNEL: ''
           SMOKE_URL: http://localhost:4173
 
+      # Auto-key is a mode, so it is only correct in both positions, and the half that needs
+      # guarding is the OFF half: dragging a shape while composing a still drawing must not
+      # quietly wrap it in a clip and start an animation. Both halves are cases here.
+      - name: Moving something keys it, and only when asked
+        run: pnpm autokey-check
+        env:
+          PLAYWRIGHT_CHANNEL: ''
+          SMOKE_URL: http://localhost:4173
+
       # The one check that presses the button twip exists for. No bridge is running here, so a
       # silent fall back to it cannot pass this off as working.
       - name: Browser compiles a .wick, byte-identical to the CLI

@@ -528,9 +528,17 @@ Wick.Selection = class extends Wick.Base {
         return this.view.width;
     }
 
+    /*
+     * These setters key after they apply, not before. x and y a few lines up always did; the
+     * five below did not, and got away with it because the clip's transformation setter
+     * writes through to the tween under the playhead and corrected the stale value a moment
+     * later. That correction only exists once there is a clip. Under auto-key the first key
+     * is also what MAKES the clip, out of whatever bounds the model holds at that instant —
+     * so keying first would build it around the old shape and drop the edit that asked for it.
+     */
     set width(width) {
-        this.project.tryToAutoCreateTween();
         this.view.width = width;
+        this.project.tryToAutoCreateTween();
     }
 
     /**
@@ -542,8 +550,8 @@ Wick.Selection = class extends Wick.Base {
     }
 
     set height(height) {
-        this.project.tryToAutoCreateTween();
         this.view.height = height;
+        this.project.tryToAutoCreateTween();
     }
 
     /**
@@ -555,8 +563,8 @@ Wick.Selection = class extends Wick.Base {
     }
 
     set rotation(rotation) {
-        this.project.tryToAutoCreateTween();
         this.view.rotation = rotation;
+        this.project.tryToAutoCreateTween();
     }
 
     /**
@@ -572,8 +580,8 @@ Wick.Selection = class extends Wick.Base {
     set skew(skew) {
         let clip = this.getSelectedObject();
         if (clip && (this.selectionType === "clip" || this.selectionType === "button")) {
-            this.project.tryToAutoCreateTween();
             clip.skew = skew;
+            this.project.tryToAutoCreateTween();
         }
     }
 
@@ -670,16 +678,16 @@ Wick.Selection = class extends Wick.Base {
      * Flips the selected obejcts horizontally.
      */
     flipHorizontally() {
-        this.project.tryToAutoCreateTween();
         this.view.flipHorizontally();
+        this.project.tryToAutoCreateTween();
     }
 
     /**
      * Flips the selected obejcts vertically.
      */
     flipVertically() {
-        this.project.tryToAutoCreateTween();
         this.view.flipVertically();
+        this.project.tryToAutoCreateTween();
     }
 
     /**

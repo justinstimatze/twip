@@ -306,7 +306,11 @@ class HotKeyInterface extends Object {
       'toggle-onion-skinning': {
         name: "Toggle Onion Skinning",
         sequences: ['0']
-      }, 
+      },
+      'toggle-auto-key': {
+        name: "Toggle Auto-Key",
+        sequences: ['9']
+      },
       'leave-focus': {
         name: "Leave Focus",
         sequences : ['alt+f'],
@@ -401,6 +405,7 @@ class HotKeyInterface extends Object {
         "activate-pan",
         "activate-zoom",
         "toggle-onion-skinning",
+        "toggle-auto-key",
         "toggle-clip-borders",
         "leave-focus",
       ],
@@ -494,6 +499,7 @@ class HotKeyInterface extends Object {
       'break-apart-selection': (() => this.editor.breakApartSelection()),
       'export-selection': this.editor.exportSelectedClip,
       'toggle-onion-skinning': this.editor.toggleOnionSkin,
+      'toggle-auto-key': this.editor.toggleAutoKey,
       'toggle-clip-borders': this.editor.toggleClipBorders,
       'finish-repeating': this.finishRepeating,
       'shrink-active-frames': this.editor.shrinkActiveFramesAndPullOtherFrames,

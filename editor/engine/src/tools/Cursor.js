@@ -183,8 +183,18 @@ Wick.Tools.Cursor = class extends Wick.Tool {
         } else if (this._selection.numObjects > 0) {
             if(this.__isDragging) {
                 this.__isDragging = false;
-                this.project.tryToAutoCreateTween();
                 this._widget.finishTransformation();
+                // The keyframe used to be made here, one line up, and has moved to the
+                // canvasModified handler in View.Project. At this point the drag exists only
+                // in paper — finishTransformation moves the view items and applyChanges is
+                // what writes them back — so a keyframe made now records where the object
+                // was rather than where it was put, and worse, anything it builds out of the
+                // model is discarded when applyChanges rebuilds the frame from paper a
+                // moment later. That was survivable while this only ever keyed frames that
+                // already had a clip: the clip's transformation setter writes through to the
+                // tween under the playhead and quietly corrected the value. Auto-key's first
+                // key also has to wrap loose paths into that clip, and there is nothing to
+                // correct a clip that has been thrown away.
                 this.fireEvent({eventName: 'canvasModified', actionName: 'cursorDrag'});
             }
         }

@@ -14,7 +14,7 @@
         <!-- The Wick Engine build is injected here during the engine build step (see gulpfile.js) -->
         <script>
             /*Wick Engine https://github.com/Wicklets/wick-engine*/
-var WICK_ENGINE_BUILD_VERSION = "2026.7.28.22.56.24";
+var WICK_ENGINE_BUILD_VERSION = "2026.7.30.0.20.3";
 /*!
  * Paper.js v0.12.4 - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
@@ -50689,13 +50689,45 @@ Wick.Project = class extends Wick.Base {
   }
 
   /**
+   * Whether moving something writes a keyframe at the playhead by itself.
+   *
+   * Static, and deliberately not serialized. This is how the person is working, not
+   * something about their document — opening someone else's file should not change the
+   * gesture your mouse performs, and undoing back past the moment you switched it on
+   * should not switch it off. `onionSkinEnabled` sits in _serialize a few lines up and is
+   * the other case: that one is a property OF the drawing.
+   */
+  static get autoKey() {
+    return Wick.Project._autoKey === true;
+  }
+  static set autoKey(autoKey) {
+    Wick.Project._autoKey = autoKey === true;
+  }
+
+  /**
    * Tries to create a tween if there is an empty space between tweens.
+   *
+   * Every path that transforms something converges here — the cursor's drag, and the
+   * Inspector's x/y/width/height/rotation/skew and both flips — which is why the auto-key
+   * mode only has to be understood in this one method.
+   *
+   * The `tweens.length > 0` clause is the part auto-key relaxes, and it is the whole of
+   * what was missing. Once a frame holds one tween, dragging at any other playhead
+   * position has always keyed by itself; it was the FIRST key that had to be asked for by
+   * name, because making it is also what converts loose paths into the clip that can hold
+   * an animation. Under auto-key the first drag does that too. Off, the gesture means what
+   * it always meant: move this drawing.
    */
   tryToAutoCreateTween() {
     var frame = this.activeFrame;
-    if (frame.tweens.length > 0 && !frame.getTweenAtPosition(frame.getRelativePlayheadPosition())) {
-      frame.createTween();
-    }
+    if (!frame) return;
+    if (frame.getTweenAtPosition(frame.getRelativePlayheadPosition())) return;
+
+    // The first key needs something to key. An empty frame would get a tween holding an
+    // identity transformation and no clip to apply it to, which is the same test
+    // canCreateTween makes before the button will light up.
+    if (frame.tweens.length === 0 && !(Wick.Project.autoKey && frame.contentful)) return;
+    frame.createTween();
   }
 
   /**
@@ -52246,9 +52278,18 @@ Wick.Selection = class extends Wick.Base {
   get width() {
     return this.view.width;
   }
+
+  /*
+   * These setters key after they apply, not before. x and y a few lines up always did; the
+   * five below did not, and got away with it because the clip's transformation setter
+   * writes through to the tween under the playhead and corrected the stale value a moment
+   * later. That correction only exists once there is a clip. Under auto-key the first key
+   * is also what MAKES the clip, out of whatever bounds the model holds at that instant —
+   * so keying first would build it around the old shape and drop the edit that asked for it.
+   */
   set width(width) {
-    this.project.tryToAutoCreateTween();
     this.view.width = width;
+    this.project.tryToAutoCreateTween();
   }
 
   /**
@@ -52259,8 +52300,8 @@ Wick.Selection = class extends Wick.Base {
     return this.view.height;
   }
   set height(height) {
-    this.project.tryToAutoCreateTween();
     this.view.height = height;
+    this.project.tryToAutoCreateTween();
   }
 
   /**
@@ -52271,8 +52312,8 @@ Wick.Selection = class extends Wick.Base {
     return this.view.rotation;
   }
   set rotation(rotation) {
-    this.project.tryToAutoCreateTween();
     this.view.rotation = rotation;
+    this.project.tryToAutoCreateTween();
   }
 
   /**
@@ -52286,8 +52327,8 @@ Wick.Selection = class extends Wick.Base {
   set skew(skew) {
     let clip = this.getSelectedObject();
     if (clip && (this.selectionType === "clip" || this.selectionType === "button")) {
-      this.project.tryToAutoCreateTween();
       clip.skew = skew;
+      this.project.tryToAutoCreateTween();
     }
   }
 
@@ -52378,16 +52419,16 @@ Wick.Selection = class extends Wick.Base {
    * Flips the selected obejcts horizontally.
    */
   flipHorizontally() {
-    this.project.tryToAutoCreateTween();
     this.view.flipHorizontally();
+    this.project.tryToAutoCreateTween();
   }
 
   /**
    * Flips the selected obejcts vertically.
    */
   flipVertically() {
-    this.project.tryToAutoCreateTween();
     this.view.flipVertically();
+    this.project.tryToAutoCreateTween();
   }
 
   /**
@@ -58586,8 +58627,18 @@ Wick.Tools.Cursor = class extends Wick.Tool {
     } else if (this._selection.numObjects > 0) {
       if (this.__isDragging) {
         this.__isDragging = false;
-        this.project.tryToAutoCreateTween();
         this._widget.finishTransformation();
+        // The keyframe used to be made here, one line up, and has moved to the
+        // canvasModified handler in View.Project. At this point the drag exists only
+        // in paper — finishTransformation moves the view items and applyChanges is
+        // what writes them back — so a keyframe made now records where the object
+        // was rather than where it was put, and worse, anything it builds out of the
+        // model is discarded when applyChanges rebuilds the frame from paper a
+        // moment later. That was survivable while this only ever keyed frames that
+        // already had a clip: the clip's transformation setter writes through to the
+        // tween under the playhead and quietly corrected the value. Auto-key's first
+        // key also has to wrap loose paths into that clip, and there is nothing to
+        // correct a clip that has been thrown away.
         this.fireEvent({
           eventName: 'canvasModified',
           actionName: 'cursorDrag'
@@ -62719,6 +62770,12 @@ Wick.View.Project = class extends Wick.View {
       tool.project = this.model;
       tool.on('canvasModified', (e, actionName) => {
         this.applyChanges();
+        // After applyChanges, because that is the moment the model finally holds
+        // what the drag did — before it, the move exists only in paper, and any clip
+        // this makes is rebuilt away by the applyChanges above. Only the cursor's
+        // drag: every tool fires canvasModified, and a brush stroke or an eraser
+        // pass is not somebody moving an object to a new position.
+        if (actionName === 'cursorDrag') this.model.tryToAutoCreateTween();
         this.fireEvent('canvasModified', e, actionName);
       });
       tool.on('canvasViewTransformed', e => {

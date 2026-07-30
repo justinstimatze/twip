@@ -999,13 +999,47 @@ Wick.Project = class extends Wick.Base {
     }
 
     /**
+     * Whether moving something writes a keyframe at the playhead by itself.
+     *
+     * Static, and deliberately not serialized. This is how the person is working, not
+     * something about their document — opening someone else's file should not change the
+     * gesture your mouse performs, and undoing back past the moment you switched it on
+     * should not switch it off. `onionSkinEnabled` sits in _serialize a few lines up and is
+     * the other case: that one is a property OF the drawing.
+     */
+    static get autoKey () {
+        return Wick.Project._autoKey === true;
+    }
+
+    static set autoKey (autoKey) {
+        Wick.Project._autoKey = autoKey === true;
+    }
+
+    /**
      * Tries to create a tween if there is an empty space between tweens.
+     *
+     * Every path that transforms something converges here — the cursor's drag, and the
+     * Inspector's x/y/width/height/rotation/skew and both flips — which is why the auto-key
+     * mode only has to be understood in this one method.
+     *
+     * The `tweens.length > 0` clause is the part auto-key relaxes, and it is the whole of
+     * what was missing. Once a frame holds one tween, dragging at any other playhead
+     * position has always keyed by itself; it was the FIRST key that had to be asked for by
+     * name, because making it is also what converts loose paths into the clip that can hold
+     * an animation. Under auto-key the first drag does that too. Off, the gesture means what
+     * it always meant: move this drawing.
      */
     tryToAutoCreateTween() {
         var frame = this.activeFrame;
-        if (frame.tweens.length > 0 && !frame.getTweenAtPosition(frame.getRelativePlayheadPosition())) {
-            frame.createTween();
-        }
+        if (!frame) return;
+        if (frame.getTweenAtPosition(frame.getRelativePlayheadPosition())) return;
+
+        // The first key needs something to key. An empty frame would get a tween holding an
+        // identity transformation and no clip to apply it to, which is the same test
+        // canCreateTween makes before the button will light up.
+        if (frame.tweens.length === 0 && !(Wick.Project.autoKey && frame.contentful)) return;
+
+        frame.createTween();
     }
 
     /**

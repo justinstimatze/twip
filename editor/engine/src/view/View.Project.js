@@ -264,6 +264,12 @@ Wick.View.Project = class extends Wick.View {
             tool.project = this.model;
             tool.on('canvasModified', (e, actionName) => {
                 this.applyChanges();
+                // After applyChanges, because that is the moment the model finally holds
+                // what the drag did — before it, the move exists only in paper, and any clip
+                // this makes is rebuilt away by the applyChanges above. Only the cursor's
+                // drag: every tool fires canvasModified, and a brush stroke or an eraser
+                // pass is not somebody moving an object to a new position.
+                if (actionName === 'cursorDrag') this.model.tryToAutoCreateTween();
                 this.fireEvent('canvasModified', e, actionName);
             });
             tool.on('canvasViewTransformed', (e) => {
